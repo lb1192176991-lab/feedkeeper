@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError, type Feed } from "../api/client.ts";
 
@@ -17,6 +17,10 @@ export function FeedsPage() {
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const [editingFeedId, setEditingFeedId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState("");
@@ -75,6 +79,36 @@ export function FeedsPage() {
     await load();
   }
 
+  async function onFileSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportMessage(null);
+
+    try {
+      const text = await file.text();
+      const res = await api.importOpml(text);
+      if (res.failed > 0) {
+        setImportMessage({
+          type: "success",
+          text: t("feeds.importPartial", { imported: res.imported, skipped: res.skipped, failed: res.failed }),
+        });
+      } else {
+        setImportMessage({
+          type: "success",
+          text: t("feeds.importSuccess", { imported: res.imported, skipped: res.skipped }),
+        });
+      }
+      await load();
+    } catch {
+      setImportMessage({ type: "error", text: t("feeds.importFailed") });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
     dateStyle: "short",
     timeStyle: "short",
@@ -82,7 +116,51 @@ export function FeedsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("feeds.title")}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{t("feeds.title")}</h1>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={onFileSelected}
+            accept=".opml,.xml,text/xml,application/xml"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="btn-secondary text-sm"
+          >
+            {importing ? t("feeds.importing") : t("feeds.importOpml")}
+          </button>
+          <a
+            href={api.exportOpmlUrl()}
+            download="feedkeeper-subscriptions.opml"
+            className="btn-secondary text-sm inline-flex items-center"
+          >
+            {t("feeds.exportOpml")}
+          </a>
+        </div>
+      </div>
+
+      {importMessage && (
+        <div
+          className={`card p-3 text-sm flex items-center justify-between border ${
+            importMessage.type === "error" ? "text-red-500 border-red-500/30" : ""
+          }`}
+          style={importMessage.type === "success" ? { borderColor: "var(--c-green3)", color: "var(--c-green3)" } : undefined}
+        >
+          <span>{importMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setImportMessage(null)}
+            className="text-xs ml-3 underline opacity-80 hover:opacity-100 cursor-pointer"
+          >
+            {t("common.close")}
+          </button>
+        </div>
+      )}
 
       <form onSubmit={onSubmit} className="card p-4 flex flex-col sm:flex-row gap-3">
         <input

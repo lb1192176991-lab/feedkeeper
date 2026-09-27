@@ -25,6 +25,7 @@ It's multi-user by design: one instance can serve several people, each with thei
 - **Web UI** — subscribe/unsubscribe, browse and search items, mark things read, manage tokens and users.
 - **Trilingual interface** — English, German, and Japanese, with a language switcher; each user can pick their own, independent of the others.
 - **Per-feed control** — custom label, adjustable check interval (5 minutes to 24 hours), and a "mark all read" button per feed or across everything.
+- **OPML import & export** — seamlessly migrate subscriptions to and from other readers (Feedly, NetNewsWire, etc.) via standard OPML 2.0.
 - **Account self-service** — change your own password from Settings.
 - **Self-hosting first** — a single Node process, one SQLite file, no external services.
 - **Hardened by default** — SSRF-guarded feed fetching, rate limiting, per-user data isolation, closed signup.
@@ -97,6 +98,8 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `get_new_items` | Fetch unread items, optionally filtered |
 | `search_items` | Full-text search across all items |
 | `mark_read` | Mark an item as read |
+| `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
+| `import_opml` | Import feeds from an OPML 2.0 XML string |
 
 ## Security
 

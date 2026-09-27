@@ -52,7 +52,13 @@
     "minutesShort": "{{count}}分",
     "hoursShort": "{{count}}時間",
     "edit": "編集",
-    "markAllRead": "すべて既読にする"
+    "markAllRead": "すべて既読にする",
+    "importOpml": "OPMLをインポート",
+    "exportOpml": "OPMLをエクスポート",
+    "importing": "フィードをインポート中…",
+    "importSuccess": "インポート完了: {{imported}} 件追加、{{skipped}} 件は登録済み。",
+    "importPartial": "インポート完了: {{imported}} 件追加、{{skipped}} 件スキップ、{{failed}} 件失敗。",
+    "importFailed": "OPMLファイルの解析またはインポートに失敗しました。"
   },
   "items": {
     "title": "記事",

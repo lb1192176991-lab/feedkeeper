@@ -52,7 +52,13 @@
     "minutesShort": "{{count}} Min.",
     "hoursShort": "{{count}} Std.",
     "edit": "Bearbeiten",
-    "markAllRead": "Alle als gelesen markieren"
+    "markAllRead": "Alle als gelesen markieren",
+    "importOpml": "OPML importieren",
+    "exportOpml": "OPML exportieren",
+    "importing": "Feeds werden importiert…",
+    "importSuccess": "Import abgeschlossen: {{imported}} hinzugefügt, {{skipped}} bereits abonniert.",
+    "importPartial": "Import abgeschlossen: {{imported}} hinzugefügt, {{skipped}} übersprungen, {{failed}} fehlgeschlagen.",
+    "importFailed": "OPML-Datei konnte nicht verarbeitet oder importiert werden."
   },
   "items": {
     "title": "Einträge",

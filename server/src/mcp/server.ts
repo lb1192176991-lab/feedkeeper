@@ -3,6 +3,7 @@ import { z } from "zod";
 import { listItemsForUser, listSubscriptionsForUser, markItemRead } from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, FeedError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
+import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -106,6 +107,35 @@ export function createMcpServerForUser(userId: number): McpServer {
     async ({ itemId }) => {
       markItemRead(userId, itemId);
       return textResult({ ok: true });
+    },
+  );
+
+  server.registerTool(
+    "export_opml",
+    {
+      title: "Export feeds as OPML",
+      description: "Exports all subscribed feeds of the current user as an OPML 2.0 XML string.",
+      inputSchema: {},
+    },
+    async () => ({ content: [{ type: "text" as const, text: generateOpml(userId) }] }),
+  );
+
+  server.registerTool(
+    "import_opml",
+    {
+      title: "Import feeds from OPML",
+      description: "Imports feeds from an OPML 2.0 XML string for the current user.",
+      inputSchema: {
+        opml: z.string().min(1).describe("The OPML XML content to import"),
+      },
+    },
+    async ({ opml }) => {
+      try {
+        const result = await importOpmlFeeds(userId, opml);
+        return textResult(result);
+      } catch (error) {
+        return errorResult(error instanceof Error ? error.message : String(error));
+      }
     },
   );
 

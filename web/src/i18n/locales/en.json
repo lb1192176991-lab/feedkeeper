@@ -52,7 +52,13 @@
     "minutesShort": "{{count}} min",
     "hoursShort": "{{count}} h",
     "edit": "Edit",
-    "markAllRead": "Mark all read"
+    "markAllRead": "Mark all read",
+    "importOpml": "Import OPML",
+    "exportOpml": "Export OPML",
+    "importing": "Importing feeds…",
+    "importSuccess": "Import complete: {{imported}} added, {{skipped}} already subscribed.",
+    "importPartial": "Import finished: {{imported}} added, {{skipped}} skipped, {{failed}} failed.",
+    "importFailed": "Failed to parse or import OPML file."
   },
   "items": {
     "title": "Items",

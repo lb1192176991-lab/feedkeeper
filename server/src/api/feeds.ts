@@ -4,12 +4,44 @@ import { requireSession } from "../auth/middleware.js";
 import { listSubscriptionsForUser } from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, FeedError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
+import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 
 export const feedsRouter = Router();
 feedsRouter.use(requireSession);
 
 feedsRouter.get("/", (req, res) => {
   res.json(listSubscriptionsForUser(req.user!.id));
+});
+
+feedsRouter.get("/opml", (req, res) => {
+  const opml = generateOpml(req.user!.id);
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="feedkeeper-subscriptions.opml"');
+  res.send(opml);
+});
+
+feedsRouter.post("/opml", async (req, res) => {
+  const xmlContent =
+    typeof req.body === "string"
+      ? req.body
+      : typeof req.body?.opml === "string"
+        ? req.body.opml
+        : null;
+
+  if (!xmlContent || !xmlContent.trim()) {
+    res.status(400).json({ error: "missing_opml_content" });
+    return;
+  }
+
+  try {
+    const result = await importOpmlFeeds(req.user!.id, xmlContent);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({
+      error: "invalid_opml",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 });
 
 const subscribeSchema = z.object({

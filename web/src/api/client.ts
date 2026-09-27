@@ -8,10 +8,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const res = await fetch(`/api${path}`, {
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers,
   });
 
   if (res.status === 204) return undefined as T;
@@ -63,6 +68,13 @@ export interface Token {
   last_used_at: string | null;
 }
 
+export interface OpmlImportResult {
+  imported: number;
+  skipped: number;
+  failed: number;
+  errors: Array<{ url: string; reason: string }>;
+}
+
 export const api = {
   onboardingStatus: () => request<{ needsOnboarding: boolean }>("/onboarding/status"),
   onboard: (data: { email: string; password: string; displayName: string }) =>
@@ -84,6 +96,13 @@ export const api = {
   unsubscribeFeed: (feedId: number) => request<void>(`/feeds/${feedId}`, { method: "DELETE" }),
   updateFeed: (feedId: number, data: { label?: string | null; pollIntervalMinutes?: number }) =>
     request<Feed>(`/feeds/${feedId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  exportOpmlUrl: () => "/api/feeds/opml",
+  importOpml: (opmlContent: string) =>
+    request<OpmlImportResult>("/feeds/opml", {
+      method: "POST",
+      headers: { "Content-Type": "application/xml" },
+      body: opmlContent,
+    }),
 
   listItems: (params: { feedId?: number; unreadOnly?: boolean; search?: string } = {}) => {
     const query = new URLSearchParams();
