@@ -1,0 +1,24 @@
+services:
+  feedkeeper:
+    image: visualfusion/feedkeeper:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: feedkeeper
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - PUBLIC_URL=http://localhost:3000
+      - DATABASE_PATH=/app/data/feedkeeper.sqlite
+      # Replace with a secure random string (e.g. openssl rand -hex 32)
+      - SESSION_SECRET=change-me-to-a-secure-random-secret
+      - ALLOW_SIGNUP=false
+      - TRUST_PROXY=false
+      - MIN_POLL_INTERVAL_MINUTES=5
+    volumes:
+      - feedkeeper_data:/app/data
+
+volumes:
+  feedkeeper_data:

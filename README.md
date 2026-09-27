@@ -53,7 +53,19 @@ flowchart LR
 
 One Node process serves the built web UI, a REST API, and an MCP endpoint (`/mcp`, using the [Streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports)) — all backed by the same SQLite database and feed poller.
 
-## Quick start (local)
+## Quick start with Docker
+
+The fastest way to run Feedkeeper:
+
+```bash
+git clone https://github.com/visualfusion/feedkeeper.git
+cd feedkeeper
+docker compose up -d
+```
+
+Open `http://localhost:3000` to complete the initial setup via the web onboarding screen.
+
+## Quick start (local development)
 
 Requires Node.js 20+.
 

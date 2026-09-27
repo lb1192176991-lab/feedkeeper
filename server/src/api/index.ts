@@ -7,6 +7,10 @@ import { tokensRouter } from "./tokens.js";
 
 export const apiRouter = Router();
 
+apiRouter.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/feeds", feedsRouter);
