@@ -35,6 +35,30 @@ export interface DiscoveredFeed {
   type: string;
 }
 
+export interface RetentionSettings {
+  retentionReadDays: number;
+  retentionMaxDays: number;
+  retentionMaxItemsPerFeed: number;
+  autoCleanupEnabled: boolean;
+}
+
+export interface DatabaseStats {
+  totalItems: number;
+  readItems: number;
+  feedsCount: number;
+  oldestItemDate: string | null;
+  databaseSizeBytes: number;
+}
+
+export interface CleanupResult {
+  deletedReadItems: number;
+  deletedOldItems: number;
+  deletedPerFeedExcess: number;
+  totalDeleted: number;
+  sizeBefore: number;
+  sizeAfter: number;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -135,4 +159,13 @@ export const api = {
   createToken: (name: string) =>
     request<{ id: number; token: string }>("/tokens", { method: "POST", body: JSON.stringify({ name }) }),
   deleteToken: (id: number) => request<void>(`/tokens/${id}`, { method: "DELETE" }),
+
+  getRetention: () => request<{ settings: RetentionSettings; stats: DatabaseStats }>("/system/retention"),
+  updateRetention: (data: Partial<RetentionSettings>) =>
+    request<{ settings: RetentionSettings; stats: DatabaseStats }>("/system/retention", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  runCleanup: () =>
+    request<{ result: CleanupResult; stats: DatabaseStats }>("/system/cleanup", { method: "POST" }),
 };

@@ -112,6 +112,26 @@
     "changePasswordButton": "Change password",
     "passwordChanged": "Password changed.",
     "passwordMismatch": "New passwords don't match.",
-    "incorrectPassword": "Current password is incorrect."
+    "incorrectPassword": "Current password is incorrect.",
+    "retentionTitle": "Database & Retention",
+    "retentionHint": "Automated cleanup of old and read items to optimize disk usage and query performance.",
+    "retentionStatsTitle": "Database Status",
+    "statTotalItems": "Total items",
+    "statReadItems": "Read items",
+    "statFeedsCount": "Active feeds",
+    "statDbSize": "Database file size (SQLite + WAL)",
+    "statOldestItem": "Oldest item",
+    "retentionReadDaysLabel": "Keep read items (days)",
+    "retentionReadDaysHint": "0 = purge immediately once read, default: 30 days",
+    "retentionMaxDaysLabel": "Maximum item retention (days)",
+    "retentionMaxDaysHint": "0 = unlimited, default: 90 days",
+    "retentionMaxItemsLabel": "Max items per feed",
+    "retentionMaxItemsHint": "0 = unlimited, default: 1000 items",
+    "autoCleanupLabel": "Enable daily automated housekeeping at 03:00 AM",
+    "saveRetention": "Save settings",
+    "retentionSaved": "Settings saved successfully.",
+    "runCleanupNow": "Run cleanup now (VACUUM)",
+    "cleaning": "Cleaning…",
+    "cleanupSuccess": "Cleanup complete: removed {{total}} items. Size: {{before}} MB ➔ {{after}} MB."
   }
 }

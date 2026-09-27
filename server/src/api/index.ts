@@ -4,6 +4,7 @@ import { authRouter } from "./auth.js";
 import { feedsRouter } from "./feeds.js";
 import { itemsRouter } from "./items.js";
 import { tokensRouter } from "./tokens.js";
+import { systemRouter } from "./system.js";
 
 export const apiRouter = Router();
 
@@ -16,3 +17,4 @@ apiRouter.use("/auth", authRouter);
 apiRouter.use("/feeds", feedsRouter);
 apiRouter.use("/items", itemsRouter);
 apiRouter.use("/tokens", tokensRouter);
+apiRouter.use("/system", systemRouter);

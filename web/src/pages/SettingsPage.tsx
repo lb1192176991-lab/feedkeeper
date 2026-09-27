@@ -1,6 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError, type Token, type User } from "../api/client.ts";
+import {
+  api,
+  ApiError,
+  type Token,
+  type User,
+  type RetentionSettings,
+  type DatabaseStats,
+  type CleanupResult,
+} from "../api/client.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
 
 function ChangePasswordSection() {
@@ -271,6 +279,197 @@ function UsersSection() {
   );
 }
 
+function RetentionSection() {
+  const { t } = useTranslation();
+  const [settings, setSettings] = useState<RetentionSettings | null>(null);
+  const [stats, setStats] = useState<DatabaseStats | null>(null);
+  const [readDays, setReadDays] = useState(30);
+  const [maxDays, setMaxDays] = useState(90);
+  const [maxItems, setMaxItems] = useState(1000);
+  const [autoCleanup, setAutoCleanup] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  async function load() {
+    try {
+      const data = await api.getRetention();
+      setSettings(data.settings);
+      setStats(data.stats);
+      setReadDays(data.settings.retentionReadDays);
+      setMaxDays(data.settings.retentionMaxDays);
+      setMaxItems(data.settings.retentionMaxItemsPerFeed);
+      setAutoCleanup(data.settings.autoCleanupEnabled);
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function onSave(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    try {
+      const data = await api.updateRetention({
+        retentionReadDays: Number(readDays),
+        retentionMaxDays: Number(maxDays),
+        retentionMaxItemsPerFeed: Number(maxItems),
+        autoCleanupEnabled: autoCleanup,
+      });
+      setSettings(data.settings);
+      setStats(data.stats);
+      setMessage({ type: "success", text: t("settings.retentionSaved") });
+    } catch {
+      setMessage({ type: "error", text: t("common.error") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onRunCleanup() {
+    setCleaning(true);
+    setMessage(null);
+    try {
+      const res = await api.runCleanup();
+      setStats(res.stats);
+      const beforeMb = (res.result.sizeBefore / 1024 / 1024).toFixed(2);
+      const afterMb = (res.result.sizeAfter / 1024 / 1024).toFixed(2);
+      setMessage({
+        type: "success",
+        text: t("settings.cleanupSuccess", {
+          total: res.result.totalDeleted,
+          before: beforeMb,
+          after: afterMb,
+        }),
+      });
+    } catch {
+      setMessage({ type: "error", text: t("common.error") });
+    } finally {
+      setCleaning(false);
+    }
+  }
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  return (
+    <section className="card p-5 flex flex-col gap-5">
+      <div>
+        <h2 className="text-lg font-semibold">{t("settings.retentionTitle")}</h2>
+        <p className="text-sm mt-1" style={{ color: "var(--c-text-muted)" }}>
+          {t("settings.retentionHint")}
+        </p>
+      </div>
+
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl border bg-[var(--c-bg)]" style={{ borderColor: "var(--c-border)" }}>
+          <div>
+            <span className="text-xs uppercase block" style={{ color: "var(--c-text-muted)" }}>{t("settings.statTotalItems")}</span>
+            <span className="text-lg font-semibold">{stats.totalItems.toLocaleString()}</span>
+          </div>
+          <div>
+            <span className="text-xs uppercase block" style={{ color: "var(--c-text-muted)" }}>{t("settings.statReadItems")}</span>
+            <span className="text-lg font-semibold">{stats.readItems.toLocaleString()}</span>
+          </div>
+          <div>
+            <span className="text-xs uppercase block" style={{ color: "var(--c-text-muted)" }}>{t("settings.statFeedsCount")}</span>
+            <span className="text-lg font-semibold">{stats.feedsCount}</span>
+          </div>
+          <div>
+            <span className="text-xs uppercase block" style={{ color: "var(--c-text-muted)" }}>{t("settings.statDbSize")}</span>
+            <span className="text-lg font-semibold">{formatBytes(stats.databaseSizeBytes)}</span>
+          </div>
+        </div>
+      )}
+
+      {message && (
+        <p className={`text-sm ${message.type === "success" ? "text-emerald-500" : "text-red-500"}`}>
+          {message.text}
+        </p>
+      )}
+
+      <form onSubmit={onSave} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="text-sm font-medium block mb-1">{t("settings.retentionReadDaysLabel")}</label>
+            <input
+              type="number"
+              min={0}
+              max={3650}
+              className="input w-full"
+              value={readDays}
+              onChange={(e) => setReadDays(Number(e.target.value))}
+            />
+            <span className="text-xs block mt-1" style={{ color: "var(--c-text-muted)" }}>
+              {t("settings.retentionReadDaysHint")}
+            </span>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1">{t("settings.retentionMaxDaysLabel")}</label>
+            <input
+              type="number"
+              min={0}
+              max={3650}
+              className="input w-full"
+              value={maxDays}
+              onChange={(e) => setMaxDays(Number(e.target.value))}
+            />
+            <span className="text-xs block mt-1" style={{ color: "var(--c-text-muted)" }}>
+              {t("settings.retentionMaxDaysHint")}
+            </span>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-1">{t("settings.retentionMaxItemsLabel")}</label>
+            <input
+              type="number"
+              min={0}
+              max={100000}
+              className="input w-full"
+              value={maxItems}
+              onChange={(e) => setMaxItems(Number(e.target.value))}
+            />
+            <span className="text-xs block mt-1" style={{ color: "var(--c-text-muted)" }}>
+              {t("settings.retentionMaxItemsHint")}
+            </span>
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm cursor-pointer mt-1">
+          <input
+            type="checkbox"
+            checked={autoCleanup}
+            onChange={(e) => setAutoCleanup(e.target.checked)}
+            className="rounded"
+          />
+          <span>{t("settings.autoCleanupLabel")}</span>
+        </label>
+
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button type="submit" disabled={saving} className="btn-primary">
+            {t("settings.saveRetention")}
+          </button>
+          <button
+            type="button"
+            disabled={cleaning}
+            onClick={onRunCleanup}
+            className="btn-secondary"
+          >
+            {cleaning ? t("settings.cleaning") : t("settings.runCleanupNow")}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -281,6 +480,7 @@ export function SettingsPage() {
       <ChangePasswordSection />
       <TokensSection />
       {user?.role === "admin" && <UsersSection />}
+      {user?.role === "admin" && <RetentionSection />}
     </div>
   );
 }

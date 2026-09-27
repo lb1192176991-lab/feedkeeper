@@ -112,6 +112,26 @@
     "changePasswordButton": "Passwort ändern",
     "passwordChanged": "Passwort geändert.",
     "passwordMismatch": "Die neuen Passwörter stimmen nicht überein.",
-    "incorrectPassword": "Das aktuelle Passwort ist falsch."
+    "incorrectPassword": "Das aktuelle Passwort ist falsch.",
+    "retentionTitle": "Datenbank & Aufbewahrung (Retention)",
+    "retentionHint": "Automatische Bereinigung alter Einträge zur Reduzierung des Speicherbedarfs und Verbesserung der Abfrageleistung.",
+    "retentionStatsTitle": "Datenbank-Status",
+    "statTotalItems": "Einträge gesamt",
+    "statReadItems": "Gelesene Einträge",
+    "statFeedsCount": "Aktive Feeds",
+    "statDbSize": "Dateigröße (SQLite + WAL)",
+    "statOldestItem": "Ältester Eintrag",
+    "retentionReadDaysLabel": "Gelesene Einträge aufbewahren (Tage)",
+    "retentionReadDaysHint": "0 = sofort löschen, Standard: 30 Tage",
+    "retentionMaxDaysLabel": "Maximale Aufbewahrungsdauer (Tage)",
+    "retentionMaxDaysHint": "0 = unbegrenzt, Standard: 90 Tage",
+    "retentionMaxItemsLabel": "Max. Einträge pro Feed",
+    "retentionMaxItemsHint": "0 = unbegrenzt, Standard: 1000 Einträge",
+    "autoCleanupLabel": "Tägliche automatische Bereinigung um 03:00 Uhr aktivieren",
+    "saveRetention": "Einstellungen speichern",
+    "retentionSaved": "Einstellungen gespeichert.",
+    "runCleanupNow": "Jetzt bereinigen (VACUUM)",
+    "cleaning": "Wird bereinigt…",
+    "cleanupSuccess": "Bereinigung erfolgreich: {{total}} Einträge entfernt. Größe: {{before}} MB ➔ {{after}} MB."
   }
 }

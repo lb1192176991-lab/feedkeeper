@@ -11,12 +11,14 @@ import { runMigrations } from "./db/index.js";
 import { apiRouter } from "./api/index.js";
 import { mcpRouter } from "./mcp/http.js";
 import { startPollingScheduler } from "./feeds/poller.js";
+import { startCleanupScheduler } from "./feeds/cleanup.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = join(__dirname, "../../web/dist");
 
 runMigrations();
 startPollingScheduler();
+startCleanupScheduler();
 
 const app = express();
 

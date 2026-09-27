@@ -6,6 +6,8 @@ import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 import { pollFeed } from "../feeds/poller.js";
 import { discoverFeeds } from "../feeds/discovery.js";
+import { findUserById } from "../auth/users.js";
+import { getDatabaseStats, runCleanup } from "../feeds/cleanup.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -196,6 +198,31 @@ export function createMcpServerForUser(userId: number): McpServer {
       }
     },
   );
+
+  const currentUser = findUserById(userId);
+  if (currentUser?.role === "admin") {
+    server.registerTool(
+      "cleanup_database",
+      {
+        title: "Clean up database and retention",
+        description: "Admin tool: runs item retention cleanup and VACUUM to purge old/read items and reclaim disk space.",
+        inputSchema: {
+          retentionReadDays: z.number().int().min(0).optional().describe("Override read items retention in days"),
+          retentionMaxDays: z.number().int().min(0).optional().describe("Override total item age retention in days"),
+          retentionMaxItemsPerFeed: z.number().int().min(0).optional().describe("Override maximum items per feed cap"),
+        },
+      },
+      async (args) => {
+        try {
+          const result = runCleanup(args);
+          const stats = getDatabaseStats();
+          return textResult({ result, stats });
+        } catch (error) {
+          return errorResult(error instanceof Error ? error.message : String(error));
+        }
+      },
+    );
+  }
 
   return server;
 }

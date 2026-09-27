@@ -112,6 +112,26 @@
     "changePasswordButton": "パスワードを変更",
     "passwordChanged": "パスワードを変更しました。",
     "passwordMismatch": "新しいパスワードが一致しません。",
-    "incorrectPassword": "現在のパスワードが正しくありません。"
+    "incorrectPassword": "現在のパスワードが正しくありません。",
+    "retentionTitle": "データベースと保持期間(Retention)",
+    "retentionHint": "古い記事や既読記事を自動的に削除し、ディスク使用量を抑えて検索パフォーマンスを向上させます。",
+    "retentionStatsTitle": "データベースの状態",
+    "statTotalItems": "総記事数",
+    "statReadItems": "既読記事数",
+    "statFeedsCount": "アクティブなフィード数",
+    "statDbSize": "ファイルサイズ (SQLite + WAL)",
+    "statOldestItem": "最古の記事",
+    "retentionReadDaysLabel": "既読記事の保持期間 (日)",
+    "retentionReadDaysHint": "0 = 既読後即時削除、デフォルト: 30日",
+    "retentionMaxDaysLabel": "最大記事保持期間 (日)",
+    "retentionMaxDaysHint": "0 = 無制限、デフォルト: 90日",
+    "retentionMaxItemsLabel": "フィードあたりの最大記事数",
+    "retentionMaxItemsHint": "0 = 無制限、デフォルト: 1000件",
+    "autoCleanupLabel": "毎日午前3時に自動クリーンアップを実行する",
+    "saveRetention": "設定を保存",
+    "retentionSaved": "設定を保存しました。",
+    "runCleanupNow": "今すぐクリーンアップを実行 (VACUUM)",
+    "cleaning": "クリーンアップ中…",
+    "cleanupSuccess": "クリーンアップが完了しました: {{total}} 件の記事を削除しました。サイズ: {{before}} MB ➔ {{after}} MB。"
   }
 }

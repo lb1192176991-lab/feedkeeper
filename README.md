@@ -19,10 +19,12 @@ It's multi-user by design: one instance can serve several people, each with thei
 
 ## Features
 
-- **Any RSS/Atom feed** — not just Google Alerts, though that's what started this project.
+- **Any RSS/Atom feed & Auto-discovery** — paste a direct feed URL or simply any website URL (e.g. `https://example.com/blog`); Feedkeeper automatically finds and subscribes to available feeds.
+- **Feed Health & Error Transparency** — clear visual status indicators, consecutive error counters, last successful check timestamps, and per-feed manual refresh.
+- **Automated Retention & Housekeeping** — configurable retention rules for read items, maximum article age, and per-feed item caps, plus daily automated pruning and SQLite database vacuuming.
 - **Multi-user** — closed by default; an admin creates accounts (or invites people through the web UI).
 - **Remote MCP access** — connect Claude Desktop, Claude Code, or any other MCP client over HTTPS from anywhere, authenticated with a personal access token. No SSH tunnel required.
-- **Web UI** — subscribe/unsubscribe, browse and search items, mark things read, manage tokens and users.
+- **Web UI** — subscribe/unsubscribe, browse and search items, mark things read, manage tokens, users, and retention settings.
 - **Trilingual interface** — English, German, and Japanese, with a language switcher; each user can pick their own, independent of the others.
 - **Per-feed control** — custom label, adjustable check interval (5 minutes to 24 hours), and a "mark all read" button per feed or across everything.
 - **OPML import & export** — seamlessly migrate subscriptions to and from other readers (Feedly, NetNewsWire, etc.) via standard OPML 2.0.
@@ -104,14 +106,17 @@ Every tool call is scoped to the token's owner — a client can only see and man
 
 | Tool | Description |
 |---|---|
-| `list_feeds` | List subscribed feeds with unread counts |
-| `subscribe_feed` | Subscribe to a feed URL |
+| `list_feeds` | List subscribed feeds with unread counts and health status |
+| `subscribe_feed` | Subscribe to a feed URL or website URL (auto-discovering the feed) |
+| `discover_feeds` | Discover available RSS/Atom/JSON feeds on any website URL |
 | `unsubscribe_feed` | Remove a subscription |
+| `refresh_feed` | Force an immediate check/poll of a subscribed feed |
 | `get_new_items` | Fetch unread items, optionally filtered |
 | `search_items` | Full-text search across all items |
 | `mark_read` | Mark an item as read |
 | `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
+| `cleanup_database` | *(Admin only)* Trigger retention housekeeping and VACUUM to purge old items and reclaim disk space |
 
 ## Security
 

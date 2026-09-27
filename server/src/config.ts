@@ -25,4 +25,8 @@ export const config = {
   allowSignup: process.env.ALLOW_SIGNUP === "true",
   trustProxy: process.env.TRUST_PROXY === "true",
   minPollIntervalMinutes: Number(process.env.MIN_POLL_INTERVAL_MINUTES ?? 5),
+  retentionReadDays: Number(process.env.RETENTION_READ_DAYS ?? 30),
+  retentionMaxDays: Number(process.env.RETENTION_MAX_DAYS ?? 90),
+  retentionMaxItemsPerFeed: Number(process.env.RETENTION_MAX_ITEMS_PER_FEED ?? 1000),
+  autoCleanupEnabled: process.env.AUTO_CLEANUP_ENABLED !== "false",
 };
