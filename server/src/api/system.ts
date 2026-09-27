@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAdmin } from "../auth/middleware.js";
+import { requireSession, requireAdmin } from "../auth/middleware.js";
 import {
   getRetentionSettings,
   updateRetentionSettings,
@@ -9,6 +9,7 @@ import {
 } from "../feeds/cleanup.js";
 
 export const systemRouter = Router();
+systemRouter.use(requireSession);
 systemRouter.use(requireAdmin);
 
 systemRouter.get("/retention", (_req, res) => {
