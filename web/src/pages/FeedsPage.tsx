@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError, type Feed } from "../api/client.ts";
+import { api, ApiError, type Feed, type DiscoveredFeed } from "../api/client.ts";
 
 const POLL_PRESETS = [5, 15, 30, 60, 180, 360, 720, 1440];
 
@@ -17,6 +17,7 @@ export function FeedsPage() {
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [discoveredCandidates, setDiscoveredCandidates] = useState<DiscoveredFeed[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -70,20 +71,36 @@ export function FeedsPage() {
     load();
   }, []);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function subscribeWithUrl(targetUrl: string, customLabel?: string | null) {
     setSubmitting(true);
     setError(null);
+    setDiscoveredCandidates([]);
     try {
-      await api.subscribeFeed(url, label || null);
+      await api.subscribeFeed(targetUrl, customLabel !== undefined ? customLabel : (label || null));
       setUrl("");
       setLabel("");
       await load();
     } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "multiple_feeds_found" && err.data && typeof err.data === "object" && "feeds" in err.data) {
+          const feedsList = (err.data as { feeds: DiscoveredFeed[] }).feeds;
+          setDiscoveredCandidates(feedsList);
+          return;
+        }
+        if (err.code === "already_subscribed") {
+          setError(t("feeds.alreadySubscribed"));
+          return;
+        }
+      }
       setError(err instanceof ApiError ? err.code : t("common.error"));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await subscribeWithUrl(url);
   }
 
   async function onUnsubscribe(feed: Feed) {
@@ -209,7 +226,10 @@ export function FeedsPage() {
           placeholder={t("feeds.urlPlaceholder")}
           className="input sm:flex-1"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            if (discoveredCandidates.length > 0) setDiscoveredCandidates([]);
+          }}
         />
         <input
           type="text"
@@ -219,9 +239,49 @@ export function FeedsPage() {
           onChange={(e) => setLabel(e.target.value)}
         />
         <button type="submit" disabled={submitting} className="btn-primary whitespace-nowrap">
-          {t("feeds.subscribe")}
+          {submitting ? t("feeds.subscribing") : t("feeds.subscribe")}
         </button>
       </form>
+
+      {discoveredCandidates.length > 0 && (
+        <div className="card p-4 border flex flex-col gap-3" style={{ borderColor: "var(--c-blue1)" }}>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">{t("feeds.multipleFeedsFound")}</p>
+            <button
+              type="button"
+              onClick={() => setDiscoveredCandidates([])}
+              className="text-xs underline opacity-80 hover:opacity-100"
+            >
+              {t("common.close")}
+            </button>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {discoveredCandidates.map((candidate) => (
+              <li
+                key={candidate.url}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg border bg-[var(--c-bg)]"
+                style={{ borderColor: "var(--c-border)" }}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{candidate.title ?? candidate.url}</p>
+                  <p className="text-xs truncate" style={{ color: "var(--c-text-muted)" }}>
+                    {candidate.url}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => subscribeWithUrl(candidate.url, candidate.title || label || null)}
+                  className="btn-primary text-xs px-3 py-1.5 shrink-0 self-end sm:self-auto"
+                >
+                  {t("feeds.subscribe")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {loading ? (

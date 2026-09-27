@@ -10,6 +10,8 @@ export interface FetchedFeed {
   etag?: string;
   lastModified?: string;
   notModified: boolean;
+  contentType?: string;
+  finalUrl: string;
 }
 
 // Fetches a feed URL while re-validating every redirect hop against the SSRF
@@ -28,7 +30,7 @@ export async function fetchFeed(
 
     const headers: Record<string, string> = {
       "User-Agent": USER_AGENT,
-      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
+      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, application/xhtml+xml;q=0.9, */*;q=0.5",
     };
     if (opts.etag) headers["If-None-Match"] = opts.etag;
     if (opts.lastModified) headers["If-Modified-Since"] = opts.lastModified;
@@ -52,7 +54,7 @@ export async function fetchFeed(
     }
 
     if (response.status === 304) {
-      return { notModified: true, body: "" };
+      return { notModified: true, body: "", finalUrl: currentUrl, contentType: response.headers.get("content-type") ?? undefined };
     }
 
     if (!response.ok) {
@@ -87,6 +89,8 @@ export async function fetchFeed(
       notModified: false,
       etag: response.headers.get("etag") ?? undefined,
       lastModified: response.headers.get("last-modified") ?? undefined,
+      contentType: response.headers.get("content-type") ?? undefined,
+      finalUrl: currentUrl,
     };
   }
 

@@ -2,6 +2,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
+    public data?: unknown,
   ) {
     super(code);
   }
@@ -23,9 +24,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new ApiError(res.status, body.error ?? "unknown_error");
+    throw new ApiError(res.status, body.error ?? "unknown_error", body);
   }
   return body as T;
+}
+
+export interface DiscoveredFeed {
+  url: string;
+  title: string | null;
+  type: string;
 }
 
 export interface User {
@@ -93,6 +100,7 @@ export const api = {
     request<User>("/auth/users", { method: "POST", body: JSON.stringify(data) }),
 
   listFeeds: () => request<Feed[]>("/feeds"),
+  discoverFeeds: (url: string) => request<{ feeds: DiscoveredFeed[] }>("/feeds/discover", { method: "POST", body: JSON.stringify({ url }) }),
   subscribeFeed: (url: string, label: string | null) =>
     request<Feed>("/feeds", { method: "POST", body: JSON.stringify({ url, label }) }),
   unsubscribeFeed: (feedId: number) => request<void>(`/feeds/${feedId}`, { method: "DELETE" }),

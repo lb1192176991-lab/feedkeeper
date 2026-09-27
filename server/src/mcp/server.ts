@@ -1,10 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { listItemsForUser, listSubscriptionsForUser, markItemRead, findFeedById, isUserSubscribed } from "../feeds/repository.js";
-import { subscribeToFeed, unsubscribeFromFeed, FeedError } from "../feeds/service.js";
+import { subscribeToFeed, unsubscribeFromFeed, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 import { pollFeed } from "../feeds/poller.js";
+import { discoverFeeds } from "../feeds/discovery.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -34,9 +35,9 @@ export function createMcpServerForUser(userId: number): McpServer {
     "subscribe_feed",
     {
       title: "Subscribe to a feed",
-      description: "Subscribes the current user to an RSS/Atom feed URL (e.g. a Google Alerts feed).",
+      description: "Subscribes the current user to an RSS/Atom feed URL or website URL (auto-discovering the feed).",
       inputSchema: {
-        url: z.string().url().describe("The feed's URL"),
+        url: z.string().url().describe("The feed URL or website URL"),
         label: z.string().max(200).optional().describe("Optional display name for this feed"),
       },
     },
@@ -46,7 +47,34 @@ export function createMcpServerForUser(userId: number): McpServer {
         return textResult(subscription);
       } catch (error) {
         if (error instanceof SsrfBlockedError) return errorResult(error.message);
+        if (error instanceof MultipleFeedsFoundError) {
+          return textResult({
+            error: "multiple_feeds_found",
+            message: "Multiple feeds found. Please specify one of the following feed URLs:",
+            feeds: error.feeds,
+          });
+        }
         if (error instanceof FeedError) return errorResult(error.message);
+        return errorResult(error instanceof Error ? error.message : String(error));
+      }
+    },
+  );
+
+  server.registerTool(
+    "discover_feeds",
+    {
+      title: "Discover feeds on a website",
+      description: "Inspects a website URL and discovers available RSS/Atom/JSON feed links.",
+      inputSchema: {
+        url: z.string().url().describe("The website URL to discover feeds from"),
+      },
+    },
+    async ({ url }) => {
+      try {
+        const feeds = await discoverFeeds(url);
+        return textResult({ feeds });
+      } catch (error) {
+        if (error instanceof SsrfBlockedError) return errorResult(error.message);
         return errorResult(error instanceof Error ? error.message : String(error));
       }
     },

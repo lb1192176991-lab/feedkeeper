@@ -2,10 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireSession } from "../auth/middleware.js";
 import { listSubscriptionsForUser, findFeedById, isUserSubscribed } from "../feeds/repository.js";
-import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, FeedError } from "../feeds/service.js";
+import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 import { pollFeed } from "../feeds/poller.js";
+import { discoverFeeds } from "../feeds/discovery.js";
 
 export const feedsRouter = Router();
 feedsRouter.use(requireSession);
@@ -45,6 +46,29 @@ feedsRouter.post("/opml", async (req, res) => {
   }
 });
 
+const discoverSchema = z.object({
+  url: z.string().url(),
+});
+
+feedsRouter.post("/discover", async (req, res) => {
+  const parsed = discoverSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const feeds = await discoverFeeds(parsed.data.url);
+    res.json({ feeds });
+  } catch (error) {
+    if (error instanceof SsrfBlockedError) {
+      res.status(400).json({ error: "blocked_url", message: error.message });
+      return;
+    }
+    res.status(400).json({ error: "discovery_failed", message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 const subscribeSchema = z.object({
   url: z.string().url(),
   label: z.string().max(200).nullable().optional(),
@@ -63,6 +87,10 @@ feedsRouter.post("/", async (req, res) => {
   } catch (error) {
     if (error instanceof SsrfBlockedError) {
       res.status(400).json({ error: "blocked_url", message: error.message });
+      return;
+    }
+    if (error instanceof MultipleFeedsFoundError) {
+      res.status(400).json({ error: "multiple_feeds_found", feeds: error.feeds });
       return;
     }
     if (error instanceof FeedError) {

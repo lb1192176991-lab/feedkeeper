@@ -13,7 +13,15 @@ import {
 import { pollFeed } from "./poller.js";
 import { assertPublicHttpUrl } from "./ssrfGuard.js";
 
+import { discoverFeeds } from "./discovery.js";
+
 export class FeedError extends Error {}
+export class MultipleFeedsFoundError extends FeedError {
+  constructor(public feeds: Array<{ url: string; title: string | null; type: string }>) {
+    super("multiple_feeds_found");
+    this.name = "MultipleFeedsFoundError";
+  }
+}
 
 export async function subscribeToFeed(
   userId: number,
@@ -21,11 +29,30 @@ export async function subscribeToFeed(
   label: string | null,
 ): Promise<SubscribedFeed> {
   const validated = await assertPublicHttpUrl(url);
-  const normalizedUrl = validated.toString();
+  let targetUrl = validated.toString();
 
-  let feed = findFeedByUrl(normalizedUrl);
+  // Try auto-discovery in case the user entered a website URL instead of a direct feed URL
+  try {
+    const discovered = await discoverFeeds(targetUrl);
+    if (discovered.length === 1) {
+      targetUrl = discovered[0].url;
+    } else if (discovered.length > 1) {
+      // If none of them exactly match what was entered, notify caller of multiple choices
+      const exact = discovered.find((d) => d.url === targetUrl);
+      if (exact) {
+        targetUrl = exact.url;
+      } else {
+        throw new MultipleFeedsFoundError(discovered);
+      }
+    }
+  } catch (err) {
+    if (err instanceof FeedError) throw err;
+    // Otherwise fallback to trying the given targetUrl directly
+  }
+
+  let feed = findFeedByUrl(targetUrl);
   if (!feed) {
-    feed = createFeed(normalizedUrl, Math.max(config.minPollIntervalMinutes, 15));
+    feed = createFeed(targetUrl, Math.max(config.minPollIntervalMinutes, 15));
   }
 
   if (isUserSubscribed(userId, feed.id)) {
