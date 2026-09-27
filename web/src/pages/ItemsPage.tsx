@@ -9,6 +9,7 @@ export function ItemsPage() {
   const [loading, setLoading] = useState(true);
   const [feedId, setFeedId] = useState<number | "">("");
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -22,6 +23,7 @@ export function ItemsPage() {
         await api.listItems({
           feedId: feedId === "" ? undefined : feedId,
           unreadOnly,
+          bookmarkedOnly,
           search: search || undefined,
         }),
       );
@@ -34,12 +36,20 @@ export function ItemsPage() {
     const timeout = setTimeout(load, 200);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedId, unreadOnly, search]);
+  }, [feedId, unreadOnly, bookmarkedOnly, search]);
 
   async function toggleRead(item: Item) {
     if (item.read) await api.markUnread(item.id);
     else await api.markRead(item.id);
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, read: !i.read } : i)));
+  }
+
+  async function toggleBookmark(item: Item) {
+    if (item.bookmarked) await api.unbookmarkItem(item.id);
+    else await api.bookmarkItem(item.id);
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, bookmarked: !i.bookmarked } : i)),
+    );
   }
 
   async function onMarkAllRead() {
@@ -84,10 +94,16 @@ export function ItemsPage() {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-2 text-sm whitespace-nowrap px-2 cursor-pointer select-none">
-          <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
-          {t("items.unreadOnly")}
-        </label>
+        <div className="flex items-center gap-4 px-1">
+          <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer select-none">
+            <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
+            {t("items.unreadOnly")}
+          </label>
+          <label className="flex items-center gap-2 text-sm whitespace-nowrap cursor-pointer select-none">
+            <input type="checkbox" checked={bookmarkedOnly} onChange={(e) => setBookmarkedOnly(e.target.checked)} />
+            {t("items.bookmarkedOnly")}
+          </label>
+        </div>
       </div>
 
       {loading ? (
@@ -100,10 +116,19 @@ export function ItemsPage() {
             <li key={item.id} className="card p-4" style={{ opacity: item.read ? 0.6 : 1 }}>
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs mb-1" style={{ color: "var(--c-text-muted)" }}>
-                    {item.feed_title} ·{" "}
-                    {item.published_at ? dateFormatter.format(new Date(item.published_at)) : ""}
-                  </p>
+                  <div className="flex items-center gap-2 text-xs mb-1" style={{ color: "var(--c-text-muted)" }}>
+                    <span>
+                      {item.feed_title} ·{" "}
+                      {item.published_at ? dateFormatter.format(new Date(item.published_at)) : ""}
+                    </span>
+                    {item.bookmarked && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                      >
+                        {t("items.bookmarkedBadge")}
+                      </span>
+                    )}
+                  </div>
                   <h2 className="font-medium text-base leading-snug">
                     {item.link ? (
                       <a
@@ -140,12 +165,23 @@ export function ItemsPage() {
                       <span aria-hidden="true">↗</span>
                     </a>
                   ) : <div />}
-                  <button
-                    onClick={() => toggleRead(item)}
-                    className="btn-secondary text-xs whitespace-nowrap px-3 py-1.5"
-                  >
-                    {item.read ? t("items.markUnread") : t("items.markRead")}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleBookmark(item)}
+                      title={item.bookmarked ? t("items.unbookmark") : t("items.bookmark")}
+                      className={`btn-secondary text-xs px-2.5 py-1.5 ${
+                        item.bookmarked ? "text-amber-500 font-semibold" : ""
+                      }`}
+                    >
+                      {item.bookmarked ? "★ " + t("items.saved") : "☆ " + t("items.save")}
+                    </button>
+                    <button
+                      onClick={() => toggleRead(item)}
+                      className="btn-secondary text-xs whitespace-nowrap px-3 py-1.5"
+                    >
+                      {item.read ? t("items.markUnread") : t("items.markRead")}
+                    </button>
+                  </div>
                 </div>
               </div>
             </li>

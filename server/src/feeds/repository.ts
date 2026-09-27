@@ -32,6 +32,13 @@ export interface SubscribedFeed extends Feed {
   unread_count: number;
 }
 
+export interface MutedKeyword {
+  id: number;
+  user_id: number;
+  keyword: string;
+  created_at: string;
+}
+
 export function findFeedByUrl(url: string): Feed | undefined {
   return db.prepare<[string], Feed>("SELECT * FROM feeds WHERE url = ?").get(url);
 }
@@ -166,8 +173,16 @@ export function upsertItems(
 
 export function listItemsForUser(
   userId: number,
-  opts: { feedId?: number; unreadOnly?: boolean; search?: string; limit?: number; since?: string } = {},
-): (Item & { read: boolean; feed_title: string | null })[] {
+  opts: {
+    feedId?: number;
+    unreadOnly?: boolean;
+    bookmarkedOnly?: boolean;
+    includeMuted?: boolean;
+    search?: string;
+    limit?: number;
+    since?: string;
+  } = {},
+): (Item & { read: boolean; bookmarked: boolean; feed_title: string | null })[] {
   const conditions: string[] = ["s.user_id = ?"];
   const params: unknown[] = [userId];
 
@@ -177,6 +192,21 @@ export function listItemsForUser(
   }
   if (opts.unreadOnly) {
     conditions.push("r.item_id IS NULL");
+  }
+  if (opts.bookmarkedOnly) {
+    conditions.push("b.item_id IS NOT NULL");
+  }
+  if (!opts.includeMuted) {
+    conditions.push(
+      `NOT EXISTS (
+        SELECT 1 FROM user_muted_keywords m
+        WHERE m.user_id = s.user_id
+          AND (
+            LOWER(COALESCE(i.title, '')) LIKE '%' || LOWER(m.keyword) || '%'
+            OR LOWER(COALESCE(i.content_snippet, '')) LIKE '%' || LOWER(m.keyword) || '%'
+          )
+      )`,
+    );
   }
   if (opts.search) {
     conditions.push("(i.title LIKE ? OR i.content_snippet LIKE ?)");
@@ -192,16 +222,17 @@ export function listItemsForUser(
 
   return db
     .prepare(
-      `SELECT DISTINCT i.*, f.title AS feed_title, (r.item_id IS NOT NULL) AS read
+      `SELECT DISTINCT i.*, f.title AS feed_title, (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
        FROM items i
        JOIN subscriptions s ON s.feed_id = i.feed_id
        JOIN feeds f ON f.id = i.feed_id
        LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = s.user_id
+       LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = s.user_id
        WHERE ${conditions.join(" AND ")}
        ORDER BY i.published_at DESC, i.created_at DESC
        LIMIT ?`,
     )
-    .all(...params) as (Item & { read: boolean; feed_title: string | null })[];
+    .all(...params) as (Item & { read: boolean; bookmarked: boolean; feed_title: string | null })[];
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {
@@ -243,4 +274,37 @@ export function markItemRead(userId: number, itemId: number): void {
 
 export function markItemUnread(userId: number, itemId: number): void {
   db.prepare("DELETE FROM item_reads WHERE user_id = ? AND item_id = ?").run(userId, itemId);
+}
+
+export function bookmarkItem(userId: number, itemId: number): void {
+  db.prepare(
+    "INSERT INTO item_bookmarks (user_id, item_id) VALUES (?, ?) ON CONFLICT (user_id, item_id) DO NOTHING",
+  ).run(userId, itemId);
+}
+
+export function unbookmarkItem(userId: number, itemId: number): void {
+  db.prepare("DELETE FROM item_bookmarks WHERE user_id = ? AND item_id = ?").run(userId, itemId);
+}
+
+export function listMutedKeywords(userId: number): MutedKeyword[] {
+  return db
+    .prepare<[number], MutedKeyword>("SELECT * FROM user_muted_keywords WHERE user_id = ? ORDER BY keyword ASC")
+    .all(userId);
+}
+
+export function addMutedKeyword(userId: number, keyword: string): MutedKeyword {
+  const trimmed = keyword.trim().toLowerCase();
+  const insert = db.prepare(
+    "INSERT INTO user_muted_keywords (user_id, keyword) VALUES (?, ?) ON CONFLICT(user_id, keyword) DO NOTHING",
+  );
+  insert.run(userId, trimmed);
+  return db
+    .prepare<[number, string], MutedKeyword>(
+      "SELECT * FROM user_muted_keywords WHERE user_id = ? AND keyword = ?",
+    )
+    .get(userId, trimmed)!;
+}
+
+export function removeMutedKeyword(userId: number, keywordId: number): void {
+  db.prepare("DELETE FROM user_muted_keywords WHERE id = ? AND user_id = ?").run(keywordId, userId);
 }

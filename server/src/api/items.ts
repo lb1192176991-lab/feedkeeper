@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSession } from "../auth/middleware.js";
-import { listItemsForUser, markAllRead, markItemRead, markItemUnread } from "../feeds/repository.js";
+import {
+  listItemsForUser,
+  markAllRead,
+  markItemRead,
+  markItemUnread,
+  bookmarkItem,
+  unbookmarkItem,
+} from "../feeds/repository.js";
 
 export const itemsRouter = Router();
 itemsRouter.use(requireSession);
@@ -9,6 +16,8 @@ itemsRouter.use(requireSession);
 const listQuerySchema = z.object({
   feedId: z.coerce.number().int().positive().optional(),
   unreadOnly: z.coerce.boolean().optional(),
+  bookmarkedOnly: z.coerce.boolean().optional(),
+  includeMuted: z.coerce.boolean().optional(),
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
 });
@@ -20,7 +29,13 @@ itemsRouter.get("/", (req, res) => {
     return;
   }
   const items = listItemsForUser(req.user!.id, parsed.data);
-  res.json(items.map((item) => ({ ...item, read: Boolean(item.read) })));
+  res.json(
+    items.map((item) => ({
+      ...item,
+      read: Boolean(item.read),
+      bookmarked: Boolean(item.bookmarked),
+    })),
+  );
 });
 
 const markAllReadSchema = z.object({ feedId: z.number().int().positive().optional() });
@@ -42,5 +57,15 @@ itemsRouter.post("/:itemId/read", (req, res) => {
 
 itemsRouter.post("/:itemId/unread", (req, res) => {
   markItemUnread(req.user!.id, Number(req.params.itemId));
+  res.status(204).end();
+});
+
+itemsRouter.post("/:itemId/bookmark", (req, res) => {
+  bookmarkItem(req.user!.id, Number(req.params.itemId));
+  res.status(204).end();
+});
+
+itemsRouter.delete("/:itemId/bookmark", (req, res) => {
+  unbookmarkItem(req.user!.id, Number(req.params.itemId));
   res.status(204).end();
 });

@@ -20,6 +20,8 @@ It's multi-user by design: one instance can serve several people, each with thei
 ## Features
 
 - **Any RSS/Atom feed & Auto-discovery** — paste a direct feed URL or simply any website URL (e.g. `https://example.com/blog`); Feedkeeper automatically finds and subscribes to available feeds.
+- **Bookmarks & Saved Articles** — bookmark articles to save them for later reading, protected permanently from automatic retention cleanup.
+- **Muted Keywords & Word Filtering** — suppress unwanted noise by configuring keyword filters that automatically hide matching articles from your feed.
 - **Feed Health & Error Transparency** — clear visual status indicators, consecutive error counters, last successful check timestamps, and per-feed manual refresh.
 - **Automated Retention & Housekeeping** — configurable retention rules for read items, maximum article age, and per-feed item caps, plus daily automated pruning and SQLite database vacuuming.
 - **Multi-user** — closed by default; an admin creates accounts (or invites people through the web UI).
@@ -111,9 +113,14 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `discover_feeds` | Discover available RSS/Atom/JSON feeds on any website URL |
 | `unsubscribe_feed` | Remove a subscription |
 | `refresh_feed` | Force an immediate check/poll of a subscribed feed |
-| `get_new_items` | Fetch unread items, optionally filtered |
-| `search_items` | Full-text search across all items |
+| `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks |
+| `search_items` | Full-text search across all items (with optional bookmarks filter) |
 | `mark_read` | Mark an item as read |
+| `bookmark_item` | Save/bookmark an item for later reading |
+| `unbookmark_item` | Remove bookmark from an item |
+| `list_muted_keywords` | List user's active muted keywords |
+| `add_muted_keyword` | Add a keyword to automatically filter out matching articles |
+| `remove_muted_keyword` | Remove a muted keyword rule |
 | `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
 | `cleanup_database` | *(Admin only)* Trigger retention housekeeping and VACUUM to purge old items and reclaim disk space |

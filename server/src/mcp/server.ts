@@ -1,6 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { listItemsForUser, listSubscriptionsForUser, markItemRead, findFeedById, isUserSubscribed } from "../feeds/repository.js";
+import {
+  listItemsForUser,
+  listSubscriptionsForUser,
+  markItemRead,
+  findFeedById,
+  isUserSubscribed,
+  bookmarkItem,
+  unbookmarkItem,
+  listMutedKeywords,
+  addMutedKeyword,
+  removeMutedKeyword,
+} from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
@@ -103,15 +114,16 @@ export function createMcpServerForUser(userId: number): McpServer {
     "get_new_items",
     {
       title: "Get new feed items",
-      description: "Returns unread items, optionally filtered by feed or a search term.",
+      description: "Returns unread items, optionally filtered by feed, search term, or bookmarks.",
       inputSchema: {
         feedId: z.number().int().positive().optional(),
         search: z.string().max(200).optional(),
+        bookmarkedOnly: z.boolean().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
     },
-    async ({ feedId, search, limit }) =>
-      textResult(listItemsForUser(userId, { feedId, search, limit, unreadOnly: true })),
+    async ({ feedId, search, bookmarkedOnly, limit }) =>
+      textResult(listItemsForUser(userId, { feedId, search, bookmarkedOnly, limit, unreadOnly: true })),
   );
 
   server.registerTool(
@@ -122,10 +134,12 @@ export function createMcpServerForUser(userId: number): McpServer {
       inputSchema: {
         query: z.string().min(1).max(200),
         feedId: z.number().int().positive().optional(),
+        bookmarkedOnly: z.boolean().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
     },
-    async ({ query, feedId, limit }) => textResult(listItemsForUser(userId, { search: query, feedId, limit })),
+    async ({ query, feedId, bookmarkedOnly, limit }) =>
+      textResult(listItemsForUser(userId, { search: query, feedId, bookmarkedOnly, limit })),
   );
 
   server.registerTool(
@@ -137,6 +151,65 @@ export function createMcpServerForUser(userId: number): McpServer {
     },
     async ({ itemId }) => {
       markItemRead(userId, itemId);
+      return textResult({ ok: true });
+    },
+  );
+
+  server.registerTool(
+    "bookmark_item",
+    {
+      title: "Bookmark an item",
+      description: "Bookmarks/saves a feed item for later reading and protects it from retention purge.",
+      inputSchema: { itemId: z.number().int().positive() },
+    },
+    async ({ itemId }) => {
+      bookmarkItem(userId, itemId);
+      return textResult({ ok: true });
+    },
+  );
+
+  server.registerTool(
+    "unbookmark_item",
+    {
+      title: "Remove bookmark",
+      description: "Removes bookmark from a feed item.",
+      inputSchema: { itemId: z.number().int().positive() },
+    },
+    async ({ itemId }) => {
+      unbookmarkItem(userId, itemId);
+      return textResult({ ok: true });
+    },
+  );
+
+  server.registerTool(
+    "list_muted_keywords",
+    {
+      title: "List muted keywords",
+      description: "Lists all muted keywords configured for the current user.",
+      inputSchema: {},
+    },
+    async () => textResult(listMutedKeywords(userId)),
+  );
+
+  server.registerTool(
+    "add_muted_keyword",
+    {
+      title: "Add muted keyword",
+      description: "Mutes a keyword. Articles containing this keyword will be filtered out from your feed.",
+      inputSchema: { keyword: z.string().min(1).max(100) },
+    },
+    async ({ keyword }) => textResult(addMutedKeyword(userId, keyword)),
+  );
+
+  server.registerTool(
+    "remove_muted_keyword",
+    {
+      title: "Remove muted keyword",
+      description: "Unmutes a keyword by its ID.",
+      inputSchema: { keywordId: z.number().int().positive() },
+    },
+    async ({ keywordId }) => {
+      removeMutedKeyword(userId, keywordId);
       return textResult({ ok: true });
     },
   );

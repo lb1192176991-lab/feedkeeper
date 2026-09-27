@@ -91,6 +91,14 @@ export interface Item {
   content_snippet: string | null;
   published_at: string | null;
   read: boolean;
+  bookmarked: boolean;
+}
+
+export interface MutedKeyword {
+  id: number;
+  user_id: number;
+  keyword: string;
+  created_at: string;
 }
 
 export interface Token {
@@ -142,18 +150,35 @@ export const api = {
   refreshAllFeeds: () =>
     request<{ refreshed: number; newItems: number; errors: number }>("/feeds/refresh-all", { method: "POST" }),
 
-  listItems: (params: { feedId?: number; unreadOnly?: boolean; search?: string } = {}) => {
+  listItems: (
+    params: {
+      feedId?: number;
+      unreadOnly?: boolean;
+      bookmarkedOnly?: boolean;
+      includeMuted?: boolean;
+      search?: string;
+    } = {},
+  ) => {
     const query = new URLSearchParams();
     if (params.feedId) query.set("feedId", String(params.feedId));
     if (params.unreadOnly) query.set("unreadOnly", "true");
+    if (params.bookmarkedOnly) query.set("bookmarkedOnly", "true");
+    if (params.includeMuted) query.set("includeMuted", "true");
     if (params.search) query.set("search", params.search);
     const qs = query.toString();
     return request<Item[]>(`/items${qs ? `?${qs}` : ""}`);
   },
   markRead: (itemId: number) => request<void>(`/items/${itemId}/read`, { method: "POST" }),
   markUnread: (itemId: number) => request<void>(`/items/${itemId}/unread`, { method: "POST" }),
+  bookmarkItem: (itemId: number) => request<void>(`/items/${itemId}/bookmark`, { method: "POST" }),
+  unbookmarkItem: (itemId: number) => request<void>(`/items/${itemId}/bookmark`, { method: "DELETE" }),
   markAllRead: (feedId?: number) =>
     request<{ marked: number }>("/items/mark-all-read", { method: "POST", body: JSON.stringify({ feedId }) }),
+
+  listMutedKeywords: () => request<{ keywords: MutedKeyword[] }>("/filters/muted"),
+  addMutedKeyword: (keyword: string) =>
+    request<MutedKeyword>("/filters/muted", { method: "POST", body: JSON.stringify({ keyword }) }),
+  deleteMutedKeyword: (id: number) => request<void>(`/filters/muted/${id}`, { method: "DELETE" }),
 
   listTokens: () => request<Token[]>("/tokens"),
   createToken: (name: string) =>

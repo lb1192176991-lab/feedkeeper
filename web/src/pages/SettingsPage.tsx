@@ -8,6 +8,7 @@ import {
   type RetentionSettings,
   type DatabaseStats,
   type CleanupResult,
+  type MutedKeyword,
 } from "../api/client.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
 
@@ -470,6 +471,108 @@ function RetentionSection() {
   );
 }
 
+function MutedKeywordsSection() {
+  const { t } = useTranslation();
+  const [keywords, setKeywords] = useState<MutedKeyword[]>([]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const data = await api.listMutedKeywords();
+      setKeywords(data.keywords);
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function onAdd(e: FormEvent) {
+    e.preventDefault();
+    if (!newKeyword.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const added = await api.addMutedKeyword(newKeyword.trim());
+      setKeywords((prev) => (prev.some((k) => k.id === added.id) ? prev : [...prev, added]));
+      setNewKeyword("");
+    } catch {
+      setError(t("common.error"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onRemove(id: number) {
+    try {
+      await api.deleteMutedKeyword(id);
+      setKeywords((prev) => prev.filter((k) => k.id !== id));
+    } catch {
+      setError(t("common.error"));
+    }
+  }
+
+  return (
+    <section className="card p-5 flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold">{t("settings.mutedKeywordsTitle")}</h2>
+        <p className="text-sm mt-1" style={{ color: "var(--c-text-muted)" }}>
+          {t("settings.mutedKeywordsHint")}
+        </p>
+      </div>
+
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      <form onSubmit={onAdd} className="flex gap-2 max-w-md">
+        <input
+          type="text"
+          placeholder={t("settings.mutedKeywordPlaceholder")}
+          className="input flex-1"
+          value={newKeyword}
+          onChange={(e) => setNewKeyword(e.target.value)}
+        />
+        <button type="submit" disabled={loading || !newKeyword.trim()} className="btn-primary whitespace-nowrap">
+          {t("settings.addMutedKeyword")}
+        </button>
+      </form>
+
+      {keywords.length > 0 ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {keywords.map((k) => (
+            <span
+              key={k.id}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border"
+              style={{
+                borderColor: "var(--c-border)",
+                backgroundColor: "var(--c-bg)",
+                color: "var(--c-text)",
+              }}
+            >
+              <span>{k.keyword}</span>
+              <button
+                type="button"
+                onClick={() => onRemove(k.id)}
+                title={t("settings.removeMutedKeyword")}
+                className="hover:opacity-75 font-bold leading-none p-0.5 text-xs text-red-500"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs italic" style={{ color: "var(--c-text-muted)" }}>
+          {t("settings.noMutedKeywords")}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -479,6 +582,7 @@ export function SettingsPage() {
       <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
       <ChangePasswordSection />
       <TokensSection />
+      <MutedKeywordsSection />
       {user?.role === "admin" && <UsersSection />}
       {user?.role === "admin" && <RetentionSection />}
     </div>

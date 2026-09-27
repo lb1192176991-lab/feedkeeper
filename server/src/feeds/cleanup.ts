@@ -114,14 +114,15 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
   let deletedOldItems = 0;
   let deletedPerFeedExcess = 0;
 
-  // 1. Delete read items older than retentionReadDays
+  // 1. Delete read items older than retentionReadDays (excluding bookmarked items)
   if (settings.retentionReadDays > 0) {
     const res = db.prepare(
       `DELETE FROM items
        WHERE id IN (
          SELECT i.id
          FROM items i
-         WHERE i.id IN (SELECT item_id FROM item_reads)
+         WHERE i.id NOT IN (SELECT item_id FROM item_bookmarks)
+           AND i.id IN (SELECT item_id FROM item_reads)
            AND NOT EXISTS (
              SELECT 1 FROM subscriptions s
              WHERE s.feed_id = i.feed_id
@@ -133,29 +134,31 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
     deletedReadItems = res.changes;
   }
 
-  // 2. Delete all items older than retentionMaxDays
+  // 2. Delete all items older than retentionMaxDays (excluding bookmarked items)
   if (settings.retentionMaxDays > 0) {
     const res = db.prepare(
       `DELETE FROM items
-       WHERE COALESCE(published_at, created_at) <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' days')`,
+       WHERE id NOT IN (SELECT item_id FROM item_bookmarks)
+         AND COALESCE(published_at, created_at) <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' days')`,
     ).run(settings.retentionMaxDays);
     deletedOldItems = res.changes;
   }
 
-  // 3. Delete items exceeding retentionMaxItemsPerFeed
+  // 3. Delete items exceeding retentionMaxItemsPerFeed (excluding bookmarked items)
   if (settings.retentionMaxItemsPerFeed > 0) {
     const res = db.prepare(
       `DELETE FROM items
-       WHERE id IN (
-         SELECT id FROM (
-           SELECT id, ROW_NUMBER() OVER (
-             PARTITION BY feed_id
-             ORDER BY COALESCE(published_at, created_at) DESC, id DESC
-           ) as rn
-           FROM items
-         )
-         WHERE rn > ?
-       )`,
+       WHERE id NOT IN (SELECT item_id FROM item_bookmarks)
+         AND id IN (
+           SELECT id FROM (
+             SELECT id, ROW_NUMBER() OVER (
+               PARTITION BY feed_id
+               ORDER BY COALESCE(published_at, created_at) DESC, id DESC
+             ) as rn
+             FROM items
+           )
+           WHERE rn > ?
+         )`,
     ).run(settings.retentionMaxItemsPerFeed);
     deletedPerFeedExcess = res.changes;
   }
