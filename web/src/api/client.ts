@@ -43,7 +43,9 @@ export interface Feed {
   site_url: string | null;
   poll_interval_minutes: number;
   last_polled_at: string | null;
+  last_success_at: string | null;
   last_error: string | null;
+  consecutive_errors: number;
   subscription_id: number;
   label: string | null;
   unread_count: number;
@@ -103,6 +105,10 @@ export const api = {
       headers: { "Content-Type": "application/xml" },
       body: opmlContent,
     }),
+  refreshFeed: (feedId: number) =>
+    request<{ feed: Feed; newItems: number; error: string | null }>(`/feeds/${feedId}/refresh`, { method: "POST" }),
+  refreshAllFeeds: () =>
+    request<{ refreshed: number; newItems: number; errors: number }>("/feeds/refresh-all", { method: "POST" }),
 
   listItems: (params: { feedId?: number; unreadOnly?: boolean; search?: string } = {}) => {
     const query = new URLSearchParams();

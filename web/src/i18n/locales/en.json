@@ -58,7 +58,14 @@
     "importing": "Importing feeds…",
     "importSuccess": "Import complete: {{imported}} added, {{skipped}} already subscribed.",
     "importPartial": "Import finished: {{imported}} added, {{skipped}} skipped, {{failed}} failed.",
-    "importFailed": "Failed to parse or import OPML file."
+    "importFailed": "Failed to parse or import OPML file.",
+    "refreshFeed": "Check now",
+    "refreshAll": "Check all feeds",
+    "refreshing": "Checking…",
+    "statusHealthy": "Healthy",
+    "statusFailing": "Failing ({{count}} consecutive errors)",
+    "statusPending": "Waiting for first check",
+    "lastSuccess": "Last successful check"
   },
   "items": {
     "title": "Items",

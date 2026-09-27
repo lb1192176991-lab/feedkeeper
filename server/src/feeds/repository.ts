@@ -7,7 +7,9 @@ export interface Feed {
   site_url: string | null;
   poll_interval_minutes: number;
   last_polled_at: string | null;
+  last_success_at: string | null;
   last_error: string | null;
+  consecutive_errors: number;
   etag: string | null;
   last_modified: string | null;
   created_at: string;
@@ -111,16 +113,28 @@ export function updateFeedAfterPoll(
   feedId: number,
   data: { title?: string; siteUrl?: string; etag?: string; lastModified?: string; error?: string | null },
 ): void {
-  db.prepare(
-    `UPDATE feeds SET
-       title = COALESCE(?, title),
-       site_url = COALESCE(?, site_url),
-       etag = COALESCE(?, etag),
-       last_modified = COALESCE(?, last_modified),
-       last_error = ?,
-       last_polled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = ?`,
-  ).run(data.title ?? null, data.siteUrl ?? null, data.etag ?? null, data.lastModified ?? null, data.error ?? null, feedId);
+  if (data.error) {
+    db.prepare(
+      `UPDATE feeds SET
+         last_error = ?,
+         consecutive_errors = consecutive_errors + 1,
+         last_polled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+       WHERE id = ?`,
+    ).run(data.error, feedId);
+  } else {
+    db.prepare(
+      `UPDATE feeds SET
+         title = COALESCE(?, title),
+         site_url = COALESCE(?, site_url),
+         etag = COALESCE(?, etag),
+         last_modified = COALESCE(?, last_modified),
+         last_error = NULL,
+         consecutive_errors = 0,
+         last_success_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+         last_polled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+       WHERE id = ?`,
+    ).run(data.title ?? null, data.siteUrl ?? null, data.etag ?? null, data.lastModified ?? null, feedId);
+  }
 }
 
 export function upsertItems(

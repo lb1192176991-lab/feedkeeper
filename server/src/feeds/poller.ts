@@ -5,7 +5,7 @@ import { listFeedsDueForPoll, updateFeedAfterPoll, upsertItems, type Feed } from
 
 const parser = new Parser();
 
-export async function pollFeed(feed: Feed): Promise<{ newItems: number }> {
+export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: string | null }> {
   try {
     const fetched = await fetchFeed(feed.url, {
       etag: feed.etag ?? undefined,
@@ -14,7 +14,7 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number }> {
 
     if (fetched.notModified) {
       updateFeedAfterPoll(feed.id, { error: null });
-      return { newItems: 0 };
+      return { newItems: 0, error: null };
     }
 
     const parsed = await parser.parseString(fetched.body);
@@ -37,11 +37,11 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number }> {
       error: null,
     });
 
-    return { newItems };
+    return { newItems, error: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     updateFeedAfterPoll(feed.id, { error: message });
-    return { newItems: 0 };
+    return { newItems: 0, error: message };
   }
 }
 

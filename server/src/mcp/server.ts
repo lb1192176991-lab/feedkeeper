@@ -1,9 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { listItemsForUser, listSubscriptionsForUser, markItemRead } from "../feeds/repository.js";
+import { listItemsForUser, listSubscriptionsForUser, markItemRead, findFeedById, isUserSubscribed } from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, FeedError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
+import { pollFeed } from "../feeds/poller.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -133,6 +134,35 @@ export function createMcpServerForUser(userId: number): McpServer {
       try {
         const result = await importOpmlFeeds(userId, opml);
         return textResult(result);
+      } catch (error) {
+        return errorResult(error instanceof Error ? error.message : String(error));
+      }
+    },
+  );
+
+  server.registerTool(
+    "refresh_feed",
+    {
+      title: "Refresh a feed",
+      description: "Forces an immediate poll of a subscribed feed to fetch new items and inspect feed health.",
+      inputSchema: {
+        feedId: z.number().int().positive().describe("The ID of the feed to refresh"),
+      },
+    },
+    async ({ feedId }) => {
+      const feed = findFeedById(feedId);
+      if (!feed || !isUserSubscribed(userId, feedId)) {
+        return errorResult("Feed not found or not subscribed");
+      }
+      try {
+        const result = await pollFeed(feed);
+        const updated = listSubscriptionsForUser(userId).find((f) => f.id === feedId);
+        return textResult({
+          success: !result.error,
+          newItems: result.newItems,
+          error: result.error,
+          feed: updated,
+        });
       } catch (error) {
         return errorResult(error instanceof Error ? error.message : String(error));
       }

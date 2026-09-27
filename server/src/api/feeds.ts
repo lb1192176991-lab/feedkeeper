@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSession } from "../auth/middleware.js";
-import { listSubscriptionsForUser } from "../feeds/repository.js";
+import { listSubscriptionsForUser, findFeedById, isUserSubscribed } from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, FeedError } from "../feeds/service.js";
 import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
+import { pollFeed } from "../feeds/poller.js";
 
 export const feedsRouter = Router();
 feedsRouter.use(requireSession);
@@ -109,4 +110,46 @@ feedsRouter.delete("/:feedId", (req, res) => {
     }
     throw error;
   }
+});
+
+feedsRouter.post("/:feedId/refresh", async (req, res) => {
+  const feedId = Number(req.params.feedId);
+  if (!Number.isInteger(feedId) || feedId <= 0) {
+    res.status(400).json({ error: "invalid_feed_id" });
+    return;
+  }
+
+  const feed = findFeedById(feedId);
+  if (!feed || !isUserSubscribed(req.user!.id, feedId)) {
+    res.status(404).json({ error: "feed_not_found" });
+    return;
+  }
+
+  const pollResult = await pollFeed(feed);
+  const updatedFeed = listSubscriptionsForUser(req.user!.id).find((f) => f.id === feedId);
+  res.json({
+    feed: updatedFeed,
+    newItems: pollResult.newItems,
+    error: pollResult.error,
+  });
+});
+
+feedsRouter.post("/refresh-all", async (req, res) => {
+  const subs = listSubscriptionsForUser(req.user!.id);
+  let totalNewItems = 0;
+  let errorCount = 0;
+
+  for (const sub of subs) {
+    const feed = findFeedById(sub.id);
+    if (!feed) continue;
+    const result = await pollFeed(feed);
+    totalNewItems += result.newItems;
+    if (result.error) errorCount++;
+  }
+
+  res.json({
+    refreshed: subs.length,
+    newItems: totalNewItems,
+    errors: errorCount,
+  });
 });

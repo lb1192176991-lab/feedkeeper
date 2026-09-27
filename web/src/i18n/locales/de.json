@@ -58,7 +58,14 @@
     "importing": "Feeds werden importiert…",
     "importSuccess": "Import abgeschlossen: {{imported}} hinzugefügt, {{skipped}} bereits abonniert.",
     "importPartial": "Import abgeschlossen: {{imported}} hinzugefügt, {{skipped}} übersprungen, {{failed}} fehlgeschlagen.",
-    "importFailed": "OPML-Datei konnte nicht verarbeitet oder importiert werden."
+    "importFailed": "OPML-Datei konnte nicht verarbeitet oder importiert werden.",
+    "refreshFeed": "Jetzt prüfen",
+    "refreshAll": "Alle Feeds prüfen",
+    "refreshing": "Wird geprüft…",
+    "statusHealthy": "Aktiv & fehlerfrei",
+    "statusFailing": "Fehler beim Abruf ({{count}}x fehlgeschlagen)",
+    "statusPending": "Wartet auf ersten Abruf",
+    "lastSuccess": "Zuletzt erfolgreich"
   },
   "items": {
     "title": "Einträge",
