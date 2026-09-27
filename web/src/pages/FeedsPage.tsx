@@ -147,14 +147,14 @@ export function FeedsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{t("feeds.title")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={onRefreshAll}
             disabled={refreshingAll || loading}
-            className="btn-secondary text-sm inline-flex items-center gap-1.5"
+            className="btn-secondary text-sm inline-flex items-center justify-center gap-1.5 col-span-2 sm:col-auto whitespace-nowrap"
           >
             <span className={refreshingAll ? "animate-spin" : ""}>↻</span>
             {refreshingAll ? t("feeds.refreshing") : t("feeds.refreshAll")}
@@ -170,14 +170,14 @@ export function FeedsPage() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="btn-secondary text-sm"
+            className="btn-secondary text-sm text-center whitespace-nowrap"
           >
             {importing ? t("feeds.importing") : t("feeds.importOpml")}
           </button>
           <a
             href={api.exportOpmlUrl()}
             download="feedkeeper-subscriptions.opml"
-            className="btn-secondary text-sm inline-flex items-center"
+            className="btn-secondary text-sm inline-flex items-center justify-center text-center whitespace-nowrap"
           >
             {t("feeds.exportOpml")}
           </a>
@@ -247,7 +247,7 @@ export function FeedsPage() {
                     : "4px solid var(--c-green3)",
                 }}
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span
@@ -267,10 +267,10 @@ export function FeedsPage() {
                             : "var(--c-green3)",
                         }}
                       />
-                      <p className="font-medium truncate">{feed.label ?? feed.title ?? feed.url}</p>
+                      <p className="font-medium truncate text-base">{feed.label ?? feed.title ?? feed.url}</p>
                     </div>
 
-                    <p className="text-sm truncate mt-0.5" style={{ color: "var(--c-text-muted)" }}>
+                    <p className="text-sm truncate mt-1" style={{ color: "var(--c-text-muted)" }}>
                       {feed.url}
                     </p>
 
@@ -295,7 +295,7 @@ export function FeedsPage() {
 
                     {feed.last_error && (
                       <div
-                        className="mt-2 p-2.5 rounded text-xs border flex items-start gap-2"
+                        className="mt-2.5 p-2.5 rounded text-xs border flex items-start gap-2"
                         style={{
                           backgroundColor: "rgba(239, 68, 68, 0.08)",
                           borderColor: "rgba(239, 68, 68, 0.25)",
@@ -308,41 +308,54 @@ export function FeedsPage() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {feed.unread_count > 0 && (
-                      <span
-                        className="text-xs font-medium px-2 py-1 rounded-full"
-                        style={{ backgroundColor: "var(--c-green3)", color: "#0f141e" }}
+                  <div
+                    className="flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2.5 sm:pt-0 border-t sm:border-t-0 shrink-0"
+                    style={{ borderColor: "var(--c-border)" }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {feed.unread_count > 0 && (
+                        <span
+                          className="text-xs font-medium px-2 py-1 rounded-full"
+                          style={{ backgroundColor: "var(--c-green3)", color: "#0f141e" }}
+                        >
+                          {t("feeds.unread", { count: feed.unread_count })}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onRefreshFeed(feed.id)}
+                        disabled={isRefreshing}
+                        title={t("feeds.refreshFeed")}
+                        className="btn-secondary text-sm inline-flex items-center gap-1.5 px-3 py-1.5"
                       >
-                        {t("feeds.unread", { count: feed.unread_count })}
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => onRefreshFeed(feed.id)}
-                      disabled={isRefreshing}
-                      title={t("feeds.refreshFeed")}
-                      className="btn-secondary text-sm inline-flex items-center gap-1"
-                    >
-                      <span className={isRefreshing ? "animate-spin" : ""}>↻</span>
-                      <span className="hidden sm:inline">{isRefreshing ? t("feeds.refreshing") : t("feeds.refreshFeed")}</span>
-                    </button>
-
-                    {feed.unread_count > 0 && (
-                      <button onClick={() => onMarkAllRead(feed)} className="btn-secondary text-sm whitespace-nowrap">
-                        {t("feeds.markAllRead")}
+                        <span className={isRefreshing ? "animate-spin" : ""}>↻</span>
+                        <span>{isRefreshing ? t("feeds.refreshing") : t("feeds.refreshFeed")}</span>
                       </button>
-                    )}
-                    <button
-                      onClick={() => (editingFeedId === feed.id ? setEditingFeedId(null) : startEdit(feed))}
-                      className="btn-secondary text-sm"
-                    >
-                      {t("feeds.edit")}
-                    </button>
-                    <button onClick={() => onUnsubscribe(feed)} className="btn-secondary text-sm">
-                      {t("feeds.unsubscribe")}
-                    </button>
+
+                      {feed.unread_count > 0 && (
+                        <button
+                          onClick={() => onMarkAllRead(feed)}
+                          className="btn-secondary text-sm whitespace-nowrap px-3 py-1.5"
+                        >
+                          {t("feeds.markAllRead")}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => (editingFeedId === feed.id ? setEditingFeedId(null) : startEdit(feed))}
+                        className="btn-secondary text-sm px-3 py-1.5"
+                      >
+                        {t("feeds.edit")}
+                      </button>
+                      <button
+                        onClick={() => onUnsubscribe(feed)}
+                        className="btn-secondary text-sm px-3 py-1.5"
+                      >
+                        {t("feeds.unsubscribe")}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
