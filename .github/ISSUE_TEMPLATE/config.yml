@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Community Discussions & Questions
+    url: https://github.com/visualfusion/feedkeeper/discussions
+    about: Ask questions, get help with self-hosting, or share ideas with the community.
   - name: Security Vulnerabilities
     url: https://github.com/visualfusion/feedkeeper/blob/main/SECURITY.md
     about: Please report security vulnerabilities privately according to our security policy.
