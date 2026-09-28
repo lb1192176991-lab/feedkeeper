@@ -39,6 +39,19 @@ npm run build  # verifies the production build succeeds
 
 Both run in CI on every pull request; please make sure they pass locally first.
 
+## Codebase architecture
+
+Feedkeeper is an npm workspace with two packages:
+
+- `server/`: Express + TypeScript backend.
+  - `src/db/`: SQLite setup with `better-sqlite3` and incremental migrations (`src/db/migrations/`).
+  - `src/feeds/`: Polling scheduler (`poller.ts`), feed parser/fetcher, auto-discovery, SSRF guard, OPML generator/parser, and housekeeping (`cleanup.ts`).
+  - `src/api/`: REST endpoints for feeds, items, bookmarks, keyword filters, folders, users, and retention settings.
+  - `src/mcp/`: Remote Model Context Protocol server exposing tools over Streamable HTTP (`/mcp`).
+- `web/`: Single-page app built with Vite, React, and Tailwind CSS.
+  - `src/pages/`: Feeds, Items, Settings, and Auth views.
+  - `src/i18n/`: Translations in `en.json`, `de.json`, and `ja.json`.
+
 ## Pull request guidelines
 
 - Keep PRs focused — one change per PR is easier to review than a bundle of unrelated fixes.

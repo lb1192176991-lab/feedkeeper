@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea or improvement for Feedkeeper
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome ideas that make Feedkeeper more useful, reliable, or enjoyable to use.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, or what problem are you running into today?
+      placeholder: A clear description of the pain point or motivation...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+      placeholder: Ideas on how the feature should behave, look, or interact with MCP/API...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds you are currently using, or related tools doing this well?
+    validations:
+      required: false
