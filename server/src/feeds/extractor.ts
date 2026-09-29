@@ -96,15 +96,13 @@ export function isCachedConsentSnippet(html: string): boolean {
   return isConsentContent("", html, "", html.replace(/<[^>]+>/g, " "));
 }
 
-// Search crawlers bypass CMP/cookie consent walls because publishers want their content indexed
-const FETCH_USER_AGENTS = [
-  "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-  `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 FeedKeeper/${APP_VERSION}`,
-];
+// Browser-like so article pages render normally, but identifies FeedKeeper honestly.
+const FETCH_USER_AGENT = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 FeedKeeper/${APP_VERSION}`;
+const FETCH_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 
-async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: AbortSignal, dispatcher: Agent, fetchImpl: ArticleFetch): Promise<{ html: string; url: string } | null> {
+async function fetchArticleHtml(rawUrl: string, signal: AbortSignal, dispatcher: Agent, fetchImpl: ArticleFetch): Promise<{ html: string; url: string } | null> {
   let currentUrl = rawUrl;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
@@ -112,9 +110,10 @@ async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: Abort
     const response = await fetchImpl(safeUrl, {
       signal,
       headers: {
-        "User-Agent": userAgent,
+        "User-Agent": FETCH_USER_AGENT,
         Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+        // Article URLs already point to one language; don't prefer any locale.
+        "Accept-Language": "*",
         "Cache-Control": "no-cache",
       },
       redirect: "manual",
@@ -159,51 +158,35 @@ export async function extractArticleFromUrl(rawUrl: string, fetchImpl: ArticleFe
   const safeUrl = await assertPublicHttpUrl(rawUrl);
   const dispatcher = createPublicDispatcher();
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
-    for (const ua of FETCH_USER_AGENTS) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+    const fetched = await fetchArticleHtml(safeUrl.toString(), controller.signal, dispatcher, fetchImpl);
+    if (!fetched) return null;
 
-      try {
-        const fetched = await fetchArticleHtml(safeUrl.toString(), ua, controller.signal, dispatcher, fetchImpl);
-        if (!fetched) continue;
+    const dom = new JSDOM(fetched.html, { url: fetched.url });
+    cleanConsentDom(dom.window.document);
 
-        const dom = new JSDOM(fetched.html, { url: fetched.url });
-        cleanConsentDom(dom.window.document);
-
-        const reader = new Readability(dom.window.document, {
-          charThreshold: 60,
-        });
-        const parsed = reader.parse();
-
-        if (!parsed || !parsed.content) {
-          continue;
-        }
-
-        if (isConsentContent(fetched.url, parsed.content, parsed.title, parsed.textContent)) {
-          // Detected a consent/cookie redirect or banner page, try next user-agent
-          continue;
-        }
-
-        return {
-          title: parsed.title || null,
-          byline: parsed.byline || null,
-          contentHtml: parsed.content,
-          textContent: parsed.textContent || "",
-          excerpt: parsed.excerpt || null,
-          siteName: parsed.siteName || null,
-        };
-      } catch (error) {
-        if (error instanceof SsrfBlockedError) throw error;
-        // Try next user-agent
-        continue;
-      } finally {
-        clearTimeout(timeout);
-      }
+    const parsed = new Readability(dom.window.document, { charThreshold: 60 }).parse();
+    // A consent wall instead of the article is treated as "no full text available".
+    if (!parsed?.content || isConsentContent(fetched.url, parsed.content, parsed.title, parsed.textContent)) {
+      return null;
     }
 
+    return {
+      title: parsed.title || null,
+      byline: parsed.byline || null,
+      contentHtml: parsed.content,
+      textContent: parsed.textContent || "",
+      excerpt: parsed.excerpt || null,
+      siteName: parsed.siteName || null,
+    };
+  } catch (error) {
+    if (error instanceof SsrfBlockedError) throw error;
     return null;
   } finally {
+    clearTimeout(timeout);
     dispatcher.destroy();
   }
 }

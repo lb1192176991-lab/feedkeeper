@@ -27,5 +27,5 @@ test("article extraction skips oversized responses", async () => {
   };
 
   assert.equal(await extractArticleFromUrl("https://93.184.216.34/article", mockFetch), null);
-  assert.equal(requests, 2);
+  assert.equal(requests, 1);
 });
