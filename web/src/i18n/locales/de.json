@@ -199,6 +199,11 @@
     "retentionSaved": "Einstellungen gespeichert.",
     "runCleanupNow": "Jetzt bereinigen (VACUUM)",
     "cleaning": "Wird bereinigt…",
-    "cleanupSuccess": "Bereinigung erfolgreich: {{total}} Einträge entfernt. Größe: {{before}} MB -> {{after}} MB."
+    "cleanupSuccess": "Bereinigung erfolgreich: {{total}} Einträge entfernt. Größe: {{before}} MB -> {{after}} MB.",
+    "installApp": "App installieren",
+    "installAppHint": "Lege FeedKeeper als eigenständige App auf dem Home-Bildschirm oder im Dock ab.",
+    "installAppButton": "Installieren",
+    "installAppIos": "Tippe in Safari auf das Teilen-Symbol (ggf. über das „…“-Menü) und wähle „Zum Home-Bildschirm“.",
+    "installAppMacSafari": "Wähle in Safari im Menü „Ablage“ den Eintrag „Zum Dock hinzufügen“."
   }
 }

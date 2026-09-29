@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   api,
@@ -13,6 +13,29 @@ import {
 import { useAuth } from "../auth/AuthContext.tsx";
 import { LanguageSwitcher } from "../components/LanguageSwitcher.tsx";
 import { CustomSelect } from "../components/CustomSelect.tsx";
+import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../utils/installPrompt.ts";
+
+function InstallAppRow() {
+  const { t } = useTranslation();
+  const mode = useSyncExternalStore(subscribeInstallPrompt, currentInstallMode);
+  if (mode === "installed" || mode === "unsupported") return null;
+
+  return (
+    <div className="pt-4 border-t border-[var(--c-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+      <div>
+        <h3 className="text-base font-semibold">{t("settings.installApp")}</h3>
+        <p className="text-sm mt-0.5" style={{ color: "var(--c-text-muted)" }}>
+          {mode === "ios" ? t("settings.installAppIos") : mode === "mac-safari" ? t("settings.installAppMacSafari") : t("settings.installAppHint")}
+        </p>
+      </div>
+      {mode === "prompt" && (
+        <button type="button" onClick={() => void promptInstall()} className="btn-primary whitespace-nowrap self-start sm:self-center">
+          {t("settings.installAppButton")}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function PreferencesSection() {
   const { t } = useTranslation();
@@ -57,6 +80,8 @@ function PreferencesSection() {
           <div className="w-11 h-6 bg-[var(--c-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--c-blue1)]" />
         </label>
       </div>
+
+      <InstallAppRow />
     </section>
   );
 }

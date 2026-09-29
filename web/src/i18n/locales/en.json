@@ -199,6 +199,11 @@
     "retentionSaved": "Settings saved successfully.",
     "runCleanupNow": "Run cleanup now (VACUUM)",
     "cleaning": "Cleaning…",
-    "cleanupSuccess": "Cleanup complete: removed {{total}} items. Size: {{before}} MB -> {{after}} MB."
+    "cleanupSuccess": "Cleanup complete: removed {{total}} items. Size: {{before}} MB -> {{after}} MB.",
+    "installApp": "Install app",
+    "installAppHint": "Add FeedKeeper to your home screen or dock as a standalone app.",
+    "installAppButton": "Install",
+    "installAppIos": "In Safari, tap the Share icon (via the “…” menu if needed) and choose “Add to Home Screen”.",
+    "installAppMacSafari": "In Safari, choose File › “Add to Dock”."
   }
 }

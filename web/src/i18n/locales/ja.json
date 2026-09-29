@@ -197,6 +197,11 @@
     "retentionSaved": "設定を保存しました。",
     "runCleanupNow": "今すぐクリーンアップを実行 (VACUUM)",
     "cleaning": "クリーンアップ中…",
-    "cleanupSuccess": "クリーンアップが完了しました: {{total}} 件の記事を削除しました。サイズ: {{before}} MB -> {{after}} MB。"
+    "cleanupSuccess": "クリーンアップが完了しました: {{total}} 件の記事を削除しました。サイズ: {{before}} MB -> {{after}} MB。",
+    "installApp": "アプリをインストール",
+    "installAppHint": "FeedKeeper をホーム画面または Dock に単独のアプリとして追加します。",
+    "installAppButton": "インストール",
+    "installAppIos": "Safari で共有アイコン（必要に応じて「…」メニューから）をタップし、「ホーム画面に追加」を選択してください。",
+    "installAppMacSafari": "Safari のメニューで「ファイル」›「Dock に追加」を選択してください。"
   }
 }
