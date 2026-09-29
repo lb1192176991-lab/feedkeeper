@@ -4,8 +4,10 @@ import { useTranslation } from "react-i18next";
 import { api, type Feed, type Folder, type Item } from "../api/client.ts";
 import { CustomSelect, type SelectOption } from "../components/CustomSelect.tsx";
 import { ArticleReaderModal } from "../components/ArticleReaderModal.tsx";
+import { ArticleExcerpt } from "../components/ArticleExcerpt.tsx";
 import { Favicon } from "../components/Favicon.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { NewspaperGrid } from "../components/NewspaperGrid.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
 
 const PAGE_SIZE = 50;
@@ -34,6 +36,25 @@ export function ItemsPage() {
   const nextOffset = useRef(0);
   const scrollRestored = useRef(false);
   const [selectedArticle, setSelectedArticle] = useState<Item | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "newspaper">(() => {
+    try {
+      return localStorage.getItem("feedkeeper_items_view") === "newspaper" ? "newspaper" : "list";
+    } catch {
+      return "list";
+    }
+  });
+
+  function changeViewMode(mode: "list" | "newspaper") {
+    if (mode === viewMode) return;
+    resetItemsScrollY();
+    setViewMode(mode);
+    window.scrollTo({ top: 0, behavior: "instant" });
+    try {
+      localStorage.setItem("feedkeeper_items_view", mode);
+    } catch {
+      // The view remains usable when storage is unavailable.
+    }
+  }
 
   const STORAGE_KEY_SCOPE = "feedkeeper_filter_scope";
   const STORAGE_KEY_UNREAD = "feedkeeper_filter_unread";
@@ -453,14 +474,48 @@ export function ItemsPage() {
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl sm:text-2xl font-semibold">{t("items.title")}</h1>
-        <button
-          onClick={onMarkAllRead}
-          className="btn-secondary text-xs sm:text-sm whitespace-nowrap"
-        >
-          {t("feeds.markAllRead")}
-        </button>
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <h1 className="text-xl sm:text-2xl font-semibold shrink-0">{t("items.title")}</h1>
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="relative grid h-11 w-[108px] shrink-0 grid-cols-2 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-1 sm:w-[220px]" role="group" aria-label={t("items.viewMode")}>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/2)] rounded-lg border border-[var(--c-mobile-nav-active-border)] bg-[var(--c-mobile-nav-active)] shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] motion-reduce:transition-none"
+              style={{ transform: viewMode === "newspaper" ? "translateX(100%)" : "translateX(0)" }}
+            />
+            <button
+              type="button"
+              onClick={() => changeViewMode("list")}
+              title={t("items.listView")}
+              aria-label={t("items.listView")}
+              aria-pressed={viewMode === "list"}
+              className={`relative z-10 flex h-full min-w-0 items-center justify-center gap-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--c-blue3)] ${viewMode === "list" ? "text-[var(--c-text)]" : "text-[var(--c-text-muted)] hover:text-[var(--c-text)]"}`}
+            >
+              <svg className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${viewMode === "list" ? "scale-105" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" /><circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" /></svg>
+              <span className="hidden sm:inline">{t("items.listView")}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => changeViewMode("newspaper")}
+              title={t("items.newspaperView")}
+              aria-label={t("items.newspaperView")}
+              aria-pressed={viewMode === "newspaper"}
+              className={`relative z-10 flex h-full min-w-0 items-center justify-center gap-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--c-blue3)] ${viewMode === "newspaper" ? "text-[var(--c-text)]" : "text-[var(--c-text-muted)] hover:text-[var(--c-text)]"}`}
+            >
+              <svg className={`h-4 w-4 transition-transform duration-200 motion-reduce:transition-none ${viewMode === "newspaper" ? "scale-105" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="17" rx="2" /><path d="M6 7h7v6H6zM16 7h2M16 10h2M6 16h12M6 18h8" /></svg>
+              <span className="hidden sm:inline">{t("items.newspaperView")}</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onMarkAllRead}
+            title={t("feeds.markAllRead")}
+            aria-label={t("feeds.markAllRead")}
+            className="btn-secondary flex h-11 w-11 shrink-0 items-center justify-center p-0!"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12l4 4 6-7M11 16l3 0 7-8" /></svg>
+          </button>
+        </div>
       </div>
 
       <div ref={toolbarRef} className="sticky z-20 py-2" style={{ top: headerHeight }}>
@@ -595,6 +650,8 @@ export function ItemsPage() {
         <LoadingSpinner size="lg" />
       ) : items.length === 0 ? (
         <p style={{ color: "var(--c-text-muted)" }}>{t("items.noItems")}</p>
+      ) : viewMode === "newspaper" ? (
+        <NewspaperGrid items={items} onOpen={openArticle} onBookmark={toggleBookmark} onRead={toggleRead} />
       ) : (
         <ul className="flex flex-col gap-3 animate-page-fade">
           {items.map((item) => {
@@ -646,11 +703,7 @@ export function ItemsPage() {
                         </span>
                       </h2>
 
-                      {item.content_snippet && (
-                        <p className="text-sm mt-1.5 line-clamp-3" style={{ color: "var(--c-text-muted)" }}>
-                          {item.content_snippet}
-                        </p>
-                      )}
+                      <ArticleExcerpt item={item} className="text-sm mt-1.5 line-clamp-3 text-[var(--c-text-muted)]" />
                     </div>
 
                     {/* Meta information row BELOW article text with icons and mobile action buttons */}

@@ -95,6 +95,9 @@
   },
   "items": {
     "title": "記事",
+    "viewMode": "記事の表示形式",
+    "listView": "リスト",
+    "newspaperView": "新聞",
     "markRead": "既読にする",
     "markUnread": "未読にする",
     "searchPlaceholder": "記事を検索…",

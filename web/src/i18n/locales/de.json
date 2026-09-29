@@ -95,6 +95,9 @@
   },
   "items": {
     "title": "Artikel",
+    "viewMode": "Darstellung der Artikel",
+    "listView": "Liste",
+    "newspaperView": "Zeitung",
     "markRead": "Als gelesen markieren",
     "markUnread": "Als ungelesen markieren",
     "searchPlaceholder": "Artikel durchsuchen…",

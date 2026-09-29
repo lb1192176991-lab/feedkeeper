@@ -95,6 +95,9 @@
   },
   "items": {
     "title": "Items",
+    "viewMode": "Article view",
+    "listView": "List",
+    "newspaperView": "Magazine",
     "markRead": "Mark read",
     "markUnread": "Mark unread",
     "searchPlaceholder": "Search items…",
