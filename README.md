@@ -79,6 +79,39 @@ Open `PUBLIC_URL` (by default `http://localhost:3000`) to complete the initial s
 
 Existing Docker installations must provide `SESSION_SECRET` through `.env` or the shell before using this Compose configuration. Changing it signs out active browser sessions; feeds and accounts stay in the database.
 
+## Back up and restore
+
+Create a consistent SQLite backup while FeedKeeper is running:
+
+```bash
+npm run db:backup -- /safe/location/feedkeeper.sqlite
+```
+
+The command refuses to overwrite an existing backup and verifies its integrity. Keep the backup outside the application directory and copy it to another machine or storage device.
+
+With Docker Compose, create the backup in the mounted data volume and copy it to the host:
+
+```bash
+docker compose exec feedkeeper npm run db:backup -- /app/data/feedkeeper-backup.sqlite
+docker compose cp feedkeeper:/app/data/feedkeeper-backup.sqlite ./feedkeeper-backup.sqlite
+```
+
+To restore, **stop FeedKeeper first**, then run:
+
+```bash
+npm run db:restore -- /safe/location/feedkeeper.sqlite --force
+```
+
+Restoring replaces the configured database. Start FeedKeeper again after the command succeeds. Existing backups may need a database migration on startup if they were created with an older version.
+
+For Docker Compose, stop the service and run the restore command in a one-off container with the backup mounted read-only:
+
+```bash
+docker compose stop feedkeeper
+docker compose run --rm --no-deps -v "$PWD/feedkeeper-backup.sqlite:/restore.sqlite:ro" feedkeeper npm run db:restore -- /restore.sqlite --force
+docker compose up -d feedkeeper
+```
+
 ## Quick start (local development)
 
 Requires Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+.
@@ -109,7 +142,7 @@ npm run start
 ## Connecting an MCP client
 
 1. Log in to the FeedKeeper web UI and go to **Settings → Personal access tokens**.
-2. Create a token and copy it immediately — it's only shown once.
+2. Create a token and copy it immediately — it's only shown once. Choose **Read only** for clients that only need to browse articles; choose **Read and write** to let the client change feeds or reading state. Existing tokens retain their previous write access.
 3. Add an MCP server entry pointing at `https://<your-domain>/mcp`, sending `Authorization: Bearer <token>` as a header.
 
 Every tool call is scoped to the token's owner — a client can only see and manage that user's own feeds and items.
@@ -127,8 +160,12 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `move_feed_to_folder` | Move a subscription into or out of a folder |
 | `refresh_feed` | Force an immediate check/poll of a subscribed feed |
 | `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks |
+| `list_items` | Page through compact items by time added; use cursors to fetch older or newly added items |
+| `get_item` | Fetch one article and its cached content |
 | `search_items` | Search titles and summaries across all items (with optional bookmarks filter) |
 | `mark_read` | Mark an item as read |
+| `mark_unread` | Mark an item as unread |
+| `mark_all_read` | Mark all subscribed items as read, optionally within a feed or folder |
 | `bookmark_item` | Save/bookmark an item for later reading |
 | `unbookmark_item` | Remove bookmark from an item |
 | `list_muted_keywords` | List user's active muted keywords |
@@ -137,6 +174,8 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
 | `cleanup_database` | *(Admin only)* Purge old items and reclaim disk space after deletions |
+
+Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `get_item` returns stored feed or reader content; it does not fetch the source website. For incremental synchronization, save `newestCursor`, pass it as `after` next time, and follow `nextCursor` as `before` until there are no more pages.
 
 ## Security
 

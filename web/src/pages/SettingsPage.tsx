@@ -143,6 +143,7 @@ function TokensSection() {
   const { t } = useTranslation();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [name, setName] = useState("");
+  const [scope, setScope] = useState<"read" | "write">("read");
   const [freshToken, setFreshToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -156,7 +157,7 @@ function TokensSection() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    const { token } = await api.createToken(name);
+    const { token } = await api.createToken(name, scope);
     setFreshToken(token);
     setName("");
     await load();
@@ -212,6 +213,15 @@ function TokensSection() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
+        <CustomSelect
+          value={scope}
+          onChange={(value) => setScope(value as "read" | "write")}
+          options={[
+            { value: "read", label: t("settings.tokenReadOnly") },
+            { value: "write", label: t("settings.tokenReadWrite") },
+          ]}
+          className="sm:w-44"
+        />
         <button type="submit" className="btn-primary whitespace-nowrap">
           {t("settings.createToken")}
         </button>
@@ -222,6 +232,9 @@ function TokensSection() {
           <li key={tok.id} className="flex items-center justify-between text-sm py-2 border-t" style={{ borderColor: "var(--c-border)" }}>
             <span>
               {tok.name} <code style={{ color: "var(--c-text-muted)" }}>{tok.token_prefix}…</code>
+              <span className="ml-2" style={{ color: "var(--c-text-muted)" }}>
+                {tok.scope === "read" ? t("settings.tokenReadOnly") : t("settings.tokenReadWrite")}
+              </span>
             </span>
             <button onClick={() => onDelete(tok.id)} className="btn-secondary text-xs">
               {t("settings.deleteToken")}

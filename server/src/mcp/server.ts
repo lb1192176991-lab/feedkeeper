@@ -4,6 +4,8 @@ import {
   listItemsForUser,
   listSubscriptionsForUser,
   markItemRead,
+  markItemUnread,
+  markAllRead,
   findFeedById,
   isUserSubscribed,
   bookmarkItem,
@@ -14,9 +16,10 @@ import {
   listFoldersForUser,
   findFolderById,
   createFolder,
-  deleteFolder,
   updateSubscriptionFolder,
 } from "../feeds/repository.js";
+import type { TokenScope } from "../auth/tokens.js";
+import { getItemForMcp, listItemsPage } from "./items.js";
 import { subscribeToFeed, unsubscribeFromFeed, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { SsrfBlockedError, normalizeUrlCandidate } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
@@ -36,7 +39,7 @@ function errorResult(message: string) {
 // Builds a fresh MCP server scoped to a single authenticated user. A new
 // instance is created per request (see mcp/http.ts) so tool handlers can
 // safely close over `userId` without leaking data between users.
-export function createMcpServerForUser(userId: number): McpServer {
+export function createMcpServerForUser(userId: number, scope: TokenScope): McpServer {
   const server = new McpServer({ name: "feedkeeper", version: "0.4.1" });
 
   server.registerTool(
@@ -54,7 +57,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     z.string().url(),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "subscribe_feed",
     {
       title: "Subscribe to a feed",
@@ -104,7 +107,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     },
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "unsubscribe_feed",
     {
       title: "Unsubscribe from a feed",
@@ -131,7 +134,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     async () => textResult(listFoldersForUser(userId)),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "create_folder",
     {
       title: "Create folder",
@@ -141,7 +144,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     async ({ name }) => textResult(createFolder(userId, name)),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "move_feed_to_folder",
     {
       title: "Move feed to folder",
@@ -177,6 +180,43 @@ export function createMcpServerForUser(userId: number): McpServer {
   );
 
   server.registerTool(
+    "list_items",
+    {
+      title: "List items with a cursor",
+      description: "Lists compact article records by time added. Use nextCursor as before to fetch older pages, or newestCursor as after to fetch newly added items. When paging new items, keep the original after cursor while following nextCursor.",
+      inputSchema: {
+        feedId: z.number().int().positive().optional(),
+        folderId: z.number().int().positive().optional(),
+        unreadOnly: z.boolean().optional(),
+        bookmarkedOnly: z.boolean().optional(),
+        before: z.string().max(256).optional(),
+        after: z.string().max(256).optional(),
+        limit: z.number().int().positive().max(100).optional(),
+      },
+    },
+    async (args) => {
+      try {
+        return textResult(listItemsPage(userId, args));
+      } catch (error) {
+        return errorResult(error instanceof Error ? error.message : String(error));
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_item",
+    {
+      title: "Get an article",
+      description: "Returns one subscribed article, including cached feed or reader content when available. Content is capped at 40,000 characters.",
+      inputSchema: { itemId: z.number().int().positive() },
+    },
+    async ({ itemId }) => {
+      const item = getItemForMcp(userId, itemId);
+      return item ? textResult(item) : errorResult("item_not_found");
+    },
+  );
+
+  server.registerTool(
     "search_items",
     {
       title: "Search feed items",
@@ -193,7 +233,7 @@ export function createMcpServerForUser(userId: number): McpServer {
       textResult(listItemsForUser(userId, { search: query, feedId, folderId, bookmarkedOnly, limit })),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "mark_read",
     {
       title: "Mark item as read",
@@ -206,7 +246,33 @@ export function createMcpServerForUser(userId: number): McpServer {
     },
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
+    "mark_unread",
+    {
+      title: "Mark item as unread",
+      description: "Marks a subscribed item as unread for the current user.",
+      inputSchema: { itemId: z.number().int().positive() },
+    },
+    async ({ itemId }) => {
+      markItemUnread(userId, itemId);
+      return textResult({ ok: true });
+    },
+  );
+
+  if (scope === "write") server.registerTool(
+    "mark_all_read",
+    {
+      title: "Mark all items as read",
+      description: "Marks all subscribed items as read, optionally limited to one feed or folder.",
+      inputSchema: {
+        feedId: z.number().int().positive().optional(),
+        folderId: z.number().int().positive().optional(),
+      },
+    },
+    async ({ feedId, folderId }) => textResult({ marked: markAllRead(userId, { feedId, folderId }) }),
+  );
+
+  if (scope === "write") server.registerTool(
     "bookmark_item",
     {
       title: "Bookmark an item",
@@ -219,7 +285,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     },
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "unbookmark_item",
     {
       title: "Remove bookmark",
@@ -242,7 +308,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     async () => textResult(listMutedKeywords(userId)),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "add_muted_keyword",
     {
       title: "Add muted keyword",
@@ -252,7 +318,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     async ({ keyword }) => textResult(addMutedKeyword(userId, keyword)),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "remove_muted_keyword",
     {
       title: "Remove muted keyword",
@@ -275,7 +341,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     async () => ({ content: [{ type: "text" as const, text: generateOpml(userId) }] }),
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "import_opml",
     {
       title: "Import feeds from OPML",
@@ -294,7 +360,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     },
   );
 
-  server.registerTool(
+  if (scope === "write") server.registerTool(
     "refresh_feed",
     {
       title: "Refresh a feed",
@@ -324,7 +390,7 @@ export function createMcpServerForUser(userId: number): McpServer {
   );
 
   const currentUser = findUserById(userId);
-  if (currentUser?.role === "admin") {
+  if (scope === "write" && currentUser?.role === "admin") {
     server.registerTool(
       "cleanup_database",
       {

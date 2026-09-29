@@ -138,6 +138,8 @@
     "tokensTitle": "Personal Access Tokens",
     "tokensHint": "Nutze ein Token, um einen MCP-Client (z. B. Claude) remote mit dieser FeedKeeper-Instanz zu verbinden.",
     "createToken": "Token erstellen",
+    "tokenReadOnly": "Nur lesen",
+    "tokenReadWrite": "Lesen und schreiben",
     "tokenNamePlaceholder": "Token-Name (z. B. \"Claude Desktop\")",
     "tokenCreated": "Token erstellt",
     "tokenCreatedHint": "Jetzt kopieren — es wird nicht erneut angezeigt.",

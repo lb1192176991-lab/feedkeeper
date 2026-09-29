@@ -26,6 +26,8 @@
     "build": "npm run build --workspace web && npm run build --workspace server",
     "start": "npm run start --workspace server",
     "setup": "npm run setup --workspace server",
+    "db:backup": "npm run db:backup --workspace server --",
+    "db:restore": "npm run db:restore --workspace server --",
     "lint": "npm run lint --workspace server && npm run lint --workspace web",
     "test": "npm run test --workspace server && npm run test --workspace web"
   }

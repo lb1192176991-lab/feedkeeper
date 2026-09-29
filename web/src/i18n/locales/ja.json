@@ -138,6 +138,8 @@
     "tokensTitle": "パーソナルアクセストークン",
     "tokensHint": "トークンを使うと、MCPクライアント(Claudeなど)からこのFeedKeeperインスタンスにリモート接続できます。",
     "createToken": "トークンを作成",
+    "tokenReadOnly": "読み取り専用",
+    "tokenReadWrite": "読み取りと書き込み",
     "tokenNamePlaceholder": "トークン名(例:「Claude Desktop」)",
     "tokenCreated": "トークンを作成しました",
     "tokenCreatedHint": "今すぐコピーしてください。二度と表示されません。",

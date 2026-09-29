@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { resolveUserIdFromToken } from "./tokens.js";
+import { resolveToken, type TokenScope } from "./tokens.js";
 import { findUserById, toPublicUser, type PublicUser } from "./users.js";
 
 declare global {
@@ -7,6 +7,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: PublicUser;
+      tokenScope?: TokenScope;
     }
   }
 }
@@ -35,17 +36,18 @@ export function requireBearerToken(req: Request, res: Response, next: NextFuncti
     res.status(401).json({ error: "missing_token" });
     return;
   }
-  const userId = resolveUserIdFromToken(token);
-  if (!userId) {
+  const resolved = resolveToken(token);
+  if (!resolved) {
     res.status(401).json({ error: "invalid_token" });
     return;
   }
-  const user = findUserById(userId);
+  const user = findUserById(resolved.userId);
   if (!user) {
     res.status(401).json({ error: "invalid_token" });
     return;
   }
   req.user = toPublicUser(user);
+  req.tokenScope = resolved.scope;
   next();
 }
 

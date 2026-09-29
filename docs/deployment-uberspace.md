@@ -82,8 +82,27 @@ npm run build
 supervisorctl restart feedkeeper
 ```
 
+## Backup and restore
+
+Create a verified backup while the service is running:
+
+```bash
+cd ~/feedkeeper
+npm run db:backup -- ~/feedkeeper-backup.sqlite
+```
+
+Store a copy outside the server. To restore it, stop the service first, then run:
+
+```bash
+supervisorctl stop feedkeeper
+npm run db:restore -- ~/feedkeeper-backup.sqlite --force
+supervisorctl start feedkeeper
+```
+
+If you use a different process manager, substitute its stop and start commands. Restore replaces the configured database.
+
 ## Notes
 
-- The SQLite database lives at the path set by `DATABASE_PATH` (`./data/feedkeeper.sqlite` by default). Back it up by copying that one file — no separate database server is involved.
+- The SQLite database lives at the path set by `DATABASE_PATH` (`./data/feedkeeper.sqlite` by default). Use the backup command above while the service is running; SQLite uses WAL mode, so copying only the main file may miss recent changes.
 - Feedkeeper polls subscribed feeds on its own schedule; there's no cron job to set up.
 - If `npm install` fails to build the native SQLite binding, install build tools with `uberspace tools version use gcc` or check the current Uberspace manual for the native module build guide — most environments get a prebuilt binary and never hit this.

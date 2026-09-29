@@ -239,6 +239,9 @@ export function listItemsForUser(
     limit?: number;
     offset?: number;
     since?: string;
+    before?: { createdAt: string; id: number };
+    after?: { createdAt: string; id: number };
+    sortByAdded?: boolean;
   } = {},
 ): (Item & {
   read: boolean;
@@ -284,6 +287,14 @@ export function listItemsForUser(
     conditions.push("i.created_at > ?");
     params.push(opts.since);
   }
+  if (opts.before) {
+    conditions.push("(i.created_at < ? OR (i.created_at = ? AND i.id < ?))");
+    params.push(opts.before.createdAt, opts.before.createdAt, opts.before.id);
+  }
+  if (opts.after) {
+    conditions.push("(i.created_at > ? OR (i.created_at = ? AND i.id > ?))");
+    params.push(opts.after.createdAt, opts.after.createdAt, opts.after.id);
+  }
 
   const limit = Math.min(opts.limit ?? 50, 200);
   const offset = Math.max(opts.offset ?? 0, 0);
@@ -303,7 +314,7 @@ export function listItemsForUser(
        LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = s.user_id
        LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = s.user_id
        WHERE ${conditions.join(" AND ")}
-       ORDER BY i.published_at DESC, i.created_at DESC, i.id DESC
+       ORDER BY ${opts.sortByAdded ? "i.created_at DESC, i.id DESC" : "i.published_at DESC, i.created_at DESC, i.id DESC"}
        LIMIT ? OFFSET ?`,
     )
     .all(...params) as (Item & {
@@ -313,6 +324,19 @@ export function listItemsForUser(
       feed_site_url: string | null;
       feed_url: string;
     })[];
+}
+
+export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
+  return db.prepare<[number, number], ReturnType<typeof listItemsForUser>[number]>(
+    `SELECT i.*, f.title AS feed_title, f.site_url AS feed_site_url, f.url AS feed_url,
+            (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
+     FROM items i
+     JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+     JOIN feeds f ON f.id = i.feed_id
+     LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = s.user_id
+     LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = s.user_id
+     WHERE i.id = ?`,
+  ).get(userId, itemId);
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {

@@ -126,6 +126,7 @@ export interface MutedKeyword {
 export interface Token {
   id: number;
   name: string;
+  scope: "read" | "write";
   token_prefix: string;
   created_at: string;
   last_used_at: string | null;
@@ -234,8 +235,8 @@ export const api = {
   deleteMutedKeyword: (id: number) => request<void>(`/filters/muted/${id}`, { method: "DELETE" }),
 
   listTokens: () => request<Token[]>("/tokens"),
-  createToken: (name: string) =>
-    request<{ id: number; token: string }>("/tokens", { method: "POST", body: JSON.stringify({ name }) }),
+  createToken: (name: string, scope: "read" | "write") =>
+    request<{ id: number; token: string }>("/tokens", { method: "POST", body: JSON.stringify({ name, scope }) }),
   deleteToken: (id: number) => request<void>(`/tokens/${id}`, { method: "DELETE" }),
 
   getRetention: () => request<{ settings: RetentionSettings; stats: DatabaseStats }>("/system/retention"),

@@ -8,6 +8,8 @@
     "build": "tsc -p tsconfig.json && node -e \"require('fs').cpSync('src/db/migrations','dist/db/migrations',{recursive:true})\"",
     "start": "node dist/server.js",
     "setup": "tsx src/setup-cli.ts",
+    "db:backup": "node dist/backup-cli.js backup",
+    "db:restore": "node dist/backup-cli.js restore",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/*.test.ts"
   },

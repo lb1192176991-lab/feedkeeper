@@ -10,7 +10,7 @@ export const mcpRouter = Router();
 // safely usable by many different users/clients from anywhere.
 mcpRouter.post("/", requireBearerToken, async (req, res) => {
   try {
-    const server = createMcpServerForUser(req.user!.id);
+    const server = createMcpServerForUser(req.user!.id, req.tokenScope!);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on("close", () => {
       transport.close();

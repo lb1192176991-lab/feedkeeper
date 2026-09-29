@@ -10,7 +10,10 @@ tokensRouter.get("/", (req, res) => {
   res.json(listTokensForUser(req.user!.id));
 });
 
-const createSchema = z.object({ name: z.string().min(1).max(100) });
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  scope: z.enum(["read", "write"]).default("read"),
+});
 
 tokensRouter.post("/", (req, res) => {
   const parsed = createSchema.safeParse(req.body);
@@ -19,7 +22,7 @@ tokensRouter.post("/", (req, res) => {
     return;
   }
   // The plaintext token is only ever returned here, right after creation.
-  const { id, token } = createPersonalAccessToken(req.user!.id, parsed.data.name);
+  const { id, token } = createPersonalAccessToken(req.user!.id, parsed.data.name, parsed.data.scope);
   res.status(201).json({ id, token });
 });
 

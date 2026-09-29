@@ -2,6 +2,7 @@ import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { db } from "../db/index.js";
 
 const TOKEN_PREFIX = "fk_";
+export type TokenScope = "read" | "write";
 
 export interface PersonalAccessToken {
   id: number;
@@ -9,6 +10,7 @@ export interface PersonalAccessToken {
   name: string;
   token_hash: string;
   token_prefix: string;
+  scope: TokenScope;
   created_at: string;
   last_used_at: string | null;
 }
@@ -18,7 +20,7 @@ function hashToken(token: string): string {
 }
 
 // Returns the plaintext token once; only the hash is persisted.
-export function createPersonalAccessToken(userId: number, name: string): { id: number; token: string } {
+export function createPersonalAccessToken(userId: number, name: string, scope: TokenScope): { id: number; token: string } {
   const secret = randomBytes(32).toString("base64url");
   const token = `${TOKEN_PREFIX}${secret}`;
   const tokenHash = hashToken(token);
@@ -26,15 +28,15 @@ export function createPersonalAccessToken(userId: number, name: string): { id: n
 
   const result = db
     .prepare(
-      `INSERT INTO personal_access_tokens (user_id, name, token_hash, token_prefix)
-       VALUES (?, ?, ?, ?)`,
+      `INSERT INTO personal_access_tokens (user_id, name, token_hash, token_prefix, scope)
+       VALUES (?, ?, ?, ?, ?)`,
     )
-    .run(userId, name, tokenHash, tokenPrefix);
+    .run(userId, name, tokenHash, tokenPrefix, scope);
 
   return { id: Number(result.lastInsertRowid), token };
 }
 
-export function resolveUserIdFromToken(token: string): number | null {
+export function resolveToken(token: string): { userId: number; scope: TokenScope } | null {
   if (!token.startsWith(TOKEN_PREFIX)) return null;
   const tokenHash = hashToken(token);
 
@@ -58,7 +60,7 @@ export function resolveUserIdFromToken(token: string): number | null {
     row.id,
   );
 
-  return row.user_id;
+  return { userId: row.user_id, scope: row.scope };
 }
 
 export function listTokensForUser(userId: number): Omit<PersonalAccessToken, "token_hash">[] {
