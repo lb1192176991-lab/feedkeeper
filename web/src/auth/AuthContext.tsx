@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type User } from "../api/client.ts";
+import { resetItemsScrollY } from "../utils/scrollState.ts";
 
 interface AuthState {
   user: User | null;
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     await api.logout();
+    resetItemsScrollY();
     setUser(null);
   }
 

@@ -165,12 +165,14 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
 
   const totalDeleted = deletedReadItems + deletedOldItems + deletedPerFeedExcess;
 
-  // Optimize and rebuild storage
+  // Optimize query planning; rebuild storage only when this run freed rows.
   db.exec("PRAGMA optimize;");
-  try {
-    db.exec("VACUUM;");
-  } catch (err) {
-    console.warn("[cleanup] VACUUM skipped or could not run:", err);
+  if (totalDeleted > 0) {
+    try {
+      db.exec("VACUUM;");
+    } catch (err) {
+      console.warn("[cleanup] VACUUM skipped or could not run:", err);
+    }
   }
 
   const sizeAfter = getDatabaseFileSizeBytes();

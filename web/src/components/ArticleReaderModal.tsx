@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Item } from "../api/client.js";
-import { sanitizeHtml, estimateReadingTime } from "../utils/sanitizeHtml.js";
+import { sanitizeHtml, estimateReadingTime, safeHttpUrl } from "../utils/sanitizeHtml.js";
 
 interface ArticleReaderModalProps {
   item: Item | null;
@@ -35,6 +35,7 @@ export function ArticleReaderModal({
   const [showFullText, setShowFullText] = useState(false);
   const [extractedByline, setExtractedByline] = useState<string | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const articleUrl = item?.link ? safeHttpUrl(item.link) : null;
 
   // Sync state whenever active item changes
   useEffect(() => {
@@ -45,7 +46,7 @@ export function ArticleReaderModal({
 
   // Automatically trigger reader view extraction if configured and article not yet extracted
   useEffect(() => {
-    if (!isOpen || !item || !item.link) return;
+    if (!isOpen || !item || !articleUrl) return;
     const isAutoReader = localStorage.getItem("feedkeeper_auto_reader_mode") !== "false";
     if (isAutoReader && !item.full_content_html) {
       handleToggleFullText();
@@ -72,7 +73,7 @@ export function ArticleReaderModal({
       return;
     }
 
-    if (!item.link) return;
+    if (!articleUrl) return;
 
     setExtracting(true);
     setExtractionError(null);
@@ -128,15 +129,15 @@ export function ArticleReaderModal({
       } else if (e.key === "r" || e.key === "R") {
         e.preventDefault();
         handleToggleFullText();
-      } else if ((e.key === "o" || e.key === "O") && currentItem.link) {
+      } else if ((e.key === "o" || e.key === "O") && articleUrl) {
         e.preventDefault();
-        window.open(currentItem.link, "_blank", "noopener,noreferrer");
+        window.open(articleUrl, "_blank", "noopener,noreferrer");
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, item, hasNext, hasPrev, onNext, onPrevious, onClose, onToggleBookmark, onToggleRead, showFullText, extracting]);
+  }, [isOpen, item, articleUrl, hasNext, hasPrev, onNext, onPrevious, onClose, onToggleBookmark, onToggleRead, showFullText, extracting]);
 
   // Format publication date & time
   const pubDate = useMemo(() => {
@@ -183,7 +184,7 @@ export function ArticleReaderModal({
   const sanitizedContent = useMemo(() => {
     if (!item) return "";
     if (activeContentHtml) {
-      return sanitizeHtml(activeContentHtml, { heroImageUrl: item.image_url });
+      return sanitizeHtml(activeContentHtml, { heroImageUrl: item.image_url, baseUrl: item.link });
     }
     return "";
   }, [item, activeContentHtml]);
@@ -196,9 +197,9 @@ export function ArticleReaderModal({
 
   // Copy article link to clipboard
   const handleCopyLink = async () => {
-    if (!item?.link) return;
+    if (!articleUrl) return;
     try {
-      await navigator.clipboard.writeText(item.link);
+      await navigator.clipboard.writeText(articleUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -325,9 +326,9 @@ export function ArticleReaderModal({
             {extractionError && (
               <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs flex items-center justify-between gap-3">
                 <span>{extractionError}</span>
-                {item.link && (
+                {articleUrl && (
                   <a
-                    href={item.link}
+                    href={articleUrl}
                     target="_blank"
                     rel="noreferrer noopener"
                     className="underline font-semibold whitespace-nowrap hover:opacity-80"
@@ -392,7 +393,7 @@ export function ArticleReaderModal({
               {/* Right group: Actions (Reader View, Bookmark, Read/Unread, Copy Link, Open in Browser) */}
               <div className="flex items-center gap-2">
                 {/* Reader View toggle */}
-                {item.link && (
+                {articleUrl && (
                   <button
                     type="button"
                     onClick={handleToggleFullText}
@@ -473,9 +474,9 @@ export function ArticleReaderModal({
                 </button>
 
                 {/* Open in external browser */}
-                {item.link && (
+                {articleUrl && (
                   <a
-                    href={item.link}
+                    href={articleUrl}
                     target="_blank"
                     rel="noreferrer noopener"
                     title={t("reader.openOriginal")}

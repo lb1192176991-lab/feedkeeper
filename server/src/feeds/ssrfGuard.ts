@@ -1,45 +1,9 @@
-import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
+import type { LookupFunction } from "node:net";
+import ipaddr from "ipaddr.js";
+import { Agent } from "undici";
 
-// Blocks feed URLs that resolve to internal/private infrastructure so a user
-// cannot make this server probe its own host or internal network (SSRF).
-const BLOCKED_IPV4_RANGES: Array<[string, number]> = [
-  ["0.0.0.0", 8],
-  ["10.0.0.0", 8],
-  ["100.64.0.0", 10], // carrier-grade NAT
-  ["127.0.0.0", 8],
-  ["169.254.0.0", 16], // link-local / cloud metadata
-  ["172.16.0.0", 12],
-  ["192.0.0.0", 24],
-  ["192.168.0.0", 16],
-  ["198.18.0.0", 15],
-  ["224.0.0.0", 4], // multicast
-];
-
-function ipToInt(ip: string): number {
-  return ip.split(".").reduce((acc, octet) => (acc << 8) + Number(octet), 0) >>> 0;
-}
-
-function isBlockedIPv4(ip: string): boolean {
-  const target = ipToInt(ip);
-  return BLOCKED_IPV4_RANGES.some(([base, prefix]) => {
-    const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
-    return (target & mask) === (ipToInt(base) & mask);
-  });
-}
-
-function isBlockedIPv6(ip: string): boolean {
-  const normalized = ip.toLowerCase();
-  return (
-    normalized === "::1" ||
-    normalized.startsWith("fe80:") || // link-local
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") || // unique local
-    normalized.startsWith("::ffff:127.") ||
-    normalized.startsWith("::ffff:10.") ||
-    normalized.startsWith("::ffff:192.168.")
-  );
-}
+const BENCHMARK_NETWORK = ipaddr.parse("198.18.0.0") as ipaddr.IPv4;
 
 export class SsrfBlockedError extends Error {
   constructor(url: string) {
@@ -49,18 +13,36 @@ export class SsrfBlockedError extends Error {
 }
 
 export function normalizeUrlCandidate(rawUrl: string): string {
-  let trimmed = rawUrl.trim();
+  const trimmed = rawUrl.trim();
   if (!trimmed) return trimmed;
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (trimmed.startsWith("//")) return `https:${trimmed}`;
   return `https://${trimmed}`;
 }
 
+export function isPublicIp(address: string): boolean {
+  try {
+    const parsed = ipaddr.process(address.replace(/^\[|\]$/g, ""));
+    // The benchmarking range is reported as "unicast" by ipaddr.js.
+    if (parsed.kind() === "ipv4" && (parsed as ipaddr.IPv4).match(BENCHMARK_NETWORK, 15)) {
+      return false;
+    }
+    return parsed.range() === "unicast";
+  } catch {
+    return false;
+  }
+}
+
+function assertPublicAddresses(addresses: Array<{ address: string }>, url: string): void {
+  if (addresses.length === 0 || addresses.some(({ address }) => !isPublicIp(address))) {
+    throw new SsrfBlockedError(url);
+  }
+}
+
 export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
-  const normalized = normalizeUrlCandidate(rawUrl);
   let url: URL;
   try {
-    url = new URL(normalized);
+    url = new URL(normalizeUrlCandidate(rawUrl));
   } catch {
     throw new Error("Invalid URL");
   }
@@ -68,23 +50,36 @@ export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("Only http:// and https:// URLs are allowed");
   }
+  if (url.username || url.password) throw new Error("URLs with credentials are not allowed");
 
-  const hostname = url.hostname;
-  const version = isIP(hostname);
-
-  if (version === 4 && isBlockedIPv4(hostname)) throw new SsrfBlockedError(rawUrl);
-  if (version === 6 && isBlockedIPv6(hostname)) throw new SsrfBlockedError(rawUrl);
-
-  if (version === 0) {
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (ipaddr.isValid(hostname)) {
+    if (!isPublicIp(hostname)) throw new SsrfBlockedError(rawUrl);
+  } else {
     if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local")) {
       throw new SsrfBlockedError(rawUrl);
     }
-    const resolved = await lookup(hostname, { all: true });
-    for (const { address, family } of resolved) {
-      if (family === 4 && isBlockedIPv4(address)) throw new SsrfBlockedError(rawUrl);
-      if (family === 6 && isBlockedIPv6(address)) throw new SsrfBlockedError(rawUrl);
-    }
+    assertPublicAddresses(await lookup(hostname, { all: true }), rawUrl);
   }
 
   return url;
+}
+
+// Validate the address actually used by the socket. A DNS answer can change
+// between URL validation and connection, so the preflight check alone is insufficient.
+export function createPublicDispatcher(): Agent {
+  const guardedLookup: LookupFunction = (hostname, options, callback) => {
+    lookup(hostname, { ...options, all: true })
+      .then((addresses) => {
+        try {
+          assertPublicAddresses(addresses, hostname);
+          if (options.all) callback(null, addresses);
+          else callback(null, addresses[0].address, addresses[0].family);
+        } catch (error) {
+          callback(error as NodeJS.ErrnoException, "");
+        }
+      })
+      .catch((error: NodeJS.ErrnoException) => callback(error, ""));
+  };
+  return new Agent({ connect: { lookup: guardedLookup } });
 }

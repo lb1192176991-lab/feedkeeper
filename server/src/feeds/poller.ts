@@ -4,13 +4,24 @@ import { fetchFeed } from "./fetcher.js";
 import { listFeedsDueForPoll, updateFeedAfterPoll, upsertItems, type Feed } from "./repository.js";
 
 type CustomItem = Parser.Item & {
-  mediaContent?: any;
-  mediaThumbnail?: any;
+  mediaContent?: unknown;
+  mediaThumbnail?: unknown;
   contentEncoded?: string;
-  "media:content"?: any;
-  "media:thumbnail"?: any;
+  "media:content"?: unknown;
+  "media:thumbnail"?: unknown;
   "content:encoded"?: string;
 };
+
+function mediaAttribute(value: unknown, key: "url" | "medium" | "type"): unknown {
+  if (typeof value !== "object" || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  const attributes = record.$;
+  if (typeof attributes === "object" && attributes !== null) {
+    const nested = (attributes as Record<string, unknown>)[key];
+    if (nested !== undefined) return nested;
+  }
+  return record[key];
+}
 
 const parser = new Parser<Record<string, unknown>, CustomItem>({
   customFields: {
@@ -41,10 +52,10 @@ function extractImageUrl(item: CustomItem): string | null {
   const mediaContent = item.mediaContent ?? item["media:content"];
   if (mediaContent) {
     if (isValidImageUrl(mediaContent)) return cleanImageUrl(mediaContent);
-    const url = mediaContent.$?.url ?? mediaContent.url;
-    const medium = mediaContent.$?.medium ?? mediaContent.medium;
-    const type = mediaContent.$?.type ?? mediaContent.type;
-    if (isValidImageUrl(url) && (medium === "image" || !medium || (type && type.startsWith("image/")))) {
+    const url = mediaAttribute(mediaContent, "url");
+    const medium = mediaAttribute(mediaContent, "medium");
+    const type = mediaAttribute(mediaContent, "type");
+    if (isValidImageUrl(url) && (medium === "image" || !medium || (typeof type === "string" && type.startsWith("image/")))) {
       return cleanImageUrl(url);
     }
   }
@@ -53,7 +64,7 @@ function extractImageUrl(item: CustomItem): string | null {
   const mediaThumbnail = item.mediaThumbnail ?? item["media:thumbnail"];
   if (mediaThumbnail) {
     if (isValidImageUrl(mediaThumbnail)) return cleanImageUrl(mediaThumbnail);
-    const url = mediaThumbnail.$?.url ?? mediaThumbnail.url;
+    const url = mediaAttribute(mediaThumbnail, "url");
     if (isValidImageUrl(url)) return cleanImageUrl(url);
   }
 
@@ -130,7 +141,16 @@ export async function pollDueFeeds(): Promise<void> {
 export function startPollingScheduler(): void {
   // Runs every minute; each feed is only actually re-fetched once its own
   // poll_interval_minutes has elapsed (see listFeedsDueForPoll).
-  cron.schedule("* * * * *", () => {
-    pollDueFeeds().catch((error) => console.error("[poller] unexpected failure", error));
+  let running = false;
+  cron.schedule("* * * * *", async () => {
+    if (running) return;
+    running = true;
+    try {
+      await pollDueFeeds();
+    } catch (error) {
+      console.error("[poller] unexpected failure", error);
+    } finally {
+      running = false;
+    }
   });
 }

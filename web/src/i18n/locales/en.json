@@ -9,6 +9,7 @@
     "close": "Close",
     "error": "Something went wrong",
     "retry": "Retry",
+    "loadMore": "Load more",
     "never": "never",
     "noOptions": "No options",
     "metaTitle": "FeedKeeper – RSS Reader & MCP Server",

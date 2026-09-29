@@ -14,14 +14,12 @@ export interface DiscoveredFeed {
 const FEED_MIME_TYPES = [
   "application/rss+xml",
   "application/atom+xml",
-  "application/feed+json",
-  "application/json",
   "text/xml",
   "application/xml",
 ];
 
 /**
- * Given a URL, determines if it is already a direct RSS/Atom/JSON feed
+ * Given a URL, determines if it is already a direct RSS/Atom feed
  * or if it is an HTML page that links to one or more feeds (auto-discovery).
  */
 export async function discoverFeeds(inputUrl: string): Promise<DiscoveredFeed[]> {

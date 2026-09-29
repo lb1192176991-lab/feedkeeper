@@ -1,4 +1,4 @@
-import { assertPublicHttpUrl } from "./ssrfGuard.js";
+import { assertPublicHttpUrl, createPublicDispatcher } from "./ssrfGuard.js";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -18,86 +18,92 @@ export interface FetchedFeed {
 // guard, capping response size, and honoring conditional GET headers.
 export async function fetchFeed(
   url: string,
-  opts: { etag?: string; lastModified?: string; cookie?: string } = {},
+  opts: { etag?: string; lastModified?: string } = {},
 ): Promise<FetchedFeed> {
   let currentUrl = url;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const dispatcher = createPublicDispatcher();
 
-  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
-    const validated = await assertPublicHttpUrl(currentUrl);
+  try {
+    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+      const validated = await assertPublicHttpUrl(currentUrl);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const headers: Record<string, string> = {
+        "User-Agent": USER_AGENT,
+        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, application/xhtml+xml;q=0.9, */*;q=0.5",
+      };
+      if (redirects === 0 && opts.etag) headers["If-None-Match"] = opts.etag;
+      if (redirects === 0 && opts.lastModified) headers["If-Modified-Since"] = opts.lastModified;
 
-    const headers: Record<string, string> = {
-      "User-Agent": USER_AGENT,
-      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, application/xhtml+xml;q=0.9, */*;q=0.5",
-    };
-    if (opts.etag) headers["If-None-Match"] = opts.etag;
-    if (opts.lastModified) headers["If-Modified-Since"] = opts.lastModified;
-    if (opts.cookie) headers["Cookie"] = opts.cookie;
-
-    let response: Response;
-    try {
-      response = await fetch(validated, {
+      const response = await fetch(validated, {
         headers,
         redirect: "manual",
         signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+        dispatcher,
+      } as RequestInit & { dispatcher: typeof dispatcher });
 
-    if (response.status === 304) {
-      return { notModified: true, body: "", finalUrl: currentUrl, contentType: response.headers.get("content-type") ?? undefined };
-    }
+      if (response.status === 304) {
+        return {
+          notModified: true,
+          body: "",
+          finalUrl: currentUrl,
+          contentType: response.headers.get("content-type") ?? undefined,
+        };
+      }
 
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) throw new Error(`Redirect from ${currentUrl} without a Location header`);
-      currentUrl = new URL(location, validated).toString();
-      continue;
-    }
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location) throw new Error(`Redirect from ${currentUrl} without a Location header`);
+        await response.body?.cancel();
+        currentUrl = new URL(location, validated).toString();
+        continue;
+      }
 
-    if (!response.ok) {
-      throw new Error(`Feed responded with HTTP ${response.status}`);
-    }
+      if (!response.ok) {
+        throw new Error(`Feed responded with HTTP ${response.status}`);
+      }
 
-    const contentLength = response.headers.get("content-length");
-    if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) {
-      throw new Error("Feed response exceeds the maximum allowed size");
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("Feed response had no body");
-
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_RESPONSE_BYTES) {
-        await reader.cancel();
+      const contentLength = response.headers.get("content-length");
+      if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) {
         throw new Error("Feed response exceeds the maximum allowed size");
       }
-      chunks.push(value);
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Feed response had no body");
+
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_RESPONSE_BYTES) {
+          await reader.cancel();
+          throw new Error("Feed response exceeds the maximum allowed size");
+        }
+        chunks.push(value);
+      }
+
+      const rawBuffer = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+      const contentType = response.headers.get("content-type") ?? undefined;
+      const body = decodeFeedBuffer(rawBuffer, contentType);
+
+      return {
+        body,
+        notModified: false,
+        etag: response.headers.get("etag") ?? undefined,
+        lastModified: response.headers.get("last-modified") ?? undefined,
+        contentType,
+        finalUrl: currentUrl,
+      };
     }
 
-    const rawBuffer = Buffer.concat(chunks.map((c) => Buffer.from(c)));
-    const contentType = response.headers.get("content-type") ?? undefined;
-    const body = decodeFeedBuffer(rawBuffer, contentType);
-
-    return {
-      body,
-      notModified: false,
-      etag: response.headers.get("etag") ?? undefined,
-      lastModified: response.headers.get("last-modified") ?? undefined,
-      contentType,
-      finalUrl: currentUrl,
-    };
+    throw new Error(`Too many redirects while fetching ${url}`);
+  } finally {
+    clearTimeout(timeout);
+    dispatcher.destroy();
   }
-
-  throw new Error(`Too many redirects while fetching ${url}`);
 }
 
 /**

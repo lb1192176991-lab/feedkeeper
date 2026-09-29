@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Feed, type Folder, type Item } from "../api/client.ts";
@@ -7,17 +7,22 @@ import { ArticleReaderModal } from "../components/ArticleReaderModal.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
 
-let cachedItems: Item[] | null = null;
-let cachedFeeds: Feed[] | null = null;
-let cachedFolders: Folder[] | null = null;
+const PAGE_SIZE = 50;
 
 export function ItemsPage() {
   const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [feeds, setFeeds] = useState<Feed[]>(() => cachedFeeds || []);
-  const [folders, setFolders] = useState<Folder[]>(() => cachedFolders || []);
-  const [items, setItems] = useState<Item[]>(() => cachedItems || []);
-  const [loading, setLoading] = useState<boolean>(() => cachedItems === null);
+  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const loadVersion = useRef(0);
+  const nextOffset = useRef(0);
+  const scrollRestored = useRef(false);
   const [selectedArticle, setSelectedArticle] = useState<Item | null>(null);
 
   const STORAGE_KEY_SCOPE = "feedkeeper_filter_scope";
@@ -93,26 +98,27 @@ export function ItemsPage() {
 
   // Restore scroll position when returning to items page
   useEffect(() => {
+    if (loading || scrollRestored.current) return;
     const targetY = getItemsScrollY();
-    if (targetY > 0) {
-      window.scrollTo({ top: targetY, behavior: "instant" });
-      const raf = requestAnimationFrame(() => {
+    const raf = requestAnimationFrame(() => {
+      if (targetY > 0) {
         window.scrollTo({ top: targetY, behavior: "instant" });
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-  }, []);
+      }
+      scrollRestored.current = true;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [loading]);
 
   // Track scroll position on items page
   useEffect(() => {
     function handleScroll() {
-      if (document.body.style.overflow !== "hidden") {
+      if (scrollRestored.current && document.body.style.overflow !== "hidden") {
         setItemsScrollY(window.scrollY);
       }
     }
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      if (document.body.style.overflow !== "hidden") {
+      if (scrollRestored.current && document.body.style.overflow !== "hidden") {
         setItemsScrollY(window.scrollY);
       }
       window.removeEventListener("scroll", handleScroll);
@@ -185,8 +191,6 @@ export function ItemsPage() {
       .then(([f, fol]) => {
         setFeeds(f);
         setFolders(fol.folders);
-        cachedFeeds = f;
-        cachedFolders = fol.folders;
       })
       .catch((err) => console.error("Failed to load initial feeds/folders:", err));
   }, []);
@@ -195,9 +199,11 @@ export function ItemsPage() {
   const currentFolderId = filterScope.startsWith("folder:") ? Number(filterScope.slice(7)) : undefined;
 
   async function load() {
-    if (items.length === 0) {
-      setLoading(true);
-    }
+    const version = ++loadVersion.current;
+    setLoading(true);
+    setLoadError(false);
+    setMoreError(false);
+    setLoadingMore(false);
     try {
       const data = await api.listItems({
         feedId: currentFeedId,
@@ -205,17 +211,66 @@ export function ItemsPage() {
         unreadOnly,
         bookmarkedOnly,
         search: search || undefined,
+        limit: PAGE_SIZE,
       });
-      setItems(data);
-      cachedItems = data;
+      if (version === loadVersion.current) {
+        setItems(data);
+        nextOffset.current = data.length;
+        setHasMore(data.length === PAGE_SIZE);
+      }
+    } catch (error) {
+      if (version === loadVersion.current) {
+        console.error("Failed to load items:", error);
+        setLoadError(true);
+      }
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
+    }
+  }
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return;
+    const version = loadVersion.current;
+    setLoadingMore(true);
+    setMoreError(false);
+    try {
+      const data = await api.listItems({
+        feedId: currentFeedId,
+        folderId: currentFolderId,
+        unreadOnly,
+        bookmarkedOnly,
+        search: search || undefined,
+        limit: PAGE_SIZE,
+        offset: nextOffset.current,
+      });
+      if (version === loadVersion.current) {
+        nextOffset.current += data.length;
+        setItems((previous) => {
+          const seen = new Set(previous.map((item) => item.id));
+          return [...previous, ...data.filter((item) => !seen.has(item.id))];
+        });
+        setHasMore(data.length === PAGE_SIZE);
+      }
+    } catch (error) {
+      if (version === loadVersion.current) {
+        console.error("Failed to load more items:", error);
+        setMoreError(true);
+      }
+    } finally {
+      if (version === loadVersion.current) setLoadingMore(false);
     }
   }
 
   useEffect(() => {
-    const timeout = setTimeout(load, 200);
-    return () => clearTimeout(timeout);
+    setItems([]);
+    setLoading(true);
+    setHasMore(false);
+    setLoadingMore(false);
+    const timeout = setTimeout(() => { void load(); }, 200);
+    return () => {
+      clearTimeout(timeout);
+      loadVersion.current++;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterScope, unreadOnly, bookmarkedOnly, search]);
 
@@ -223,9 +278,7 @@ export function ItemsPage() {
   useEffect(() => {
     if (articleParam) {
       const found = items.find((i) => i.id === Number(articleParam));
-      if (found) {
-        setSelectedArticle(found);
-      }
+      setSelectedArticle(found ?? null);
     } else {
       setSelectedArticle(null);
     }
@@ -236,9 +289,7 @@ export function ItemsPage() {
     if (!item.read) {
       api.markRead(item.id).catch(() => {});
       setItems((prev) => {
-        const next = prev.map((i) => (i.id === item.id ? { ...i, read: true } : i));
-        cachedItems = next;
-        return next;
+        return prev.map((i) => (i.id === item.id ? { ...i, read: true } : i));
       });
       setSelectedArticle({ ...item, read: true });
     }
@@ -277,9 +328,7 @@ export function ItemsPage() {
     if (item.read) await api.markUnread(item.id);
     else await api.markRead(item.id);
     setItems((prev) => {
-      const next = prev.map((i) => (i.id === item.id ? { ...i, read: nextRead } : i));
-      cachedItems = next;
-      return next;
+      return prev.map((i) => (i.id === item.id ? { ...i, read: nextRead } : i));
     });
     if (selectedArticle?.id === item.id) {
       setSelectedArticle((prev) => (prev ? { ...prev, read: nextRead } : null));
@@ -291,9 +340,7 @@ export function ItemsPage() {
     if (item.bookmarked) await api.unbookmarkItem(item.id);
     else await api.bookmarkItem(item.id);
     setItems((prev) => {
-      const next = prev.map((i) => (i.id === item.id ? { ...i, bookmarked: nextBookmarked } : i));
-      cachedItems = next;
-      return next;
+      return prev.map((i) => (i.id === item.id ? { ...i, bookmarked: nextBookmarked } : i));
     });
     if (selectedArticle?.id === item.id) {
       setSelectedArticle((prev) => (prev ? { ...prev, bookmarked: nextBookmarked } : null));
@@ -456,7 +503,9 @@ export function ItemsPage() {
         </div>
       </div>
 
-      {loading && items.length === 0 ? (
+      {loadError ? (
+        <p role="alert" style={{ color: "var(--c-text-muted)" }}>{t("common.error")}</p>
+      ) : loading && items.length === 0 ? (
         <LoadingSpinner size="lg" />
       ) : items.length === 0 ? (
         <p style={{ color: "var(--c-text-muted)" }}>{t("items.noItems")}</p>
@@ -688,6 +737,17 @@ export function ItemsPage() {
             );
           })}
         </ul>
+      )}
+
+      {!loadError && items.length > 0 && (hasMore || moreError) && (
+        <button
+          type="button"
+          onClick={() => { void loadMore(); }}
+          disabled={loadingMore}
+          className="btn-secondary self-center"
+        >
+          {loadingMore ? t("common.loading") : moreError ? t("common.retry") : t("common.loadMore")}
+        </button>
       )}
 
       {/* Modern Slide-over Reader Modal */}

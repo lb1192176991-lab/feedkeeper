@@ -191,6 +191,8 @@ export const api = {
       bookmarkedOnly?: boolean;
       includeMuted?: boolean;
       search?: string;
+      limit?: number;
+      offset?: number;
     } = {},
   ) => {
     const query = new URLSearchParams();
@@ -200,6 +202,8 @@ export const api = {
     if (params.bookmarkedOnly) query.set("bookmarkedOnly", "true");
     if (params.includeMuted) query.set("includeMuted", "true");
     if (params.search) query.set("search", params.search);
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.offset) query.set("offset", String(params.offset));
     const qs = query.toString();
     return request<Item[]>(`/items${qs ? `?${qs}` : ""}`);
   },

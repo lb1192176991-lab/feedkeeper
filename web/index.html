@@ -10,16 +10,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <script>
-      (function () {
-        try {
-          var saved = localStorage.getItem("fk_theme");
-          if (saved === "light" || saved === "dark") {
-            document.documentElement.setAttribute("data-theme", saved);
-          }
-        } catch (e) {}
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
     <title>FeedKeeper</title>
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#0f172a" />

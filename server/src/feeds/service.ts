@@ -107,14 +107,15 @@ export function updateFeedSettings(
     throw new FeedError("not_subscribed");
   }
 
+  if (settings.folderId != null && !findFolderById(userId, settings.folderId)) {
+    throw new FeedError("folder_not_found");
+  }
+
   if (settings.label !== undefined) {
     updateSubscriptionLabel(userId, feedId, settings.label);
   }
 
   if (settings.folderId !== undefined) {
-    if (settings.folderId !== null && !findFolderById(userId, settings.folderId)) {
-      throw new FeedError("folder_not_found");
-    }
     updateSubscriptionFolder(userId, feedId, settings.folderId);
   }
 

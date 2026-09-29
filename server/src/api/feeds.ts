@@ -25,7 +25,15 @@ feedsRouter.put("/reorder", (req, res) => {
     res.status(400).json({ error: "invalid_feed_ids" });
     return;
   }
-  reorderSubscriptions(req.user!.id, parsed.data.feedIds);
+  const currentIds = listSubscriptionsForUser(req.user!.id).map((feed) => feed.id);
+  const requestedIds = parsed.data.feedIds;
+  if (requestedIds.length !== currentIds.length ||
+      new Set(requestedIds).size !== currentIds.length ||
+      requestedIds.some((id) => !currentIds.includes(id))) {
+    res.status(400).json({ error: "invalid_feed_ids" });
+    return;
+  }
+  reorderSubscriptions(req.user!.id, requestedIds);
   res.json({ ok: true });
 });
 

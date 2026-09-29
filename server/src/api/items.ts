@@ -20,11 +20,12 @@ itemsRouter.use(requireSession);
 const listQuerySchema = z.object({
   feedId: z.coerce.number().int().positive().optional(),
   folderId: z.coerce.number().int().positive().optional(),
-  unreadOnly: z.coerce.boolean().optional(),
-  bookmarkedOnly: z.coerce.boolean().optional(),
-  includeMuted: z.coerce.boolean().optional(),
+  unreadOnly: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+  bookmarkedOnly: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+  includeMuted: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
+  offset: z.coerce.number().int().min(0).max(1_000_000).optional(),
 });
 
 itemsRouter.get("/", (req, res) => {

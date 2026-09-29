@@ -119,7 +119,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `move_feed_to_folder` | Move a subscription into or out of a folder |
 | `refresh_feed` | Force an immediate check/poll of a subscribed feed |
 | `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks |
-| `search_items` | Full-text search across all items (with optional bookmarks filter) |
+| `search_items` | Search titles and summaries across all items (with optional bookmarks filter) |
 | `mark_read` | Mark an item as read |
 | `bookmark_item` | Save/bookmark an item for later reading |
 | `unbookmark_item` | Remove bookmark from an item |

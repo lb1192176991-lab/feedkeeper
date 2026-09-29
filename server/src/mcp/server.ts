@@ -88,7 +88,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     "discover_feeds",
     {
       title: "Discover feeds on a website",
-      description: "Inspects a website URL and discovers available RSS/Atom/JSON feed links.",
+      description: "Inspects a website URL and discovers available RSS/Atom feed links.",
       inputSchema: {
         url: mcpUrlSchema.describe("The website URL to discover feeds from"),
       },
@@ -180,7 +180,7 @@ export function createMcpServerForUser(userId: number): McpServer {
     "search_items",
     {
       title: "Search feed items",
-      description: "Full-text search (title/summary) across all items the user has access to, read or unread.",
+      description: "Searches item titles and summaries for a phrase across all items the user can access.",
       inputSchema: {
         query: z.string().min(1).max(200),
         feedId: z.number().int().positive().optional(),

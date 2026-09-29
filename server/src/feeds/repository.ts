@@ -190,18 +190,22 @@ export function upsertItems(
   const insert = db.prepare(
     `INSERT INTO items (feed_id, guid, title, link, content_snippet, content_html, published_at, image_url)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (feed_id, guid) DO UPDATE SET
-       title = COALESCE(excluded.title, items.title),
-       link = COALESCE(excluded.link, items.link),
-       content_snippet = COALESCE(excluded.content_snippet, items.content_snippet),
-       content_html = COALESCE(excluded.content_html, items.content_html),
-       published_at = COALESCE(excluded.published_at, items.published_at),
-       image_url = COALESCE(excluded.image_url, items.image_url)`,
+     ON CONFLICT (feed_id, guid) DO NOTHING`,
+  );
+  const update = db.prepare(
+    `UPDATE items SET
+       title = COALESCE(?, title),
+       link = COALESCE(?, link),
+       content_snippet = COALESCE(?, content_snippet),
+       content_html = COALESCE(?, content_html),
+       published_at = COALESCE(?, published_at),
+       image_url = COALESCE(?, image_url)
+     WHERE feed_id = ? AND guid = ?`,
   );
   const insertMany = db.transaction((rows: typeof items) => {
     let inserted = 0;
     for (const row of rows) {
-      const result = insert.run(
+      const values = [
         feedId,
         row.guid,
         row.title ?? null,
@@ -210,8 +214,13 @@ export function upsertItems(
         row.contentHtml ?? null,
         row.publishedAt ?? null,
         row.imageUrl ?? null,
-      );
-      if (result.changes > 0) inserted++;
+      ] as const;
+      const result = insert.run(...values);
+      if (result.changes > 0) {
+        inserted++;
+      } else {
+        update.run(...values.slice(2), feedId, row.guid);
+      }
     }
     return inserted;
   });
@@ -228,6 +237,7 @@ export function listItemsForUser(
     includeMuted?: boolean;
     search?: string;
     limit?: number;
+    offset?: number;
     since?: string;
   } = {},
 ): (Item & {
@@ -260,15 +270,15 @@ export function listItemsForUser(
         SELECT 1 FROM user_muted_keywords m
         WHERE m.user_id = s.user_id
           AND (
-            LOWER(COALESCE(i.title, '')) LIKE '%' || LOWER(m.keyword) || '%'
-            OR LOWER(COALESCE(i.content_snippet, '')) LIKE '%' || LOWER(m.keyword) || '%'
+            INSTR(LOWER(COALESCE(i.title, '')), LOWER(m.keyword)) > 0
+            OR INSTR(LOWER(COALESCE(i.content_snippet, '')), LOWER(m.keyword)) > 0
           )
       )`,
     );
   }
   if (opts.search) {
-    conditions.push("(i.title LIKE ? OR i.content_snippet LIKE ?)");
-    params.push(`%${opts.search}%`, `%${opts.search}%`);
+    conditions.push("(INSTR(LOWER(COALESCE(i.title, '')), LOWER(?)) > 0 OR INSTR(LOWER(COALESCE(i.content_snippet, '')), LOWER(?)) > 0)");
+    params.push(opts.search, opts.search);
   }
   if (opts.since) {
     conditions.push("i.created_at > ?");
@@ -276,7 +286,8 @@ export function listItemsForUser(
   }
 
   const limit = Math.min(opts.limit ?? 50, 200);
-  params.push(limit);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  params.push(limit, offset);
 
   return db
     .prepare(
@@ -292,8 +303,8 @@ export function listItemsForUser(
        LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = s.user_id
        LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = s.user_id
        WHERE ${conditions.join(" AND ")}
-       ORDER BY i.published_at DESC, i.created_at DESC
-       LIMIT ?`,
+       ORDER BY i.published_at DESC, i.created_at DESC, i.id DESC
+       LIMIT ? OFFSET ?`,
     )
     .all(...params) as (Item & {
       read: boolean;

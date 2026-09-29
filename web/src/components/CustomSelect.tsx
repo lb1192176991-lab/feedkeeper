@@ -89,6 +89,12 @@ export function CustomSelect({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : options.length - 1));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setHighlightedIndex(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setHighlightedIndex(options.length - 1);
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       if (highlightedIndex >= 0 && highlightedIndex < options.length) {
@@ -117,13 +123,19 @@ export function CustomSelect({
       ref={containerRef}
       className={`relative inline-block ${className}`}
       onKeyDown={handleKeyDown}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
     >
       <button
         type="button"
         id={id}
+        role="combobox"
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? `${id}-listbox` : undefined}
+        aria-activedescendant={open && highlightedIndex >= 0 ? `${id}-option-${highlightedIndex}` : undefined}
         disabled={disabled}
         onClick={() => !disabled && setOpen((prev) => !prev)}
         className={`w-full flex items-center justify-between gap-2 text-left font-normal transition-colors cursor-pointer select-none rounded-lg border bg-[var(--c-surface)] text-[var(--c-text)] shadow-xs hover:border-[var(--c-blue3)] focus:outline-none focus:border-[var(--c-blue3)] ${
@@ -173,6 +185,7 @@ export function CustomSelect({
         >
           <ul
             ref={listboxRef}
+            id={`${id}-listbox`}
             role="listbox"
             aria-labelledby={id}
             className="max-h-60 overflow-y-auto py-1 text-[var(--c-text)] focus:outline-none"
@@ -186,7 +199,11 @@ export function CustomSelect({
               </li>
             ) : (
               grouped.map((group, gIdx) => (
-                <li key={group.groupName ?? `ungrouped-${gIdx}`}>
+                <li
+                  key={group.groupName ?? `ungrouped-${gIdx}`}
+                  role="group"
+                  aria-label={group.groupName ?? undefined}
+                >
                   {group.groupName && (
                     <div
                       className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider select-none border-t first:border-t-0"
@@ -198,7 +215,7 @@ export function CustomSelect({
                       {group.groupName}
                     </div>
                   )}
-                  <ul>
+                  <ul role="presentation">
                     {group.items.map(({ opt, index }) => {
                       const isSelected = opt.value === value;
                       const isHighlighted = index === highlightedIndex;
@@ -206,6 +223,7 @@ export function CustomSelect({
                       return (
                         <li
                           key={opt.value}
+                          id={`${id}-option-${index}`}
                           data-index={index}
                           role="option"
                           aria-selected={isSelected}

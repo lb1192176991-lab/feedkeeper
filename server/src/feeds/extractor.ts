@@ -1,6 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
-import { assertPublicHttpUrl, SsrfBlockedError } from "./ssrfGuard.js";
+import { assertPublicHttpUrl, createPublicDispatcher, SsrfBlockedError } from "./ssrfGuard.js";
+import type { Agent } from "undici";
 
 export interface ExtractedArticle {
   title: string | null;
@@ -98,7 +99,7 @@ const FETCH_USER_AGENTS = [
 const MAX_REDIRECTS = 5;
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 
-async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: AbortSignal): Promise<{ html: string; url: string } | null> {
+async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: AbortSignal, dispatcher: Agent): Promise<{ html: string; url: string } | null> {
   let currentUrl = rawUrl;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
@@ -112,11 +113,13 @@ async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: Abort
         "Cache-Control": "no-cache",
       },
       redirect: "manual",
-    });
+      dispatcher,
+    } as RequestInit & { dispatcher: Agent });
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location) return null;
+      await response.body?.cancel();
       currentUrl = new URL(location, safeUrl).toString();
       continue;
     }
@@ -149,48 +152,53 @@ async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: Abort
 
 export async function extractArticleFromUrl(rawUrl: string): Promise<ExtractedArticle | null> {
   const safeUrl = await assertPublicHttpUrl(rawUrl);
+  const dispatcher = createPublicDispatcher();
 
-  for (const ua of FETCH_USER_AGENTS) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    for (const ua of FETCH_USER_AGENTS) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
 
-    try {
-      const fetched = await fetchArticleHtml(safeUrl.toString(), ua, controller.signal);
-      if (!fetched) continue;
+      try {
+        const fetched = await fetchArticleHtml(safeUrl.toString(), ua, controller.signal, dispatcher);
+        if (!fetched) continue;
 
-      const dom = new JSDOM(fetched.html, { url: fetched.url });
-      cleanConsentDom(dom.window.document);
+        const dom = new JSDOM(fetched.html, { url: fetched.url });
+        cleanConsentDom(dom.window.document);
 
-      const reader = new Readability(dom.window.document, {
-        charThreshold: 60,
-      });
-      const parsed = reader.parse();
+        const reader = new Readability(dom.window.document, {
+          charThreshold: 60,
+        });
+        const parsed = reader.parse();
 
-      if (!parsed || !parsed.content) {
+        if (!parsed || !parsed.content) {
+          continue;
+        }
+
+        if (isConsentContent(fetched.url, parsed.content, parsed.title, parsed.textContent)) {
+          // Detected a consent/cookie redirect or banner page, try next user-agent
+          continue;
+        }
+
+        return {
+          title: parsed.title || null,
+          byline: parsed.byline || null,
+          contentHtml: parsed.content,
+          textContent: parsed.textContent || "",
+          excerpt: parsed.excerpt || null,
+          siteName: parsed.siteName || null,
+        };
+      } catch (error) {
+        if (error instanceof SsrfBlockedError) throw error;
+        // Try next user-agent
         continue;
+      } finally {
+        clearTimeout(timeout);
       }
-
-      if (isConsentContent(fetched.url, parsed.content, parsed.title, parsed.textContent)) {
-        // Detected a consent/cookie redirect or banner page, try next user-agent
-        continue;
-      }
-
-      return {
-        title: parsed.title || null,
-        byline: parsed.byline || null,
-        contentHtml: parsed.content,
-        textContent: parsed.textContent || "",
-        excerpt: parsed.excerpt || null,
-        siteName: parsed.siteName || null,
-      };
-    } catch (error) {
-      if (error instanceof SsrfBlockedError) throw error;
-      // Try next user-agent
-      continue;
-    } finally {
-      clearTimeout(timeout);
     }
-  }
 
-  return null;
+    return null;
+  } finally {
+    dispatcher.destroy();
+  }
 }

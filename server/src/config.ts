@@ -32,3 +32,7 @@ export const config = {
   showGithubLink: process.env.SHOW_GITHUB_LINK !== "false",
   githubUrl: process.env.GITHUB_URL ?? "https://github.com/visualfusion/feedkeeper",
 };
+
+if (config.sessionSecret.length < 32) {
+  throw new Error("SESSION_SECRET must contain at least 32 characters");
+}

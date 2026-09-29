@@ -9,6 +9,7 @@
     "close": "閉じる",
     "error": "問題が発生しました",
     "retry": "再試行",
+    "loadMore": "さらに読み込む",
     "never": "なし",
     "noOptions": "選択肢がありません",
     "metaTitle": "FeedKeeper – RSSリーダー & MCPサーバー",

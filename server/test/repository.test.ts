@@ -3,10 +3,10 @@ import { test } from "node:test";
 
 test("item state changes require a feed subscription", async () => {
   process.env.DATABASE_PATH = ":memory:";
-  process.env.SESSION_SECRET = "test-session-secret";
+  process.env.SESSION_SECRET = "test-session-secret-at-least-32-characters";
 
   const { db, runMigrations } = await import("../src/db/index.js");
-  const { markItemRead, bookmarkItem, subscribe } = await import("../src/feeds/repository.js");
+  const { markItemRead, bookmarkItem, subscribe, upsertItems, listItemsForUser, addMutedKeyword } = await import("../src/feeds/repository.js");
   runMigrations();
 
   const addUser = db.prepare("INSERT INTO users (email, password_hash, display_name) VALUES (?, 'hash', ?)");
@@ -25,6 +25,29 @@ test("item state changes require a feed subscription", async () => {
   bookmarkItem(ownerId, itemId);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM item_reads WHERE user_id = ?").get(ownerId)?.count, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM item_bookmarks WHERE user_id = ?").get(ownerId)?.count, 1);
+
+  assert.equal(upsertItems(feedId, [{ guid: "another", title: "First title" }]), 1);
+  assert.equal(upsertItems(feedId, [{ guid: "another", title: "Updated title" }]), 0);
+  assert.equal(
+    (db.prepare("SELECT title FROM items WHERE feed_id = ? AND guid = 'another'").get(feedId) as { title: string }).title,
+    "Updated title",
+  );
+
+  upsertItems(feedId, [
+    { guid: "percent", title: "100% uptime" },
+    { guid: "plain", title: "ordinary update" },
+  ]);
+  assert.deepEqual(listItemsForUser(ownerId, { search: "%" }).map((item) => item.guid), ["percent"]);
+  addMutedKeyword(ownerId, "%");
+  assert.equal(listItemsForUser(ownerId).some((item) => item.guid === "percent"), false);
+  assert.equal(listItemsForUser(ownerId).some((item) => item.guid === "plain"), true);
+
+  upsertItems(feedId, Array.from({ length: 55 }, (_, index) => ({ guid: `page-${index}`, title: `Article ${index}` })));
+  const firstPage = listItemsForUser(ownerId, { includeMuted: true, limit: 50 });
+  const secondPage = listItemsForUser(ownerId, { includeMuted: true, limit: 50, offset: 50 });
+  assert.equal(firstPage.length, 50);
+  assert.equal(secondPage.length, 9);
+  assert.equal(new Set([...firstPage, ...secondPage].map((item) => item.id)).size, 59);
 
   db.close();
 });
