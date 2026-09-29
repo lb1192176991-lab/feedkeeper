@@ -37,7 +37,7 @@ function errorResult(message: string) {
 // instance is created per request (see mcp/http.ts) so tool handlers can
 // safely close over `userId` without leaking data between users.
 export function createMcpServerForUser(userId: number): McpServer {
-  const server = new McpServer({ name: "feedkeeper", version: "0.4.0" });
+  const server = new McpServer({ name: "feedkeeper", version: "0.4.1" });
 
   server.registerTool(
     "list_feeds",

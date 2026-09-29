@@ -3,7 +3,7 @@ import { assertPublicHttpUrl, createPublicDispatcher } from "./ssrfGuard.js";
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_REDIRECTS = 5;
-const USER_AGENT = "FeedKeeper/1.0 (+https://github.com/visualfusion/feedkeeper)";
+const USER_AGENT = "FeedKeeper/0.4.1 (+https://github.com/visualfusion/feedkeeper)";
 
 export interface FetchedFeed {
   body: string;

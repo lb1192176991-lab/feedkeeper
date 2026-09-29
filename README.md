@@ -72,7 +72,7 @@ cp .env.example .env
 Generate a secret with `openssl rand -hex 32` and put it in `.env` as `SESSION_SECRET`. For a public domain, also set `PUBLIC_URL` to the URL users open. Then start the container:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 Open `PUBLIC_URL` (by default `http://localhost:3000`) to complete the initial setup via the web onboarding screen.
