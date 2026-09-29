@@ -8,6 +8,7 @@ import { ArticleExcerpt } from "../components/ArticleExcerpt.tsx";
 import { Favicon } from "../components/Favicon.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { NewspaperGrid } from "../components/NewspaperGrid.tsx";
+import { PullToRefresh } from "../components/PullToRefresh.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
 
 const PAGE_SIZE = 50;
@@ -434,6 +435,11 @@ export function ItemsPage() {
     await load();
   }
 
+  async function refreshArticles() {
+    await api.refreshAllFeeds();
+    await load();
+  }
+
   const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
     dateStyle: "medium",
   });
@@ -472,7 +478,7 @@ export function ItemsPage() {
     }
   }
 
-  return (
+  const content = (
     <div className="flex flex-col gap-5 sm:gap-6">
       <div className="flex items-center justify-between gap-2 sm:gap-3">
         <h1 className="text-xl sm:text-2xl font-semibold shrink-0">{t("items.title")}</h1>
@@ -897,5 +903,11 @@ export function ItemsPage() {
         hasPrev={hasPrev}
       />
     </div>
+  );
+
+  return (
+    <PullToRefresh disabled={loading || Boolean(selectedArticle) || mobileSearchOpen} onRefresh={refreshArticles}>
+      {content}
+    </PullToRefresh>
   );
 }

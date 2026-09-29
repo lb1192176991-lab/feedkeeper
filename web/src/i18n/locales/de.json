@@ -111,6 +111,9 @@
     "saved": "Gemerkt",
     "allFeeds": "Alle Feeds",
     "noItems": "Keine Artikel vorhanden.",
+    "refresh": "Artikel aktualisieren",
+    "refreshing": "Feeds werden aktualisiert…",
+    "refreshFailed": "Aktualisierung fehlgeschlagen. Bitte erneut versuchen.",
     "openLink": "Öffnen"
   },
   "reader": {

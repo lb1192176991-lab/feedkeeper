@@ -111,6 +111,9 @@
     "saved": "Saved",
     "allFeeds": "All feeds",
     "noItems": "No items to show.",
+    "refresh": "Refresh articles",
+    "refreshing": "Refreshing feeds…",
+    "refreshFailed": "Refresh failed. Please try again.",
     "openLink": "Open"
   },
   "reader": {
