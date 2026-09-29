@@ -1,7 +1,11 @@
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
+import { fetch as undiciFetch } from "undici";
 import { assertPublicHttpUrl, createPublicDispatcher, SsrfBlockedError } from "./ssrfGuard.js";
 import type { Agent } from "undici";
+
+type ArticleFetch = typeof globalThis.fetch;
+const defaultFetch = undiciFetch as unknown as ArticleFetch;
 
 export interface ExtractedArticle {
   title: string | null;
@@ -99,12 +103,12 @@ const FETCH_USER_AGENTS = [
 const MAX_REDIRECTS = 5;
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 
-async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: AbortSignal, dispatcher: Agent): Promise<{ html: string; url: string } | null> {
+async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: AbortSignal, dispatcher: Agent, fetchImpl: ArticleFetch): Promise<{ html: string; url: string } | null> {
   let currentUrl = rawUrl;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
     const safeUrl = await assertPublicHttpUrl(currentUrl);
-    const response = await fetch(safeUrl, {
+    const response = await fetchImpl(safeUrl, {
       signal,
       headers: {
         "User-Agent": userAgent,
@@ -150,7 +154,7 @@ async function fetchArticleHtml(rawUrl: string, userAgent: string, signal: Abort
   return null;
 }
 
-export async function extractArticleFromUrl(rawUrl: string): Promise<ExtractedArticle | null> {
+export async function extractArticleFromUrl(rawUrl: string, fetchImpl: ArticleFetch = defaultFetch): Promise<ExtractedArticle | null> {
   const safeUrl = await assertPublicHttpUrl(rawUrl);
   const dispatcher = createPublicDispatcher();
 
@@ -160,7 +164,7 @@ export async function extractArticleFromUrl(rawUrl: string): Promise<ExtractedAr
       const timeout = setTimeout(() => controller.abort(), 12000);
 
       try {
-        const fetched = await fetchArticleHtml(safeUrl.toString(), ua, controller.signal, dispatcher);
+        const fetched = await fetchArticleHtml(safeUrl.toString(), ua, controller.signal, dispatcher, fetchImpl);
         if (!fetched) continue;
 
         const dom = new JSDOM(fetched.html, { url: fetched.url });

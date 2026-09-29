@@ -1,3 +1,4 @@
+import { fetch as undiciFetch } from "undici";
 import { assertPublicHttpUrl, createPublicDispatcher } from "./ssrfGuard.js";
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -36,12 +37,12 @@ export async function fetchFeed(
       if (redirects === 0 && opts.etag) headers["If-None-Match"] = opts.etag;
       if (redirects === 0 && opts.lastModified) headers["If-Modified-Since"] = opts.lastModified;
 
-      const response = await fetch(validated, {
+      const response = await undiciFetch(validated, {
         headers,
         redirect: "manual",
         signal: controller.signal,
         dispatcher,
-      } as RequestInit & { dispatcher: typeof dispatcher });
+      });
 
       if (response.status === 304) {
         return {

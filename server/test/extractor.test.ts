@@ -4,9 +4,8 @@ import { extractArticleFromUrl } from "../src/feeds/extractor.js";
 import { SsrfBlockedError } from "../src/feeds/ssrfGuard.js";
 
 test("article extraction rejects redirects to internal addresses", async () => {
-  const originalFetch = globalThis.fetch;
   const requests: string[] = [];
-  globalThis.fetch = async (input) => {
+  const mockFetch: typeof fetch = async (input) => {
     requests.push(String(input));
     return new Response(null, {
       status: 302,
@@ -14,28 +13,19 @@ test("article extraction rejects redirects to internal addresses", async () => {
     });
   };
 
-  try {
-    await assert.rejects(extractArticleFromUrl("https://93.184.216.34/article"), SsrfBlockedError);
-    assert.deepEqual(requests, ["https://93.184.216.34/article"]);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  await assert.rejects(extractArticleFromUrl("https://93.184.216.34/article", mockFetch), SsrfBlockedError);
+  assert.deepEqual(requests, ["https://93.184.216.34/article"]);
 });
 
 test("article extraction skips oversized responses", async () => {
-  const originalFetch = globalThis.fetch;
   let requests = 0;
-  globalThis.fetch = async () => {
+  const mockFetch: typeof fetch = async () => {
     requests++;
     return new Response("too large", {
       headers: { "content-length": String(6 * 1024 * 1024) },
     });
   };
 
-  try {
-    assert.equal(await extractArticleFromUrl("https://93.184.216.34/article"), null);
-    assert.equal(requests, 2);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert.equal(await extractArticleFromUrl("https://93.184.216.34/article", mockFetch), null);
+  assert.equal(requests, 2);
 });

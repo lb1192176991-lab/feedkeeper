@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
+import { fetch as undiciFetch } from "undici";
 import { assertPublicHttpUrl, createPublicDispatcher, isPublicIp, SsrfBlockedError } from "../src/feeds/ssrfGuard.js";
 import { fetchFeed } from "../src/feeds/fetcher.js";
 
@@ -17,7 +18,7 @@ test("connection lookup rejects private DNS answers", async () => {
   const dispatcher = createPublicDispatcher();
   try {
     await assert.rejects(
-      fetch("http://localhost:12345/", { dispatcher } as RequestInit & { dispatcher: typeof dispatcher }),
+      undiciFetch("http://localhost:12345/", { dispatcher }),
       (error: unknown) => error instanceof Error && error.cause instanceof SsrfBlockedError,
     );
   } finally {
