@@ -87,7 +87,7 @@ export function subscribe(
          label = COALESCE(excluded.label, subscriptions.label),
          folder_id = COALESCE(excluded.folder_id, subscriptions.folder_id)`,
     )
-    .run(userId, feedId, label ?? null, folderId ?? null, nextPosition);
+    .run(userId, feedId, label?.trim() || null, folderId ?? null, nextPosition);
   return Number(result.lastInsertRowid);
 }
 
@@ -108,7 +108,7 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
       `SELECT
          f.*,
          s.id AS subscription_id,
-         s.label AS label,
+         NULLIF(TRIM(s.label), '') AS label,
          s.folder_id AS folder_id,
          fo.name AS folder_name,
          s.position AS position,
@@ -303,7 +303,7 @@ export function listItemsForUser(
   return db
     .prepare(
       `SELECT DISTINCT i.*,
-              f.title AS feed_title,
+              COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
               f.site_url AS feed_site_url,
               f.url AS feed_url,
               (r.item_id IS NOT NULL) AS read,
@@ -328,7 +328,8 @@ export function listItemsForUser(
 
 export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
   return db.prepare<[number, number], ReturnType<typeof listItemsForUser>[number]>(
-    `SELECT i.*, f.title AS feed_title, f.site_url AS feed_site_url, f.url AS feed_url,
+    `SELECT i.*, COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
+            f.site_url AS feed_site_url, f.url AS feed_url,
             (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
      FROM items i
      JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
@@ -340,7 +341,7 @@ export function findItemForUser(userId: number, itemId: number): ReturnType<type
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {
-  db.prepare("UPDATE subscriptions SET label = ? WHERE user_id = ? AND feed_id = ?").run(label, userId, feedId);
+  db.prepare("UPDATE subscriptions SET label = ? WHERE user_id = ? AND feed_id = ?").run(label?.trim() || null, userId, feedId);
 }
 
 export function updateSubscriptionFolder(userId: number, feedId: number, folderId: number | null): void {

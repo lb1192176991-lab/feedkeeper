@@ -33,6 +33,7 @@ export function FeedsPage() {
 
   const [editingFeedId, setEditingFeedId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [editLabelChanged, setEditLabelChanged] = useState(false);
   const [editFolderId, setEditFolderId] = useState<number | null>(null);
   const [editInterval, setEditInterval] = useState(15);
 
@@ -180,14 +181,15 @@ export function FeedsPage() {
 
   function startEdit(feed: Feed) {
     setEditingFeedId(feed.id);
-    setEditLabel(feed.label ?? "");
+    setEditLabel(feed.label?.trim() || feed.title?.trim() || feed.url);
+    setEditLabelChanged(false);
     setEditFolderId(feed.folder_id ?? null);
     setEditInterval(feed.poll_interval_minutes);
   }
 
   async function saveEdit(feedId: number) {
     await api.updateFeed(feedId, {
-      label: editLabel || null,
+      ...(editLabelChanged ? { label: editLabel.trim() || null } : {}),
       folderId: editFolderId,
       pollIntervalMinutes: editInterval,
     });
@@ -754,10 +756,13 @@ export function FeedsPage() {
                         </label>
                         <input
                           type="text"
-                          placeholder={feed.title ?? t("feeds.labelPlaceholder")}
+                          placeholder={t("feeds.labelPlaceholder")}
                           className="input"
                           value={editLabel}
-                          onChange={(e) => setEditLabel(e.target.value)}
+                          onChange={(e) => {
+                            setEditLabel(e.target.value);
+                            setEditLabelChanged(true);
+                          }}
                         />
                       </div>
 

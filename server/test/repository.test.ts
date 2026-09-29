@@ -6,7 +6,7 @@ test("item state changes require a feed subscription", async () => {
   process.env.SESSION_SECRET = "test-session-secret-at-least-32-characters";
 
   const { db, runMigrations } = await import("../src/db/index.js");
-  const { markItemRead, bookmarkItem, subscribe, upsertItems, listItemsForUser, addMutedKeyword } = await import("../src/feeds/repository.js");
+  const { markItemRead, bookmarkItem, subscribe, upsertItems, listItemsForUser, findItemForUser, updateSubscriptionLabel, addMutedKeyword } = await import("../src/feeds/repository.js");
   runMigrations();
 
   const addUser = db.prepare("INSERT INTO users (email, password_hash, display_name) VALUES (?, 'hash', ?)");
@@ -25,6 +25,15 @@ test("item state changes require a feed subscription", async () => {
   bookmarkItem(ownerId, itemId);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM item_reads WHERE user_id = ?").get(ownerId)?.count, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM item_bookmarks WHERE user_id = ?").get(ownerId)?.count, 1);
+
+  db.prepare("UPDATE feeds SET title = ? WHERE id = ?").run("Original Source", feedId);
+  subscribe(otherId, feedId, "Other name");
+  updateSubscriptionLabel(ownerId, feedId, " My name ");
+  assert.equal(listItemsForUser(ownerId)[0].feed_title, "My name");
+  assert.equal(listItemsForUser(otherId)[0].feed_title, "Other name");
+  assert.equal(findItemForUser(ownerId, itemId)?.feed_title, "My name");
+  updateSubscriptionLabel(ownerId, feedId, "  ");
+  assert.equal(listItemsForUser(ownerId)[0].feed_title, "Original Source");
 
   assert.equal(upsertItems(feedId, [{ guid: "another", title: "First title" }]), 1);
   assert.equal(upsertItems(feedId, [{ guid: "another", title: "Updated title" }]), 0);
