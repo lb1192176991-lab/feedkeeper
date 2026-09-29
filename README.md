@@ -66,10 +66,18 @@ The fastest way to run FeedKeeper:
 ```bash
 git clone https://github.com/visualfusion/feedkeeper.git
 cd feedkeeper
+cp .env.example .env
+```
+
+Generate a secret with `openssl rand -hex 32` and put it in `.env` as `SESSION_SECRET`. For a public domain, also set `PUBLIC_URL` to the URL users open. Then start the container:
+
+```bash
 docker compose up -d
 ```
 
-Open `http://localhost:3000` to complete the initial setup via the web onboarding screen.
+Open `PUBLIC_URL` (by default `http://localhost:3000`) to complete the initial setup via the web onboarding screen.
+
+Existing Docker installations must provide `SESSION_SECRET` through `.env` or the shell before using this Compose configuration. Changing it signs out active browser sessions; feeds and accounts stay in the database.
 
 ## Quick start (local development)
 
@@ -128,12 +136,12 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `remove_muted_keyword` | Remove a muted keyword rule |
 | `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
-| `cleanup_database` | *(Admin only)* Trigger retention housekeeping and VACUUM to purge old items and reclaim disk space |
+| `cleanup_database` | *(Admin only)* Purge old items and reclaim disk space after deletions |
 
 ## Security
 
 - **Closed signup by default** (`ALLOW_SIGNUP=false`). An admin creates additional accounts from Settings.
-- **SSRF protection**: feed URLs are validated (and every redirect hop re-validated) against private/internal IP ranges before being fetched, so this server can't be used to probe its own host or internal network.
+- **SSRF protection**: feed URLs and redirects are checked before fetching and again when connecting. Private/internal addresses are blocked by default. On trusted instances that need local feeds, set `ALLOW_PRIVATE_FEEDS=true`.
 - **Rate limiting** on login and the general API surface.
 - **Personal access tokens** are stored as salted hashes, never in plaintext.
 - **Per-user data isolation**: every query is scoped to the authenticated user; feeds are deduplicated by URL under the hood, but subscriptions, read state, and tokens are always per-user.

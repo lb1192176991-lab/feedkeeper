@@ -10,13 +10,19 @@ services:
       - "3000:3000"
     environment:
       - PORT=3000
-      - PUBLIC_URL=http://localhost:3000
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:3000}
       - DATABASE_PATH=/app/data/feedkeeper.sqlite
-      # Replace with a secure random string (e.g. openssl rand -hex 32)
-      - SESSION_SECRET=change-me-to-a-secure-random-secret
-      - ALLOW_SIGNUP=false
-      - TRUST_PROXY=false
-      - MIN_POLL_INTERVAL_MINUTES=5
+      - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in .env before starting}
+      - ALLOW_SIGNUP=${ALLOW_SIGNUP:-false}
+      - ALLOW_PRIVATE_FEEDS=${ALLOW_PRIVATE_FEEDS:-false}
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      - MIN_POLL_INTERVAL_MINUTES=${MIN_POLL_INTERVAL_MINUTES:-5}
+      - RETENTION_READ_DAYS=${RETENTION_READ_DAYS:-30}
+      - RETENTION_MAX_DAYS=${RETENTION_MAX_DAYS:-90}
+      - RETENTION_MAX_ITEMS_PER_FEED=${RETENTION_MAX_ITEMS_PER_FEED:-1000}
+      - AUTO_CLEANUP_ENABLED=${AUTO_CLEANUP_ENABLED:-true}
+      - SHOW_GITHUB_LINK=${SHOW_GITHUB_LINK:-true}
+      - GITHUB_URL=${GITHUB_URL:-https://github.com/visualfusion/feedkeeper}
     volumes:
       - feedkeeper_data:/app/data
 

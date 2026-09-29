@@ -5,6 +5,10 @@ import { Agent } from "undici";
 
 const BENCHMARK_NETWORK = ipaddr.parse("198.18.0.0") as ipaddr.IPv4;
 
+function privateFeedsAllowed(): boolean {
+  return process.env.ALLOW_PRIVATE_FEEDS === "true";
+}
+
 export class SsrfBlockedError extends Error {
   constructor(url: string) {
     super(`Refusing to fetch "${url}": resolves to a blocked internal address`);
@@ -52,6 +56,8 @@ export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
   }
   if (url.username || url.password) throw new Error("URLs with credentials are not allowed");
 
+  if (privateFeedsAllowed()) return url;
+
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
   if (ipaddr.isValid(hostname)) {
     if (!isPublicIp(hostname)) throw new SsrfBlockedError(rawUrl);
@@ -68,6 +74,7 @@ export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
 // Validate the address actually used by the socket. A DNS answer can change
 // between URL validation and connection, so the preflight check alone is insufficient.
 export function createPublicDispatcher(): Agent {
+  if (privateFeedsAllowed()) return new Agent();
   const guardedLookup: LookupFunction = (hostname, options, callback) => {
     lookup(hostname, { ...options, all: true })
       .then((addresses) => {
