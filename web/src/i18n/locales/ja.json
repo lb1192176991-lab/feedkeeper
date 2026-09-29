@@ -20,7 +20,8 @@
     "feeds": "フィード",
     "settings": "設定",
     "logout": "ログアウト",
-    "menu": "メニュー"
+    "menu": "メニュー",
+    "account": "アカウント"
   },
   "onboarding": {
     "title": "FeedKeeperへようこそ",

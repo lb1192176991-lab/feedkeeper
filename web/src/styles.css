@@ -23,6 +23,8 @@
   --c-danger-hover: #9a3412;
   --c-danger-bg: rgba(124, 45, 18, 0.08);
   --c-danger-border: rgba(124, 45, 18, 0.25);
+  --c-mobile-nav-active: #e2e8f0;
+  --c-mobile-nav-active-border: rgba(51, 65, 85, 0.22);
   color-scheme: light;
 }
 
@@ -43,6 +45,8 @@
   --c-danger-hover: #f97316;
   --c-danger-bg: rgba(234, 88, 12, 0.12);
   --c-danger-border: rgba(234, 88, 12, 0.3);
+  --c-mobile-nav-active: rgba(255, 255, 255, 0.12);
+  --c-mobile-nav-active-border: rgba(255, 255, 255, 0.15);
   color-scheme: dark;
 }
 
@@ -64,6 +68,8 @@
     --c-danger-hover: #f97316;
     --c-danger-bg: rgba(234, 88, 12, 0.12);
     --c-danger-border: rgba(234, 88, 12, 0.3);
+    --c-mobile-nav-active: rgba(255, 255, 255, 0.12);
+    --c-mobile-nav-active-border: rgba(255, 255, 255, 0.15);
     color-scheme: dark;
   }
 }
@@ -391,6 +397,10 @@ input[type="checkbox"]:disabled {
 .animate-page-fade {
   animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: opacity, transform;
+}
+
+.mobile-bottom-nav {
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 
 @media (max-width: 639px) {

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Feed, type Folder, type Item } from "../api/client.ts";
 import { CustomSelect, type SelectOption } from "../components/CustomSelect.tsx";
+import { TodayDate } from "../components/TodayDate.tsx";
 import { ArticleReaderModal } from "../components/ArticleReaderModal.tsx";
 import { ArticleExcerpt } from "../components/ArticleExcerpt.tsx";
 import { Favicon } from "../components/Favicon.tsx";
@@ -471,6 +472,11 @@ export function ItemsPage() {
     return list;
   }, [folders, feeds, t]);
 
+  // The page title names the current filter; the generic title covers feeds that are still loading.
+  const scopeTitle = filterScope
+    ? scopeOptions.find((option) => option.value === filterScope)?.label ?? t("items.title")
+    : t("items.allFeeds");
+
   function handleItemUpdated(updated: Item) {
     setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
     if (selectedArticle?.id === updated.id) {
@@ -481,7 +487,10 @@ export function ItemsPage() {
   const content = (
     <div className="flex flex-col gap-5 sm:gap-6">
       <div className="flex items-center justify-between gap-2 sm:gap-3">
-        <h1 className="text-xl sm:text-2xl font-semibold shrink-0">{t("items.title")}</h1>
+        <div className="min-w-0">
+          <h1 className="sr-only">{scopeTitle}</h1>
+          <TodayDate className="block" />
+        </div>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="relative grid h-11 w-[108px] shrink-0 grid-cols-2 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-1 sm:w-[220px]" role="group" aria-label={t("items.viewMode")}>
             <span

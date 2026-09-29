@@ -20,7 +20,8 @@
     "items": "Artikel",
     "settings": "Einstellungen",
     "logout": "Abmelden",
-    "menu": "Menü"
+    "menu": "Menü",
+    "account": "Konto"
   },
   "onboarding": {
     "title": "Willkommen bei FeedKeeper",
