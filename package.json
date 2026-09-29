@@ -1,6 +1,6 @@
 {
   "name": "feedkeeper",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Self-hosted, multi-user RSS/Atom feed manager with a remote-capable MCP server.",
   "license": "MIT",
@@ -26,6 +26,7 @@
     "build": "npm run build --workspace web && npm run build --workspace server",
     "start": "npm run start --workspace server",
     "setup": "npm run setup --workspace server",
-    "lint": "npm run lint --workspace server && npm run lint --workspace web"
+    "lint": "npm run lint --workspace server && npm run lint --workspace web",
+    "test": "npm run test --workspace server"
   }
 }
