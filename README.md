@@ -25,7 +25,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Folder organization and feed ordering** — group subscriptions into folders, move feeds between them, and reorder the feed list by dragging.
 - **Smart feed discovery** — paste a direct feed link or a website address (like `example.com/blog`); FeedKeeper discovers RSS and Atom feeds.
 - **Automatic character encoding** — parses standard UTF-8 as well as legacy ISO-8859-1/Windows-1252 feeds without garbled umlauts or broken symbols.
-- **Bookmarks & Saved stories** — star interesting articles to read later; bookmarked items are permanently protected from automated cleanups.
+- **Bookmarks** — star articles to read later; bookmarked items are never removed by automatic cleanups.
 - **Keyword mute filters** — cut through information overload by filtering out articles matching specific keywords before they reach your stream.
 - **Health monitoring** — clear status indicators show polling health, consecutive fetch errors, and timestamps so you instantly spot dead feeds.
 - **Automated database housekeeping** — sensible defaults prune read articles, enforce maximum item retention, and run SQLite `VACUUM` on schedule to keep storage lean.
@@ -34,7 +34,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **OPML 2.0 import & export** — switch back and forth from Feedly, NetNewsWire, Inoreader, or Reeder at any time.
 - **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls.
 - **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews.
-- **Mobile-friendly web app** — responsive interface, mobile tab navigation, pull to refresh, an installable home-screen app with an in-app install prompt, quick mark-as-read toggles, and light, dark and system themes.
+- **Mobile-friendly web app** — responsive layout with tab navigation and pull to refresh, installable on the home screen, with light, dark and system themes.
 - **Personal profiles** — each account can set its display name and a profile photo.
 - **Online backups** — create verified SQLite backups while the service keeps running.
 - **Hardened security** — SSRF protection against internal network probing, rate limiting on authentication, and hashed API tokens.
@@ -90,7 +90,7 @@ Create a consistent SQLite backup while FeedKeeper is running:
 npm run db:backup -- /safe/location/feedkeeper.sqlite
 ```
 
-The command refuses to overwrite an existing backup and verifies its integrity. Keep the backup outside the application directory and copy it to another machine or storage device.
+Without Docker, run `npm run build` once before using the backup commands. The command refuses to overwrite an existing backup and verifies its integrity. Keep the backup outside the application directory and copy it to another machine or storage device.
 
 With Docker Compose, create the backup in the mounted data volume and copy it to the host:
 
@@ -190,7 +190,7 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 
 The browser loads article images and site favicons from their source websites. Opening a full article through the reader also fetches that page from the FeedKeeper server.
 
-Found a security issue? Please open an issue on GitHub or reach out to the maintainer directly rather than filing a public report for anything sensitive.
+Found a security issue? Please report it privately as described in [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ## Configuration
 
@@ -203,7 +203,7 @@ See [.env.example](.env.example) for all available environment variables.
 
 ## Contributing
 
-Issues and pull requests are welcome. This is a young project — expect some rough edges.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started. This is a young project, so expect some rough edges.
 
 ## License
 
