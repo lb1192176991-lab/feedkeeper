@@ -70,6 +70,12 @@ export interface User {
   display_name: string;
   role: "admin" | "user";
   created_at: string;
+  avatar_updated_at: string | null;
+}
+
+/** Versioned photo URL so a new upload bypasses the long-lived browser cache. */
+export function avatarUrl(user: Pick<User, "avatar_updated_at">): string | null {
+  return user.avatar_updated_at ? `/api/auth/me/avatar?v=${encodeURIComponent(user.avatar_updated_at)}` : null;
 }
 
 export interface Feed {
@@ -151,6 +157,11 @@ export const api = {
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) }),
   me: () => request<User>("/auth/me"),
+  updateProfile: (displayName: string) =>
+    request<User>("/auth/me", { method: "PATCH", body: JSON.stringify({ displayName }) }),
+  uploadAvatar: (image: Blob) =>
+    request<User>("/auth/me/avatar", { method: "PUT", headers: { "Content-Type": image.type }, body: image }),
+  deleteAvatar: () => request<User>("/auth/me/avatar", { method: "DELETE" }),
   listUsers: () => request<User[]>("/auth/users"),
   createUser: (data: { email: string; password: string; displayName: string; role: "admin" | "user" }) =>
     request<User>("/auth/users", { method: "POST", body: JSON.stringify(data) }),

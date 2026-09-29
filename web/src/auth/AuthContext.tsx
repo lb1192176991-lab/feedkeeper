@@ -8,6 +8,8 @@ interface AuthState {
   needsOnboarding: boolean;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
+  /** Apply a profile change returned by the API without a full auth reload. */
+  setCurrentUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -56,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, needsOnboarding, refresh, logout }}>
+    <AuthContext.Provider value={{ user, loading, needsOnboarding, refresh, logout, setCurrentUser: setUser }}>
       {children}
     </AuthContext.Provider>
   );

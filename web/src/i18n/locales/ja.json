@@ -203,6 +203,14 @@
     "installAppHint": "FeedKeeper をホーム画面または Dock に単独のアプリとして追加します。",
     "installAppButton": "インストール",
     "installAppIos": "Safari で共有アイコン（必要に応じて「…」メニューから）をタップし、「ホーム画面に追加」を選択してください。",
-    "installAppMacSafari": "Safari のメニューで「ファイル」›「Dock に追加」を選択してください。"
+    "installAppMacSafari": "Safari のメニューで「ファイル」›「Dock に追加」を選択してください。",
+    "profileTitle": "プロフィール",
+    "displayNameLabel": "表示名",
+    "profileSaved": "プロフィールを保存しました。",
+    "avatarUpload": "写真をアップロード",
+    "avatarChange": "写真を変更",
+    "avatarRemove": "削除",
+    "avatarHint": "JPG、PNG、WebP に対応。正方形に切り抜いて縮小します。",
+    "avatarUnreadable": "画像を読み込めませんでした。"
   }
 }

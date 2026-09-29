@@ -205,6 +205,14 @@
     "installAppHint": "Lege FeedKeeper als eigenständige App auf dem Home-Bildschirm oder im Dock ab.",
     "installAppButton": "Installieren",
     "installAppIos": "Tippe in Safari auf das Teilen-Symbol (ggf. über das „…“-Menü) und wähle „Zum Home-Bildschirm“.",
-    "installAppMacSafari": "Wähle in Safari im Menü „Ablage“ den Eintrag „Zum Dock hinzufügen“."
+    "installAppMacSafari": "Wähle in Safari im Menü „Ablage“ den Eintrag „Zum Dock hinzufügen“.",
+    "profileTitle": "Profil",
+    "displayNameLabel": "Anzeigename",
+    "profileSaved": "Profil gespeichert.",
+    "avatarUpload": "Foto hochladen",
+    "avatarChange": "Foto ändern",
+    "avatarRemove": "Entfernen",
+    "avatarHint": "JPG, PNG oder WebP – wird quadratisch zugeschnitten und verkleinert.",
+    "avatarUnreadable": "Das Bild konnte nicht gelesen werden."
   }
 }

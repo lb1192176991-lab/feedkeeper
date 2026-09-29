@@ -205,6 +205,14 @@
     "installAppHint": "Add FeedKeeper to your home screen or dock as a standalone app.",
     "installAppButton": "Install",
     "installAppIos": "In Safari, tap the Share icon (via the “…” menu if needed) and choose “Add to Home Screen”.",
-    "installAppMacSafari": "In Safari, choose File › “Add to Dock”."
+    "installAppMacSafari": "In Safari, choose File › “Add to Dock”.",
+    "profileTitle": "Profile",
+    "displayNameLabel": "Display name",
+    "profileSaved": "Profile saved.",
+    "avatarUpload": "Upload photo",
+    "avatarChange": "Change photo",
+    "avatarRemove": "Remove",
+    "avatarHint": "JPG, PNG or WebP – cropped to a square and resized.",
+    "avatarUnreadable": "The image could not be read."
   }
 }

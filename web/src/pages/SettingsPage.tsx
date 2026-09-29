@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   api,
@@ -14,6 +14,110 @@ import { useAuth } from "../auth/AuthContext.tsx";
 import { LanguageSwitcher } from "../components/LanguageSwitcher.tsx";
 import { CustomSelect } from "../components/CustomSelect.tsx";
 import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../utils/installPrompt.ts";
+import { prepareAvatar } from "../utils/avatarImage.ts";
+import { UserAvatar } from "../components/UserAvatar.tsx";
+
+function ProfileSection() {
+  const { t } = useTranslation();
+  const { user, setCurrentUser } = useAuth();
+  const [displayName, setDisplayName] = useState(user?.display_name ?? "");
+  const [savingName, setSavingName] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (!user) return null;
+  const trimmedName = displayName.trim();
+
+  async function onSaveName(e: FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setSavingName(true);
+    try {
+      const updated = await api.updateProfile(trimmedName);
+      setCurrentUser(updated);
+      setDisplayName(updated.display_name);
+      setMessage({ type: "success", text: t("settings.profileSaved") });
+    } catch {
+      setMessage({ type: "error", text: t("common.error") });
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function onPhotoSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setMessage(null);
+    setUploading(true);
+    try {
+      setCurrentUser(await api.uploadAvatar(await prepareAvatar(file)));
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof ApiError ? t("common.error") : t("settings.avatarUnreadable") });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function onRemovePhoto() {
+    setMessage(null);
+    setUploading(true);
+    try {
+      setCurrentUser(await api.deleteAvatar());
+    } catch {
+      setMessage({ type: "error", text: t("common.error") });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <section className="card p-5 flex flex-col gap-5">
+      <h2 className="text-lg font-semibold">{t("settings.profileTitle")}</h2>
+
+      <div className="flex items-center gap-4">
+        <UserAvatar user={user} className={`h-20 w-20 text-2xl transition-opacity ${uploading ? "opacity-50" : ""}`} />
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary text-sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+              {user.avatar_updated_at ? t("settings.avatarChange") : t("settings.avatarUpload")}
+            </button>
+            {user.avatar_updated_at && (
+              <button type="button" className="btn-secondary text-sm text-danger" disabled={uploading} onClick={onRemovePhoto}>
+                {t("settings.avatarRemove")}
+              </button>
+            )}
+          </div>
+          <p className="text-xs" style={{ color: "var(--c-text-muted)" }}>{t("settings.avatarHint")}</p>
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onPhotoSelected} />
+      </div>
+
+      <form onSubmit={onSaveName} className="flex flex-col gap-3 max-w-sm">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">{t("settings.displayNameLabel")}</span>
+          <input
+            className="input"
+            required
+            maxLength={100}
+            autoComplete="name"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+        </label>
+        {message && (
+          <p className={`text-sm ${message.type === "error" ? "text-danger" : ""}`} style={message.type === "success" ? { color: "var(--c-green3)" } : undefined}>
+            {message.text}
+          </p>
+        )}
+        <button type="submit" disabled={savingName || !trimmedName || trimmedName === user.display_name} className="btn-primary self-start">
+          {t("common.save")}
+        </button>
+      </form>
+    </section>
+  );
+}
 
 function InstallAppRow() {
   const { t } = useTranslation();
@@ -675,6 +779,7 @@ export function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
+      <ProfileSection />
       <PreferencesSection />
       <ChangePasswordSection />
       <TokensSection />

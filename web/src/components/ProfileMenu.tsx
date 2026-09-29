@@ -4,14 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/AuthContext.tsx";
 import { getTheme, setTheme, subscribeTheme, type Theme } from "../utils/theme.ts";
 import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../utils/installPrompt.ts";
-
-function initials(name: string, email: string) {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return email.charAt(0).toUpperCase() || "?";
-  const first = words[0].charAt(0);
-  const last = words.length > 1 ? words[words.length - 1].charAt(0) : "";
-  return (first + last).toUpperCase();
-}
+import { UserAvatar } from "./UserAvatar.tsx";
 
 const themeIcons: Record<Theme, ReactNode> = {
   light: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></>,
@@ -71,13 +64,13 @@ export function ProfileMenu() {
         aria-controls={panelId}
         aria-label={t("nav.account")}
         title={user.display_name || user.email}
-        className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-semibold tracking-wide transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--c-blue3)] ${
+        className={`flex rounded-full transition-shadow cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--c-blue3)] ${
           open || location.pathname.startsWith("/settings")
-            ? "border-[var(--c-blue1)] bg-[var(--c-blue1)] text-white"
-            : "border-[var(--c-border)] bg-[var(--c-mobile-nav-active)] text-[var(--c-text)] hover:border-[var(--c-blue4)]"
+            ? "ring-2 ring-[var(--c-blue3)] ring-offset-2 ring-offset-[var(--c-surface)]"
+            : "hover:ring-2 hover:ring-[var(--c-border)] hover:ring-offset-2 hover:ring-offset-[var(--c-surface)]"
         }`}
       >
-        {initials(user.display_name, user.email)}
+        <UserAvatar user={user} className="h-9 w-9 text-xs" />
       </button>
 
       {open && (
@@ -86,9 +79,12 @@ export function ProfileMenu() {
           className="card animate-fade-in absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] p-1.5 shadow-xl"
           style={{ boxShadow: "0 16px 40px -12px rgba(0, 0, 0, 0.35)" }}
         >
-          <div className="px-3 pt-2 pb-3">
-            <p className="truncate text-sm font-semibold text-[var(--c-text)]">{user.display_name || user.email}</p>
-            {user.display_name && <p className="truncate text-xs text-[var(--c-text-muted)]">{user.email}</p>}
+          <div className="flex items-center gap-3 px-3 pt-2 pb-3">
+            <UserAvatar user={user} className="h-10 w-10 text-sm" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[var(--c-text)]">{user.display_name || user.email}</p>
+              {user.display_name && <p className="truncate text-xs text-[var(--c-text-muted)]">{user.email}</p>}
+            </div>
           </div>
 
           <div className="border-t border-[var(--c-border)] px-3 py-3">

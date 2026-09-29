@@ -1,9 +1,21 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { config } from "../config.js";
 import { requireSession, requireAdmin } from "../auth/middleware.js";
-import { createUser, findUserByEmail, findUserById, listUsers, toPublicUser, updateUserPassword } from "../auth/users.js";
+import {
+  createUser,
+  deleteUserAvatar,
+  findUserByEmail,
+  findUserById,
+  getUserAvatar,
+  listUsers,
+  setUserAvatar,
+  toPublicUser,
+  updateDisplayName,
+  updateUserPassword,
+} from "../auth/users.js";
+import { AVATAR_MAX_BYTES, detectAvatarType } from "../auth/avatar.js";
 import { verifyPassword } from "../auth/password.js";
 
 export const authRouter = Router();
@@ -44,6 +56,52 @@ authRouter.post("/logout", (req, res) => {
 
 authRouter.get("/me", requireSession, (req, res) => {
   res.json(req.user);
+});
+
+const profileSchema = z.object({
+  displayName: z.string().trim().min(1).max(100),
+});
+
+authRouter.patch("/me", requireSession, (req, res) => {
+  const parsed = profileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+    return;
+  }
+  updateDisplayName(req.user!.id, parsed.data.displayName);
+  res.json(toPublicUser(findUserById(req.user!.id)!));
+});
+
+authRouter.get("/me/avatar", requireSession, (req, res) => {
+  const avatar = getUserAvatar(req.user!.id);
+  if (!avatar) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  // The client adds the update timestamp to the URL, so a changed photo gets a new cache key.
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.type(avatar.mime_type).send(avatar.data);
+});
+
+authRouter.put(
+  "/me/avatar",
+  requireSession,
+  express.raw({ type: ["image/jpeg", "image/png", "image/webp"], limit: AVATAR_MAX_BYTES }),
+  (req, res) => {
+    const data = Buffer.isBuffer(req.body) ? req.body : null;
+    const mimeType = data ? detectAvatarType(data) : null;
+    if (!data || !mimeType) {
+      res.status(400).json({ error: "invalid_image" });
+      return;
+    }
+    setUserAvatar(req.user!.id, mimeType, data);
+    res.json(toPublicUser(findUserById(req.user!.id)!));
+  },
+);
+
+authRouter.delete("/me/avatar", requireSession, (req, res) => {
+  deleteUserAvatar(req.user!.id);
+  res.json(toPublicUser(findUserById(req.user!.id)!));
 });
 
 const changePasswordSchema = z.object({
