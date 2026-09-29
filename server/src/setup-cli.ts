@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  console.log("Feedkeeper setup — create the first admin account.\n");
+  console.log("FeedKeeper setup — create the first admin account.\n");
   const email = await readLine("Admin email: ");
   const displayName = await readLine("Display name: ");
 
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
   }
 
   const user = createUser({ email, password, displayName, role: "admin" });
-  console.log(`\nAdmin account "${user.email}" created. You can now log in at your Feedkeeper URL.`);
+  console.log(`\nAdmin account "${user.email}" created. You can now log in at your FeedKeeper URL.`);
   process.exit(0);
 }
 

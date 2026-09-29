@@ -37,6 +37,11 @@ app.use(
     },
   }),
 );
+// Send X-Robots-Tag to ensure all HTTP endpoints disallow indexing even outside HTML
+app.use((_req, res, next) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
 app.use(
   cors({
     origin: config.publicUrl,

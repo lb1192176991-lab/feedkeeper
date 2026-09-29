@@ -6,11 +6,21 @@ import { itemsRouter } from "./items.js";
 import { tokensRouter } from "./tokens.js";
 import { systemRouter } from "./system.js";
 import { filtersRouter } from "./filters.js";
+import { foldersRouter } from "./folders.js";
+
+import { config } from "../config.js";
 
 export const apiRouter = Router();
 
 apiRouter.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+apiRouter.get("/config", (_req, res) => {
+  res.json({
+    showGithubLink: config.showGithubLink,
+    githubUrl: config.githubUrl,
+  });
 });
 
 apiRouter.use("/onboarding", onboardingRouter);
@@ -20,3 +30,4 @@ apiRouter.use("/items", itemsRouter);
 apiRouter.use("/tokens", tokensRouter);
 apiRouter.use("/system", systemRouter);
 apiRouter.use("/filters", filtersRouter);
+apiRouter.use("/folders", foldersRouter);

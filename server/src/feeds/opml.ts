@@ -7,7 +7,9 @@ import {
   createFeed,
   isUserSubscribed,
   subscribe,
+  createFolder,
   type Feed,
+  type SubscribedFeed,
 } from "./repository.js";
 import { assertPublicHttpUrl, SsrfBlockedError } from "./ssrfGuard.js";
 import { pollFeed } from "./poller.js";
@@ -15,6 +17,7 @@ import { pollFeed } from "./poller.js";
 export interface OpmlFeedItem {
   url: string;
   label?: string;
+  folder?: string;
 }
 
 export interface OpmlImportResult {
@@ -43,27 +46,54 @@ function escapeXml(unsafe: string): string {
   });
 }
 
+function feedToOutlineXml(s: SubscribedFeed, indent = "    "): string {
+  const text = escapeXml(s.label || s.title || s.url);
+  const xmlUrl = escapeXml(s.url);
+  const htmlUrl = s.site_url ? ` htmlUrl="${escapeXml(s.site_url)}"` : "";
+  return `${indent}<outline text="${text}" title="${text}" type="rss" xmlUrl="${xmlUrl}"${htmlUrl} />`;
+}
+
 /**
  * Generates standard OPML 2.0 XML representation of all subscribed feeds for a user.
  */
 export function generateOpml(userId: number): string {
   const subscriptions = listSubscriptionsForUser(userId);
 
-  const outlines = subscriptions
-    .map((s) => {
-      const text = escapeXml(s.label || s.title || s.url);
-      const xmlUrl = escapeXml(s.url);
-      const htmlUrl = s.site_url ? ` htmlUrl="${escapeXml(s.site_url)}"` : "";
-      return `    <outline text="${text}" title="${text}" type="rss" xmlUrl="${xmlUrl}"${htmlUrl} />`;
-    })
-    .join("\n");
+  // Group feeds by folder
+  const unfiled: SubscribedFeed[] = [];
+  const folders = new Map<string, SubscribedFeed[]>();
 
+  for (const sub of subscriptions) {
+    if (sub.folder_name) {
+      const list = folders.get(sub.folder_name) ?? [];
+      list.push(sub);
+      folders.set(sub.folder_name, list);
+    } else {
+      unfiled.push(sub);
+    }
+  }
+
+  const sections: string[] = [];
+
+  // Add folder outlines
+  for (const [folderName, feeds] of folders.entries()) {
+    const escapedName = escapeXml(folderName);
+    const feedOutlines = feeds.map((f) => feedToOutlineXml(f, "      ")).join("\n");
+    sections.push(`    <outline text="${escapedName}" title="${escapedName}">\n${feedOutlines}\n    </outline>`);
+  }
+
+  // Add unfiled feeds
+  for (const sub of unfiled) {
+    sections.push(feedToOutlineXml(sub, "    "));
+  }
+
+  const outlines = sections.join("\n");
   const now = new Date().toUTCString();
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <opml version="2.0">
   <head>
-    <title>Feedkeeper Subscriptions</title>
+    <title>FeedKeeper Subscriptions</title>
     <dateCreated>${now}</dateCreated>
   </head>
   <body>
@@ -76,12 +106,12 @@ ${outlines}
 /**
  * Recursively extracts outline elements containing an xmlUrl attribute from parsed OPML.
  */
-function extractOutlines(node: unknown, items: OpmlFeedItem[] = []): OpmlFeedItem[] {
+function extractOutlines(node: unknown, items: OpmlFeedItem[] = [], currentFolder?: string): OpmlFeedItem[] {
   if (!node || typeof node !== "object") return items;
 
   if (Array.isArray(node)) {
     for (const item of node) {
-      extractOutlines(item, items);
+      extractOutlines(item, items, currentFolder);
     }
     return items;
   }
@@ -92,17 +122,19 @@ function extractOutlines(node: unknown, items: OpmlFeedItem[] = []): OpmlFeedIte
     (typeof record["@_xmlUrl"] === "string" ? record["@_xmlUrl"] : undefined) ??
     (typeof record["@_xmlurl"] === "string" ? record["@_xmlurl"] : undefined);
 
-  if (xmlUrl) {
-    const rawLabel =
-      (typeof record["@_text"] === "string" ? record["@_text"] : undefined) ??
-      (typeof record["@_title"] === "string" ? record["@_title"] : undefined);
+  const rawLabel =
+    (typeof record["@_text"] === "string" ? record["@_text"] : undefined) ??
+    (typeof record["@_title"] === "string" ? record["@_title"] : undefined);
 
+  if (xmlUrl) {
     const label = rawLabel?.trim() ? rawLabel.trim() : undefined;
-    items.push({ url: xmlUrl.trim(), label });
+    items.push({ url: xmlUrl.trim(), label, folder: currentFolder });
+  } else if (rawLabel && record.outline) {
+    currentFolder = rawLabel.trim();
   }
 
   if (record.outline) {
-    extractOutlines(record.outline, items);
+    extractOutlines(record.outline, items, currentFolder);
   }
 
   return items;
@@ -142,6 +174,7 @@ export async function importOpmlFeeds(userId: number, xmlContent: string): Promi
   };
 
   const feedsToPoll: Feed[] = [];
+  const folderCache = new Map<string, number>();
 
   for (const item of feedItems) {
     if (!item.url) continue;
@@ -175,7 +208,18 @@ export async function importOpmlFeeds(userId: number, xmlContent: string): Promi
         continue;
       }
 
-      subscribe(userId, feed.id, item.label ?? null);
+      let folderId: number | null = null;
+      if (item.folder) {
+        if (folderCache.has(item.folder)) {
+          folderId = folderCache.get(item.folder)!;
+        } else {
+          const folder = createFolder(userId, item.folder);
+          folderId = folder.id;
+          folderCache.set(item.folder, folder.id);
+        }
+      }
+
+      subscribe(userId, feed.id, item.label ?? null, folderId);
       result.imported++;
       feedsToPoll.push(feed);
     } catch (error) {

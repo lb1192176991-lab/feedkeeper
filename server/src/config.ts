@@ -29,4 +29,6 @@ export const config = {
   retentionMaxDays: Number(process.env.RETENTION_MAX_DAYS ?? 90),
   retentionMaxItemsPerFeed: Number(process.env.RETENTION_MAX_ITEMS_PER_FEED ?? 1000),
   autoCleanupEnabled: process.env.AUTO_CLEANUP_ENABLED !== "false",
+  showGithubLink: process.env.SHOW_GITHUB_LINK !== "false",
+  githubUrl: process.env.GITHUB_URL ?? "https://github.com/visualfusion/feedkeeper",
 };

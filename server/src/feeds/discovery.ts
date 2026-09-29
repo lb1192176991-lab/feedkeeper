@@ -55,8 +55,17 @@ export async function discoverFeeds(inputUrl: string): Promise<DiscoveredFeed[]>
     return feeds;
   }
 
-  // 3. Fallback: try common feed paths relative to the domain (e.g., /feed, /rss.xml, /atom.xml)
-  const commonPaths = ["/feed", "/rss.xml", "/atom.xml", "/feed.xml"];
+  // 3. Fallback: try common feed paths relative to the domain (e.g., /feed, /rss.xml, /atom.xml, /rss.php?feed=RSS2.0)
+  const commonPaths = [
+    "/feed",
+    "/rss.xml",
+    "/atom.xml",
+    "/feed.xml",
+    "/index.xml",
+    "/rss",
+    "/rss.php?feed=RSS2.0",
+    "/rss.php?feed=ATOM1.0",
+  ];
   for (const path of commonPaths) {
     try {
       const candidateUrl = new URL(path, fetched.finalUrl || targetUrl).toString();

@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSession } from "../auth/middleware.js";
-import { listSubscriptionsForUser, findFeedById, isUserSubscribed } from "../feeds/repository.js";
+import { listSubscriptionsForUser, findFeedById, isUserSubscribed, reorderSubscriptions } from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
-import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
+import { SsrfBlockedError, normalizeUrlCandidate } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 import { pollFeed } from "../feeds/poller.js";
 import { discoverFeeds } from "../feeds/discovery.js";
@@ -13,6 +13,20 @@ feedsRouter.use(requireSession);
 
 feedsRouter.get("/", (req, res) => {
   res.json(listSubscriptionsForUser(req.user!.id));
+});
+
+const reorderSchema = z.object({
+  feedIds: z.array(z.number().int().positive()),
+});
+
+feedsRouter.put("/reorder", (req, res) => {
+  const parsed = reorderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_feed_ids" });
+    return;
+  }
+  reorderSubscriptions(req.user!.id, parsed.data.feedIds);
+  res.json({ ok: true });
 });
 
 feedsRouter.get("/opml", (req, res) => {
@@ -46,8 +60,13 @@ feedsRouter.post("/opml", async (req, res) => {
   }
 });
 
+const urlField = z.preprocess(
+  (val) => (typeof val === "string" ? normalizeUrlCandidate(val) : val),
+  z.string().url(),
+);
+
 const discoverSchema = z.object({
-  url: z.string().url(),
+  url: urlField,
 });
 
 feedsRouter.post("/discover", async (req, res) => {
@@ -70,8 +89,9 @@ feedsRouter.post("/discover", async (req, res) => {
 });
 
 const subscribeSchema = z.object({
-  url: z.string().url(),
+  url: urlField,
   label: z.string().max(200).nullable().optional(),
+  folderId: z.number().int().positive().nullable().optional(),
 });
 
 feedsRouter.post("/", async (req, res) => {
@@ -82,7 +102,12 @@ feedsRouter.post("/", async (req, res) => {
   }
 
   try {
-    const subscription = await subscribeToFeed(req.user!.id, parsed.data.url, parsed.data.label ?? null);
+    const subscription = await subscribeToFeed(
+      req.user!.id,
+      parsed.data.url,
+      parsed.data.label ?? null,
+      parsed.data.folderId ?? null,
+    );
     res.status(201).json(subscription);
   } catch (error) {
     if (error instanceof SsrfBlockedError) {
@@ -94,7 +119,8 @@ feedsRouter.post("/", async (req, res) => {
       return;
     }
     if (error instanceof FeedError) {
-      res.status(409).json({ error: error.message });
+      const status = error.message === "already_subscribed" ? 409 : 400;
+      res.status(status).json({ error: error.message });
       return;
     }
     res.status(400).json({ error: "invalid_feed", message: error instanceof Error ? error.message : String(error) });
@@ -103,6 +129,7 @@ feedsRouter.post("/", async (req, res) => {
 
 const updateSchema = z.object({
   label: z.string().max(200).nullable().optional(),
+  folderId: z.number().int().positive().nullable().optional(),
   pollIntervalMinutes: z.number().int().positive().max(10080).optional(),
 });
 

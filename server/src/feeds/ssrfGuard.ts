@@ -48,10 +48,19 @@ export class SsrfBlockedError extends Error {
   }
 }
 
+export function normalizeUrlCandidate(rawUrl: string): string {
+  let trimmed = rawUrl.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `https://${trimmed}`;
+}
+
 export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
+  const normalized = normalizeUrlCandidate(rawUrl);
   let url: URL;
   try {
-    url = new URL(rawUrl);
+    url = new URL(normalized);
   } catch {
     throw new Error("Invalid URL");
   }

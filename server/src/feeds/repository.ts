@@ -22,14 +22,27 @@ export interface Item {
   title: string | null;
   link: string | null;
   content_snippet: string | null;
+  content_html: string | null;
+  full_content_html: string | null;
+  image_url: string | null;
   published_at: string | null;
+  created_at: string;
+}
+
+export interface Folder {
+  id: number;
+  user_id: number;
+  name: string;
   created_at: string;
 }
 
 export interface SubscribedFeed extends Feed {
   subscription_id: number;
   label: string | null;
+  folder_id: number | null;
+  folder_name: string | null;
   unread_count: number;
+  position: number;
 }
 
 export interface MutedKeyword {
@@ -54,13 +67,27 @@ export function createFeed(url: string, pollIntervalMinutes: number): Feed {
   return findFeedById(Number(result.lastInsertRowid))!;
 }
 
-export function subscribe(userId: number, feedId: number, label: string | null): number {
+export function subscribe(
+  userId: number,
+  feedId: number,
+  label?: string | null,
+  folderId?: number | null,
+): number {
+  const maxPosRow = db
+    .prepare<[number], { max_pos: number | null }>(
+      "SELECT MAX(position) AS max_pos FROM subscriptions WHERE user_id = ?",
+    )
+    .get(userId);
+  const nextPosition = (maxPosRow?.max_pos ?? -1) + 1;
+
   const result = db
     .prepare(
-      `INSERT INTO subscriptions (user_id, feed_id, label) VALUES (?, ?, ?)
-       ON CONFLICT (user_id, feed_id) DO UPDATE SET label = excluded.label`,
+      `INSERT INTO subscriptions (user_id, feed_id, label, folder_id, position) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, feed_id) DO UPDATE SET
+         label = COALESCE(excluded.label, subscriptions.label),
+         folder_id = COALESCE(excluded.folder_id, subscriptions.folder_id)`,
     )
-    .run(userId, feedId, label);
+    .run(userId, feedId, label ?? null, folderId ?? null, nextPosition);
   return Number(result.lastInsertRowid);
 }
 
@@ -82,6 +109,9 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
          f.*,
          s.id AS subscription_id,
          s.label AS label,
+         s.folder_id AS folder_id,
+         fo.name AS folder_name,
+         s.position AS position,
          (
            SELECT COUNT(*) FROM items i
            WHERE i.feed_id = f.id
@@ -91,8 +121,9 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
          ) AS unread_count
        FROM subscriptions s
        JOIN feeds f ON f.id = s.feed_id
+       LEFT JOIN folders fo ON fo.id = s.folder_id
        WHERE s.user_id = ?
-       ORDER BY s.created_at ASC`,
+       ORDER BY s.position ASC, s.created_at ASC`,
     )
     .all(userId, userId);
 }
@@ -146,12 +177,26 @@ export function updateFeedAfterPoll(
 
 export function upsertItems(
   feedId: number,
-  items: Array<{ guid: string; title?: string; link?: string; contentSnippet?: string; publishedAt?: string }>,
+  items: Array<{
+    guid: string;
+    title?: string;
+    link?: string;
+    contentSnippet?: string;
+    contentHtml?: string | null;
+    publishedAt?: string;
+    imageUrl?: string | null;
+  }>,
 ): number {
   const insert = db.prepare(
-    `INSERT INTO items (feed_id, guid, title, link, content_snippet, published_at)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT (feed_id, guid) DO NOTHING`,
+    `INSERT INTO items (feed_id, guid, title, link, content_snippet, content_html, published_at, image_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (feed_id, guid) DO UPDATE SET
+       title = COALESCE(excluded.title, items.title),
+       link = COALESCE(excluded.link, items.link),
+       content_snippet = COALESCE(excluded.content_snippet, items.content_snippet),
+       content_html = COALESCE(excluded.content_html, items.content_html),
+       published_at = COALESCE(excluded.published_at, items.published_at),
+       image_url = COALESCE(excluded.image_url, items.image_url)`,
   );
   const insertMany = db.transaction((rows: typeof items) => {
     let inserted = 0;
@@ -162,7 +207,9 @@ export function upsertItems(
         row.title ?? null,
         row.link ?? null,
         row.contentSnippet ?? null,
+        row.contentHtml ?? null,
         row.publishedAt ?? null,
+        row.imageUrl ?? null,
       );
       if (result.changes > 0) inserted++;
     }
@@ -175,6 +222,7 @@ export function listItemsForUser(
   userId: number,
   opts: {
     feedId?: number;
+    folderId?: number;
     unreadOnly?: boolean;
     bookmarkedOnly?: boolean;
     includeMuted?: boolean;
@@ -182,13 +230,23 @@ export function listItemsForUser(
     limit?: number;
     since?: string;
   } = {},
-): (Item & { read: boolean; bookmarked: boolean; feed_title: string | null })[] {
+): (Item & {
+  read: boolean;
+  bookmarked: boolean;
+  feed_title: string | null;
+  feed_site_url: string | null;
+  feed_url: string;
+})[] {
   const conditions: string[] = ["s.user_id = ?"];
   const params: unknown[] = [userId];
 
   if (opts.feedId) {
     conditions.push("i.feed_id = ?");
     params.push(opts.feedId);
+  }
+  if (opts.folderId) {
+    conditions.push("s.folder_id = ?");
+    params.push(opts.folderId);
   }
   if (opts.unreadOnly) {
     conditions.push("r.item_id IS NULL");
@@ -222,7 +280,12 @@ export function listItemsForUser(
 
   return db
     .prepare(
-      `SELECT DISTINCT i.*, f.title AS feed_title, (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
+      `SELECT DISTINCT i.*,
+              f.title AS feed_title,
+              f.site_url AS feed_site_url,
+              f.url AS feed_url,
+              (r.item_id IS NOT NULL) AS read,
+              (b.item_id IS NOT NULL) AS bookmarked
        FROM items i
        JOIN subscriptions s ON s.feed_id = i.feed_id
        JOIN feeds f ON f.id = i.feed_id
@@ -232,24 +295,100 @@ export function listItemsForUser(
        ORDER BY i.published_at DESC, i.created_at DESC
        LIMIT ?`,
     )
-    .all(...params) as (Item & { read: boolean; bookmarked: boolean; feed_title: string | null })[];
+    .all(...params) as (Item & {
+      read: boolean;
+      bookmarked: boolean;
+      feed_title: string | null;
+      feed_site_url: string | null;
+      feed_url: string;
+    })[];
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {
   db.prepare("UPDATE subscriptions SET label = ? WHERE user_id = ? AND feed_id = ?").run(label, userId, feedId);
 }
 
+export function updateSubscriptionFolder(userId: number, feedId: number, folderId: number | null): void {
+  db.prepare("UPDATE subscriptions SET folder_id = ? WHERE user_id = ? AND feed_id = ?").run(
+    folderId,
+    userId,
+    feedId,
+  );
+}
+
+export function listFoldersForUser(userId: number): (Folder & { feed_count: number; unread_count: number })[] {
+  return db
+    .prepare<[number, number, number], Folder & { feed_count: number; unread_count: number }>(
+      `SELECT
+         fo.*,
+         COUNT(DISTINCT s.feed_id) AS feed_count,
+         COALESCE(
+           (
+             SELECT COUNT(*)
+             FROM items i
+             JOIN subscriptions s2 ON s2.feed_id = i.feed_id AND s2.folder_id = fo.id AND s2.user_id = ?
+             WHERE NOT EXISTS (
+               SELECT 1 FROM item_reads r WHERE r.item_id = i.id AND r.user_id = ?
+             )
+           ), 0
+         ) AS unread_count
+       FROM folders fo
+       LEFT JOIN subscriptions s ON s.folder_id = fo.id AND s.user_id = fo.user_id
+       WHERE fo.user_id = ?
+       GROUP BY fo.id
+       ORDER BY fo.name COLLATE NOCASE ASC`,
+    )
+    .all(userId, userId, userId);
+}
+
+export function findFolderByName(userId: number, name: string): Folder | undefined {
+  return db
+    .prepare<[number, string], Folder>("SELECT * FROM folders WHERE user_id = ? AND name = ?")
+    .get(userId, name.trim());
+}
+
+export function findFolderById(userId: number, id: number): Folder | undefined {
+  return db
+    .prepare<[number, number], Folder>("SELECT * FROM folders WHERE user_id = ? AND id = ?")
+    .get(userId, id);
+}
+
+export function createFolder(userId: number, name: string): Folder {
+  const trimmed = name.trim();
+  db.prepare("INSERT INTO folders (user_id, name) VALUES (?, ?) ON CONFLICT (user_id, name) DO NOTHING").run(
+    userId,
+    trimmed,
+  );
+  return findFolderByName(userId, trimmed)!;
+}
+
+export function updateFolder(userId: number, id: number, name: string): Folder {
+  const trimmed = name.trim();
+  db.prepare("UPDATE folders SET name = ? WHERE id = ? AND user_id = ?").run(trimmed, id, userId);
+  return findFolderById(userId, id)!;
+}
+
+export function deleteFolder(userId: number, id: number): void {
+  db.prepare("DELETE FROM folders WHERE id = ? AND user_id = ?").run(id, userId);
+}
+
 export function updateFeedPollInterval(feedId: number, minutes: number): void {
   db.prepare("UPDATE feeds SET poll_interval_minutes = ? WHERE id = ?").run(minutes, feedId);
 }
 
-export function markAllRead(userId: number, feedId?: number): number {
+export function markAllRead(userId: number, filter?: number | { feedId?: number; folderId?: number }): number {
+  const feedId = typeof filter === "number" ? filter : filter?.feedId;
+  const folderId = typeof filter === "object" ? filter?.folderId : undefined;
   const conditions = ["s.user_id = ?"];
   const params: unknown[] = [userId, userId];
 
   if (feedId) {
     conditions.push("i.feed_id = ?");
     params.push(feedId);
+  }
+  if (folderId) {
+    conditions.push("s.folder_id = ?");
+    params.push(folderId);
   }
 
   const result = db
@@ -268,22 +407,38 @@ export function markAllRead(userId: number, feedId?: number): number {
 
 export function markItemRead(userId: number, itemId: number): void {
   db.prepare(
-    "INSERT INTO item_reads (user_id, item_id) VALUES (?, ?) ON CONFLICT (user_id, item_id) DO NOTHING",
-  ).run(userId, itemId);
+    `INSERT INTO item_reads (user_id, item_id)
+     SELECT ?, i.id FROM items i
+     JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+     WHERE i.id = ?
+     ON CONFLICT (user_id, item_id) DO NOTHING`,
+  ).run(userId, userId, itemId);
 }
 
 export function markItemUnread(userId: number, itemId: number): void {
-  db.prepare("DELETE FROM item_reads WHERE user_id = ? AND item_id = ?").run(userId, itemId);
+  db.prepare(
+    `DELETE FROM item_reads WHERE user_id = ? AND item_id = ?
+     AND EXISTS (SELECT 1 FROM items i JOIN subscriptions s ON s.feed_id = i.feed_id
+                 WHERE i.id = ? AND s.user_id = ?)`,
+  ).run(userId, itemId, itemId, userId);
 }
 
 export function bookmarkItem(userId: number, itemId: number): void {
   db.prepare(
-    "INSERT INTO item_bookmarks (user_id, item_id) VALUES (?, ?) ON CONFLICT (user_id, item_id) DO NOTHING",
-  ).run(userId, itemId);
+    `INSERT INTO item_bookmarks (user_id, item_id)
+     SELECT ?, i.id FROM items i
+     JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+     WHERE i.id = ?
+     ON CONFLICT (user_id, item_id) DO NOTHING`,
+  ).run(userId, userId, itemId);
 }
 
 export function unbookmarkItem(userId: number, itemId: number): void {
-  db.prepare("DELETE FROM item_bookmarks WHERE user_id = ? AND item_id = ?").run(userId, itemId);
+  db.prepare(
+    `DELETE FROM item_bookmarks WHERE user_id = ? AND item_id = ?
+     AND EXISTS (SELECT 1 FROM items i JOIN subscriptions s ON s.feed_id = i.feed_id
+                 WHERE i.id = ? AND s.user_id = ?)`,
+  ).run(userId, itemId, itemId, userId);
 }
 
 export function listMutedKeywords(userId: number): MutedKeyword[] {
@@ -307,4 +462,22 @@ export function addMutedKeyword(userId: number, keyword: string): MutedKeyword {
 
 export function removeMutedKeyword(userId: number, keywordId: number): void {
   db.prepare("DELETE FROM user_muted_keywords WHERE id = ? AND user_id = ?").run(keywordId, userId);
+}
+
+export function reorderSubscriptions(userId: number, feedIds: number[]): void {
+  const update = db.prepare("UPDATE subscriptions SET position = ? WHERE user_id = ? AND feed_id = ?");
+  const runTransaction = db.transaction(() => {
+    feedIds.forEach((feedId, index) => {
+      update.run(index, userId, feedId);
+    });
+  });
+  runTransaction();
+}
+
+export function findItemById(id: number): Item | undefined {
+  return db.prepare<[number], Item>("SELECT * FROM items WHERE id = ?").get(id);
+}
+
+export function updateItemFullContent(id: number, fullContentHtml: string): void {
+  db.prepare("UPDATE items SET full_content_html = ? WHERE id = ?").run(fullContentHtml, id);
 }

@@ -11,9 +11,14 @@ import {
   listMutedKeywords,
   addMutedKeyword,
   removeMutedKeyword,
+  listFoldersForUser,
+  findFolderById,
+  createFolder,
+  deleteFolder,
+  updateSubscriptionFolder,
 } from "../feeds/repository.js";
 import { subscribeToFeed, unsubscribeFromFeed, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
-import { SsrfBlockedError } from "../feeds/ssrfGuard.js";
+import { SsrfBlockedError, normalizeUrlCandidate } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 import { pollFeed } from "../feeds/poller.js";
 import { discoverFeeds } from "../feeds/discovery.js";
@@ -32,7 +37,7 @@ function errorResult(message: string) {
 // instance is created per request (see mcp/http.ts) so tool handlers can
 // safely close over `userId` without leaking data between users.
 export function createMcpServerForUser(userId: number): McpServer {
-  const server = new McpServer({ name: "feedkeeper", version: "0.1.0" });
+  const server = new McpServer({ name: "feedkeeper", version: "0.4.0" });
 
   server.registerTool(
     "list_feeds",
@@ -44,19 +49,25 @@ export function createMcpServerForUser(userId: number): McpServer {
     async () => textResult(listSubscriptionsForUser(userId)),
   );
 
+  const mcpUrlSchema = z.preprocess(
+    (val) => (typeof val === "string" ? normalizeUrlCandidate(val) : val),
+    z.string().url(),
+  );
+
   server.registerTool(
     "subscribe_feed",
     {
       title: "Subscribe to a feed",
       description: "Subscribes the current user to an RSS/Atom feed URL or website URL (auto-discovering the feed).",
       inputSchema: {
-        url: z.string().url().describe("The feed URL or website URL"),
+        url: mcpUrlSchema.describe("The feed URL or website URL"),
         label: z.string().max(200).optional().describe("Optional display name for this feed"),
+        folderId: z.number().int().positive().optional().describe("Optional folder/category ID"),
       },
     },
-    async ({ url, label }) => {
+    async ({ url, label, folderId }) => {
       try {
-        const subscription = await subscribeToFeed(userId, url, label ?? null);
+        const subscription = await subscribeToFeed(userId, url, label ?? null, folderId ?? null);
         return textResult(subscription);
       } catch (error) {
         if (error instanceof SsrfBlockedError) return errorResult(error.message);
@@ -79,7 +90,7 @@ export function createMcpServerForUser(userId: number): McpServer {
       title: "Discover feeds on a website",
       description: "Inspects a website URL and discovers available RSS/Atom/JSON feed links.",
       inputSchema: {
-        url: z.string().url().describe("The website URL to discover feeds from"),
+        url: mcpUrlSchema.describe("The website URL to discover feeds from"),
       },
     },
     async ({ url }) => {
@@ -111,19 +122,58 @@ export function createMcpServerForUser(userId: number): McpServer {
   );
 
   server.registerTool(
+    "list_folders",
+    {
+      title: "List folders / categories",
+      description: "Lists all feed categories/folders created by the user, including feed and unread counts.",
+      inputSchema: {},
+    },
+    async () => textResult(listFoldersForUser(userId)),
+  );
+
+  server.registerTool(
+    "create_folder",
+    {
+      title: "Create folder",
+      description: "Creates a new category/folder to organize feeds.",
+      inputSchema: { name: z.string().trim().min(1).max(100) },
+    },
+    async ({ name }) => textResult(createFolder(userId, name)),
+  );
+
+  server.registerTool(
+    "move_feed_to_folder",
+    {
+      title: "Move feed to folder",
+      description: "Assigns a feed to a folder, or removes it from all folders if folderId is null.",
+      inputSchema: {
+        feedId: z.number().int().positive(),
+        folderId: z.number().int().positive().nullable(),
+      },
+    },
+    async ({ feedId, folderId }) => {
+      if (!isUserSubscribed(userId, feedId)) return errorResult("not_subscribed");
+      if (folderId !== null && !findFolderById(userId, folderId)) return errorResult("folder_not_found");
+      updateSubscriptionFolder(userId, feedId, folderId);
+      return textResult({ ok: true });
+    },
+  );
+
+  server.registerTool(
     "get_new_items",
     {
       title: "Get new feed items",
-      description: "Returns unread items, optionally filtered by feed, search term, or bookmarks.",
+      description: "Returns unread items, optionally filtered by feed, folder, search term, or bookmarks.",
       inputSchema: {
         feedId: z.number().int().positive().optional(),
+        folderId: z.number().int().positive().optional(),
         search: z.string().max(200).optional(),
         bookmarkedOnly: z.boolean().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
     },
-    async ({ feedId, search, bookmarkedOnly, limit }) =>
-      textResult(listItemsForUser(userId, { feedId, search, bookmarkedOnly, limit, unreadOnly: true })),
+    async ({ feedId, folderId, search, bookmarkedOnly, limit }) =>
+      textResult(listItemsForUser(userId, { feedId, folderId, search, bookmarkedOnly, limit, unreadOnly: true })),
   );
 
   server.registerTool(
@@ -134,12 +184,13 @@ export function createMcpServerForUser(userId: number): McpServer {
       inputSchema: {
         query: z.string().min(1).max(200),
         feedId: z.number().int().positive().optional(),
+        folderId: z.number().int().positive().optional(),
         bookmarkedOnly: z.boolean().optional(),
         limit: z.number().int().positive().max(200).optional(),
       },
     },
-    async ({ query, feedId, bookmarkedOnly, limit }) =>
-      textResult(listItemsForUser(userId, { search: query, feedId, bookmarkedOnly, limit })),
+    async ({ query, feedId, folderId, bookmarkedOnly, limit }) =>
+      textResult(listItemsForUser(userId, { search: query, feedId, folderId, bookmarkedOnly, limit })),
   );
 
   server.registerTool(
