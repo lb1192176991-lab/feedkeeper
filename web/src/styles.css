@@ -393,9 +393,43 @@ input[type="checkbox"]:disabled {
   will-change: opacity, transform;
 }
 
+@media (max-width: 639px) {
+  .items-toolbar {
+    transition: gap 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .items-toolbar-scope,
+  .items-toolbar-search,
+  .items-toolbar-filters {
+    transition: flex-grow 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+      flex-basis 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+      opacity 0.2s ease;
+  }
+
+  .items-toolbar-search { flex: 0 0 38px; width: 38px; }
+  .items-toolbar-filters { flex: 0 0 82px; width: 82px; overflow: hidden; }
+  .items-toolbar-open { gap: 0; }
+  .items-toolbar-open .items-toolbar-scope,
+  .items-toolbar-open .items-toolbar-filters {
+    flex: 0 0 0px;
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .items-toolbar-open .items-toolbar-search { flex: 1 1 0px; width: auto; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-page-fade {
     animation: none;
+  }
+
+  .items-toolbar,
+  .items-toolbar-scope,
+  .items-toolbar-search,
+  .items-toolbar-filters {
+    transition: none;
   }
 }
 

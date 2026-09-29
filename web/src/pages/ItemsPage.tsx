@@ -10,6 +10,15 @@ import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/sc
 
 const PAGE_SIZE = 50;
 
+function SearchIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 export function ItemsPage() {
   const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -70,6 +79,57 @@ export function ItemsPage() {
   const [unreadOnly, setUnreadOnly] = useState<boolean>(initialUnreadOnly);
   const [bookmarkedOnly, setBookmarkedOnly] = useState<boolean>(initialBookmarkedOnly);
   const [search, setSearch] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
+  const mobileSearchButtonRef = useRef<HTMLButtonElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(61);
+  const [toolbarDocked, setToolbarDocked] = useState(false);
+
+  useEffect(() => {
+    const header = document.querySelector<HTMLElement>("[data-app-header]");
+    if (!header) return;
+    const observer = new ResizeObserver(() => setHeaderHeight(header.getBoundingClientRect().height));
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    function updateDocked() {
+      const toolbarTop = toolbarRef.current?.getBoundingClientRect().top;
+      setToolbarDocked(window.scrollY > 0 && toolbarTop !== undefined && toolbarTop <= headerHeight + 1);
+    }
+    updateDocked();
+    window.addEventListener("scroll", updateDocked, { passive: true });
+    window.addEventListener("resize", updateDocked);
+    return () => {
+      window.removeEventListener("scroll", updateDocked);
+      window.removeEventListener("resize", updateDocked);
+    };
+  }, [headerHeight]);
+
+  useEffect(() => {
+    if (mobileSearchOpen) mobileSearchRef.current?.focus();
+  }, [mobileSearchOpen]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 640px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setMobileSearchOpen(false);
+    };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
+
+  function closeMobileSearch() {
+    setMobileSearchOpen(false);
+    requestAnimationFrame(() => mobileSearchButtonRef.current?.focus());
+  }
+
+  function updateSearch(value: string) {
+    resetItemsScrollY();
+    setSearch(value);
+  }
 
   function toggleUnreadOnly() {
     resetItemsScrollY();
@@ -403,43 +463,81 @@ export function ItemsPage() {
         </button>
       </div>
 
-      <div className="card p-3 sm:p-4 flex flex-col sm:flex-row gap-2.5 sm:gap-3">
-        <div className="relative flex-1 min-w-0">
-          <input
-            type="search"
-            placeholder={t("items.searchPlaceholder")}
-            className="input w-full pl-9 pr-3"
-            value={search}
-            onChange={(e) => {
-              resetItemsScrollY();
-              setSearch(e.target.value);
-            }}
+      <div ref={toolbarRef} className="sticky z-20 py-2" style={{ top: headerHeight }}>
+        {toolbarDocked && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-px bottom-0 left-1/2 w-screen -translate-x-1/2 border-y border-[var(--c-border)] backdrop-blur-md"
+            style={{ backgroundColor: "color-mix(in srgb, var(--c-surface) 85%, transparent)" }}
           />
-          <svg
-            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-45"
-            style={{ color: "var(--c-text-muted)" }}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </div>
+        )}
+        <div className={`items-toolbar relative z-10 flex items-center gap-2 sm:gap-3 ${mobileSearchOpen ? "items-toolbar-open" : ""}`}>
+          <div className="items-toolbar-scope min-w-0 flex-1 sm:flex-none sm:w-64" inert={mobileSearchOpen}>
+            <CustomSelect
+              value={filterScope}
+              onChange={onScopeChange}
+              options={scopeOptions}
+              className="w-full"
+              placeholder={t("items.allFeeds")}
+            />
+          </div>
 
-        <div className="flex items-center gap-2 sm:contents">
-          <CustomSelect
-            value={filterScope}
-            onChange={onScopeChange}
-            options={scopeOptions}
-            className="flex-1 min-w-0 sm:flex-none sm:w-64 shrink-0 block"
-            placeholder={t("items.allFeeds")}
-          />
+          <div className="relative hidden sm:block flex-1 min-w-0">
+            <input
+              type="search"
+              placeholder={t("items.searchPlaceholder")}
+              aria-label={t("items.searchPlaceholder")}
+              className="input w-full pl-9 pr-3"
+              value={search}
+              onChange={(e) => updateSearch(e.target.value)}
+            />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-45 text-[var(--c-text-muted)]"><SearchIcon /></span>
+          </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="items-toolbar-search relative h-[38px] min-w-0 overflow-hidden sm:hidden">
+            <button
+              ref={mobileSearchButtonRef}
+              type="button"
+              onClick={() => setMobileSearchOpen(true)}
+              aria-label={t("items.searchPlaceholder")}
+              aria-controls="mobile-article-search"
+              aria-expanded={mobileSearchOpen}
+              title={t("items.searchPlaceholder")}
+              aria-hidden={mobileSearchOpen}
+              tabIndex={mobileSearchOpen ? -1 : 0}
+              className={`absolute inset-y-0 left-0 z-10 flex w-[38px] items-center justify-center rounded-lg border transition-opacity duration-150 ${mobileSearchOpen ? "pointer-events-none opacity-0" : search ? "border-[var(--c-blue3)] bg-[var(--c-surface-hover)] text-[var(--c-text)] opacity-100" : "border-[var(--c-border)] bg-[var(--c-surface)] text-[var(--c-text-muted)] opacity-100"}`}
+            >
+              <SearchIcon />
+            </button>
+            <div className={`flex h-full min-w-0 items-center gap-2 transition-opacity duration-200 ${mobileSearchOpen ? "opacity-100 delay-75" : "pointer-events-none opacity-0"}`} inert={!mobileSearchOpen}>
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--c-text-muted)] opacity-60"><SearchIcon /></span>
+              <input
+                id="mobile-article-search"
+                ref={mobileSearchRef}
+                type="search"
+                placeholder={t("items.searchPlaceholder")}
+                aria-label={t("items.searchPlaceholder")}
+                className="input min-w-0 flex-1 pl-9"
+                value={search}
+                onChange={(e) => updateSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Escape") closeMobileSearch(); }}
+              />
+              <button
+                type="button"
+                onClick={closeMobileSearch}
+                aria-label={t("common.close")}
+                title={t("common.close")}
+                className="w-[38px] h-[38px] rounded-lg border border-[var(--c-border)] bg-[var(--c-surface)] text-[var(--c-text-muted)] flex items-center justify-center shrink-0 cursor-pointer"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="items-toolbar-filters flex items-center gap-1.5 sm:gap-2 shrink-0" inert={mobileSearchOpen}>
             <button
               type="button"
               onClick={toggleBookmarkedOnly}

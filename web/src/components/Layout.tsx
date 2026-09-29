@@ -53,6 +53,7 @@ export function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       <header
+        data-app-header
         className="sticky top-0 z-30 backdrop-blur-md border-b"
         style={{
           borderColor: "var(--c-border)",
