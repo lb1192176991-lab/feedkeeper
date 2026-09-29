@@ -4,7 +4,7 @@ This guide walks through running Feedkeeper on an [Uberspace](https://uberspace.
 
 ## 1. Pick a Node.js version
 
-Feedkeeper needs Node.js 20 or newer.
+FeedKeeper needs Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+.
 
 ```bash
 uberspace tools version list node

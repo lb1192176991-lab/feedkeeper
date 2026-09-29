@@ -73,7 +73,7 @@ Open `http://localhost:3000` to complete the initial setup via the web onboardin
 
 ## Quick start (local development)
 
-Requires Node.js 20+.
+Requires Node.js 22.22.2+ (22.x), 24.15+ (24.x), or 26+.
 
 ```bash
 git clone https://github.com/visualfusion/feedkeeper.git
@@ -89,7 +89,7 @@ Open `http://localhost:5173` and follow the onboarding screen to create the firs
 
 ## Deploying
 
-See [docs/deployment-uberspace.md](docs/deployment-uberspace.md) for a step-by-step guide to running FeedKeeper on [Uberspace](https://uberspace.de). The same steps work on any Linux host with SSH access and Node.js 20+.
+See [docs/deployment-uberspace.md](docs/deployment-uberspace.md) for a step-by-step guide to running FeedKeeper on [Uberspace](https://uberspace.de). The same steps work on any Linux host with SSH access and a supported Node.js version.
 
 For production, build once and run the compiled server:
 
