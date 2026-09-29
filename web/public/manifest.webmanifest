@@ -1,11 +1,10 @@
 {
   "name": "FeedKeeper",
   "short_name": "FeedKeeper",
-  "description": "FeedKeeper – RSS-Reader & MCP-Server",
+  "description": "Self-hosted RSS/Atom reader and remote MCP server for AI assistants.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#0b0f17",
   "theme_color": "#0f172a",
   "icons": [

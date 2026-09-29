@@ -3,6 +3,7 @@ import { JSDOM } from "jsdom";
 import { fetch as undiciFetch } from "undici";
 import { assertPublicHttpUrl, createPublicDispatcher, SsrfBlockedError } from "./ssrfGuard.js";
 import type { Agent } from "undici";
+import { APP_VERSION } from "../version.js";
 
 type ArticleFetch = typeof globalThis.fetch;
 const defaultFetch = undiciFetch as unknown as ArticleFetch;
@@ -98,7 +99,7 @@ export function isCachedConsentSnippet(html: string): boolean {
 // Search crawlers bypass CMP/cookie consent walls because publishers want their content indexed
 const FETCH_USER_AGENTS = [
   "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 FeedKeeper/0.4.1",
+  `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 FeedKeeper/${APP_VERSION}`,
 ];
 const MAX_REDIRECTS = 5;
 const MAX_HTML_BYTES = 5 * 1024 * 1024;

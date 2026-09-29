@@ -1,10 +1,11 @@
 import { fetch as undiciFetch } from "undici";
 import { assertPublicHttpUrl, createPublicDispatcher } from "./ssrfGuard.js";
+import { APP_VERSION } from "../version.js";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_REDIRECTS = 5;
-const USER_AGENT = "FeedKeeper/0.4.1 (+https://github.com/visualfusion/feedkeeper)";
+const USER_AGENT = `FeedKeeper/${APP_VERSION} (+https://github.com/visualfusion/feedkeeper)`;
 
 export interface FetchedFeed {
   body: string;

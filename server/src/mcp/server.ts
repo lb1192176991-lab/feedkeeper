@@ -27,6 +27,7 @@ import { pollFeed } from "../feeds/poller.js";
 import { discoverFeeds } from "../feeds/discovery.js";
 import { findUserById } from "../auth/users.js";
 import { getDatabaseStats, runCleanup } from "../feeds/cleanup.js";
+import { APP_VERSION } from "../version.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -40,7 +41,7 @@ function errorResult(message: string) {
 // instance is created per request (see mcp/http.ts) so tool handlers can
 // safely close over `userId` without leaking data between users.
 export function createMcpServerForUser(userId: number, scope: TokenScope): McpServer {
-  const server = new McpServer({ name: "feedkeeper", version: "0.4.1" });
+  const server = new McpServer({ name: "feedkeeper", version: APP_VERSION });
 
   server.registerTool(
     "list_feeds",

@@ -12,7 +12,7 @@
     "type": "git",
     "url": "git+https://github.com/visualfusion/feedkeeper.git"
   },
-  "homepage": "https://rss.visualfusion.de",
+  "homepage": "https://github.com/visualfusion/feedkeeper#readme",
   "workspaces": [
     "server",
     "web"

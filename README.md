@@ -29,11 +29,14 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Keyword mute filters** — cut through information overload by filtering out articles matching specific keywords before they reach your stream.
 - **Health monitoring** — clear status indicators show polling health, consecutive fetch errors, and timestamps so you instantly spot dead feeds.
 - **Automated database housekeeping** — sensible defaults prune read articles, enforce maximum item retention, and run SQLite `VACUUM` on schedule to keep storage lean.
-- **Remote MCP access** — stream items directly into Claude or any MCP-compatible environment via standard Streamable HTTP.
+- **Remote MCP access** — stream items directly into Claude or any MCP-compatible environment via standard Streamable HTTP, with read-only or read-write tokens and cursor-based paging for incremental sync.
 - **Privacy & self-hosting first** — a single Node.js process and one SQLite file. No external database engines, no telemetry, no tracking.
 - **OPML 2.0 import & export** — switch back and forth from Feedly, NetNewsWire, Inoreader, or Reeder at any time.
 - **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls.
-- **Mobile-friendly web app** — responsive interface, mobile tab navigation, installable home-screen app, quick mark-as-read toggles, and dark/light modes.
+- **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews.
+- **Mobile-friendly web app** — responsive interface, mobile tab navigation, pull to refresh, an installable home-screen app with an in-app install prompt, quick mark-as-read toggles, and light, dark and system themes.
+- **Personal profiles** — each account can set its display name and a profile photo.
+- **Online backups** — create verified SQLite backups while the service keeps running.
 - **Hardened security** — SSRF protection against internal network probing, rate limiting on authentication, and hashed API tokens.
 
 ## How it fits together

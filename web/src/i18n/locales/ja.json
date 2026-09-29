@@ -5,7 +5,6 @@
     "save": "保存",
     "cancel": "キャンセル",
     "delete": "削除",
-    "add": "追加",
     "close": "閉じる",
     "error": "問題が発生しました",
     "retry": "再試行",
@@ -24,7 +23,6 @@
     "account": "アカウント"
   },
   "onboarding": {
-    "title": "FeedKeeperへようこそ",
     "subtitle": "セットアップを完了するには、最初の管理者アカウントを作成してください。",
     "emailLabel": "メールアドレス",
     "displayNameLabel": "表示名",
@@ -35,7 +33,6 @@
     "cliHint": "代わりにサーバーで「npm run setup」を実行してください。どちらの方法でも同じ最初の管理者アカウントが作成されます。"
   },
   "login": {
-    "title": "ログイン",
     "subtitle": "RSSリーダー & MCPサーバー",
     "emailLabel": "メールアドレス",
     "passwordLabel": "パスワード",
@@ -45,14 +42,11 @@
   },
   "feeds": {
     "title": "フィード一覧",
-    "addFeed": "フィードを追加",
     "urlPlaceholder": "example.com またはフィードURL",
     "labelPlaceholder": "ラベル(任意)",
     "subscribe": "登録",
     "subscribing": "登録中…",
-    "discovering": "フィードを検出中…",
     "multipleFeedsFound": "複数のフィードが見つかりました。1つ選択してください:",
-    "feedDiscoveredSingle": "検出されたフィード: {{title}}",
     "unsubscribe": "登録解除",
     "unsubscribeConfirm": "「{{title}}」の登録を解除しますか?",
     "noFeeds": "まだフィードがありません。上から最初のフィードを追加してください。",
@@ -81,7 +75,6 @@
     "statusFailing": "取得エラー ({{count}}回連続失敗)",
     "statusPending": "初回確認待ち",
     "lastSuccess": "最終成功日時",
-    "folders": "フォルダー",
     "manageFolders": "フォルダーの管理",
     "noFolder": "フォルダーなし",
     "folder": "フォルダー",
@@ -90,9 +83,7 @@
     "deleteFolderConfirm": "フォルダー「{{name}}」を削除しますか？登録フィードは保持されます。",
     "folderGroup": "フォルダー",
     "feedGroup": "個別フィード",
-    "folderPrefix": "フォルダー: {{name}}",
-    "dragHandle": "ドラッグして並び替え",
-    "uncategorized": "未分類"
+    "dragHandle": "ドラッグして並び替え"
   },
   "items": {
     "title": "記事",
@@ -105,17 +96,13 @@
     "unreadOnly": "未読のみ",
     "all": "すべて表示",
     "bookmarkedOnly": "ブックマークのみ",
-    "bookmarkedBadge": "保存済み",
     "bookmark": "保存",
     "unbookmark": "保存を解除",
-    "save": "保存",
-    "saved": "保存済み",
     "allFeeds": "すべてのフィード",
     "noItems": "表示する記事がありません。",
     "refresh": "記事を更新",
     "refreshing": "フィードを更新中…",
-    "refreshFailed": "更新に失敗しました。もう一度お試しください。",
-    "openLink": "開く"
+    "refreshFailed": "更新に失敗しました。もう一度お試しください。"
   },
   "reader": {
     "close": "閉じる (Esc)",
@@ -125,15 +112,8 @@
     "copyLink": "リンクをコピー",
     "linkCopied": "リンクをコピーしました！",
     "readingTime": "読了目安 {{count}}分",
-    "readMore": "{{source}} で記事全文を読む",
-    "originalOn": "{{source}} の元記事",
-    "teaserTitle": "記事の全文を読む",
-    "teaserHint": "このフィードは概要のみを提供しています。全文は直接 {{source}} でお読みいただけます。",
-    "loadFullText": "全文を読み込む",
-    "loadingFullText": "全文を読み込み中...",
     "toggleFullText": "ウェブから全文を抽出 (R)",
     "togglePreview": "プレビューに戻る (R)",
-    "fullTextExtracted": "全文",
     "extractionFailed": "ウェブサイトから記事の全文を抽出できませんでした。",
     "bookmark": "保存 (S)",
     "unbookmark": "保存を解除 (S)",
@@ -181,12 +161,10 @@
     "incorrectPassword": "現在のパスワードが正しくありません。",
     "retentionTitle": "データベースと保持期間(Retention)",
     "retentionHint": "古い記事や既読記事を自動的に削除し、ディスク使用量を抑えて検索パフォーマンスを向上させます。",
-    "retentionStatsTitle": "データベースの状態",
     "statTotalItems": "総記事数",
     "statReadItems": "既読記事数",
     "statFeedsCount": "アクティブなフィード数",
     "statDbSize": "ファイルサイズ (SQLite + WAL)",
-    "statOldestItem": "最古の記事",
     "retentionReadDaysLabel": "既読記事の保持期間 (日)",
     "retentionReadDaysHint": "0 = 既読後即時削除、デフォルト: 30日",
     "retentionMaxDaysLabel": "最大記事保持期間 (日)",
@@ -211,6 +189,8 @@
     "avatarChange": "写真を変更",
     "avatarRemove": "削除",
     "avatarHint": "JPG、PNG、WebP に対応。正方形に切り抜いて縮小します。",
-    "avatarUnreadable": "画像を読み込めませんでした。"
+    "avatarUnreadable": "画像を読み込めませんでした。",
+    "autoReaderMode": "デフォルトでリーダーモードで開く",
+    "autoReaderModeHint": "詳細表示を開いたときに、整形された記事の全文を自動で読み込みます。"
   }
 }

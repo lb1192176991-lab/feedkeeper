@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 export function LoadingSpinner({
   className = "",
   size = "md",
@@ -7,6 +9,7 @@ export function LoadingSpinner({
   size?: "sm" | "md" | "lg";
   center?: boolean;
 }) {
+  const { t } = useTranslation();
   const sizeMap = {
     sm: "w-5 h-5 border-2",
     md: "w-8 h-8 border-[2.5px]",
@@ -17,7 +20,7 @@ export function LoadingSpinner({
     <div
       className={`rounded-full animate-spin border-[var(--c-border)] border-t-[var(--c-blue1)] dark:border-t-white/80 ${sizeMap[size]} ${className}`}
       role="status"
-      aria-label="Loading"
+      aria-label={t("common.loading")}
     />
   );
 
