@@ -23,38 +23,76 @@ function imageFilename(url: string | null): string {
   }
 }
 
+const sanitizeConfig = {
+  USE_PROFILES: { html: true },
+  ALLOWED_ATTR: ["href", "src", "alt", "title", "width", "height", "loading"],
+  ALLOW_DATA_ATTR: false,
+  FORBID_TAGS: ["form", "input", "button", "textarea", "select", "style", "video", "audio", "source"],
+};
+
+function isPixel(img: Element, src: string | null): boolean {
+  return (img.getAttribute("width") === "1" && img.getAttribute("height") === "1") ||
+    Boolean(src && /feedsportal\.com|feedburner\.com|pixel\.wp\.com|statcounter\.com/i.test(src));
+}
+
+function isSmallImage(img: Element): boolean {
+  const width = Number(img.getAttribute("width"));
+  const height = Number(img.getAttribute("height"));
+  return (width > 0 && width < 160) || (height > 0 && height < 100);
+}
+
+/** Finds a usable image before the article's main text for the reader hero. */
+export function leadingArticleImage(rawHtml: string, baseUrl?: string | null): string | null {
+  if (!rawHtml) return null;
+  const cleanHtml = DOMPurify.sanitize(rawHtml, sanitizeConfig);
+  const doc = new DOMParser().parseFromString(cleanHtml, "text/html");
+
+  for (const img of doc.querySelectorAll("img")) {
+    const before = doc.createRange();
+    before.selectNodeContents(doc.body);
+    before.setEndBefore(img);
+    if (before.toString().trim().length > 160) return null;
+
+    const src = safeHttpUrl(img.getAttribute("src") ?? "", baseUrl);
+    if (src && !isPixel(img, src) && !isSmallImage(img)) return src;
+  }
+  return null;
+}
+
 /** Sanitizes feed and extracted article HTML before it enters the page. */
 export function sanitizeHtml(rawHtml: string, options: SanitizeOptions = {}): string {
   if (!rawHtml) return "";
 
-  const sanitizeConfig = {
-    USE_PROFILES: { html: true },
-    ALLOWED_ATTR: ["href", "src", "alt", "title", "width", "height", "loading"],
-    ALLOW_DATA_ATTR: false,
-    FORBID_TAGS: ["form", "input", "button", "textarea", "select", "style", "video", "audio", "source"],
-  };
   const cleanHtml = DOMPurify.sanitize(rawHtml, sanitizeConfig);
   const doc = new DOMParser().parseFromString(cleanHtml, "text/html");
   const heroUrl = options.heroImageUrl ? safeHttpUrl(options.heroImageUrl, options.baseUrl) : null;
   const heroFilename = imageFilename(heroUrl);
   const bodyTextLength = doc.body.textContent?.trim().length ?? 0;
+  let previousImage: Element | null = null;
+  let previousImageSrc: string | null = null;
 
   Array.from(doc.querySelectorAll("img")).forEach((img, index) => {
     const src = safeHttpUrl(img.getAttribute("src") ?? "", options.baseUrl);
     const filename = imageFilename(src);
-    const isPixel =
-      (img.getAttribute("width") === "1" && img.getAttribute("height") === "1") ||
-      Boolean(src && /feedsportal\.com|feedburner\.com|pixel\.wp\.com|statcounter\.com/i.test(src));
     const isDuplicateHero = Boolean(
       heroUrl && src &&
       (src === heroUrl || (heroFilename && filename === heroFilename) || (index === 0 && bodyTextLength < 400)),
     );
+    let isRepeatedImage = false;
+    if (src && src === previousImageSrc && previousImage) {
+      const between = doc.createRange();
+      between.setStartAfter(previousImage);
+      between.setEndBefore(img);
+      isRepeatedImage = !between.toString().trim();
+    }
 
-    if (!src || isPixel || isDuplicateHero) {
+    if (!src || isPixel(img, src) || isDuplicateHero || isRepeatedImage) {
       img.remove();
     } else {
       img.setAttribute("src", src);
       img.setAttribute("loading", "lazy");
+      previousImage = img;
+      previousImageSrc = src;
     }
   });
 

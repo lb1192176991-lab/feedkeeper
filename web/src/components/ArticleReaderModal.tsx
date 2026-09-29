@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Item } from "../api/client.js";
-import { sanitizeHtml, estimateReadingTime, safeHttpUrl } from "../utils/sanitizeHtml.js";
+import { sanitizeHtml, leadingArticleImage, estimateReadingTime, safeHttpUrl } from "../utils/sanitizeHtml.js";
+import { Favicon } from "./Favicon.js";
 
 interface ArticleReaderModalProps {
   item: Item | null;
@@ -35,6 +36,7 @@ export function ArticleReaderModal({
   const [showFullText, setShowFullText] = useState(false);
   const [extractedByline, setExtractedByline] = useState<string | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [leadImage, setLeadImage] = useState<{ src: string; width: number; height: number } | null>(null);
   const articleUrl = item?.link ? safeHttpUrl(item.link) : null;
 
   // Sync state whenever active item changes
@@ -147,11 +149,13 @@ export function ArticleReaderModal({
 
   const formattedDate = useMemo(() => {
     if (!pubDate) return "";
-    return new Intl.DateTimeFormat(i18n.language, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(pubDate);
-  }, [pubDate, i18n.language]);
+    return new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: "medium" }).format(pubDate);
+  }, [pubDate, i18n.resolvedLanguage]);
+
+  const formattedTime = useMemo(() => {
+    if (!pubDate) return "";
+    return new Intl.DateTimeFormat(i18n.resolvedLanguage, { timeStyle: "short" }).format(pubDate);
+  }, [pubDate, i18n.resolvedLanguage]);
 
   // Extract source domain
   const sourceDomain = useMemo(() => {
@@ -163,31 +167,36 @@ export function ArticleReaderModal({
     }
   }, [item?.link, item?.feed_title]);
 
-  // Resolve favicon URL for source
-  const faviconUrl = useMemo(() => {
-    for (const source of [item?.feed_site_url, item?.feed_url, item?.link]) {
-      if (!source) continue;
-      try {
-        const url = new URL(source);
-        if (url.protocol === "https:" || url.protocol === "http:") return `${url.origin}/favicon.ico`;
-      } catch {
-        // Try the next source URL.
-      }
-    }
-    return null;
-  }, [item?.feed_site_url, item?.feed_url, item?.link]);
-
   // Active content HTML (full text if toggled, otherwise feed HTML)
   const activeContentHtml = showFullText ? item?.full_content_html : item?.content_html;
+  const heroImageUrl = useMemo(
+    () => item?.image_url ?? leadingArticleImage(activeContentHtml ?? "", item?.link),
+    [item?.image_url, activeContentHtml, item?.link],
+  );
+  useEffect(() => {
+    setLeadImage(null);
+    if (!isOpen || !heroImageUrl) return;
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (!cancelled && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setLeadImage({ src: heroImageUrl, width: image.naturalWidth, height: image.naturalHeight });
+      }
+    };
+    image.src = heroImageUrl;
+    return () => { cancelled = true; };
+  }, [isOpen, heroImageUrl]);
+  const visibleLeadImage = leadImage?.src === heroImageUrl ? leadImage : null;
+  const compactLeadImage = visibleLeadImage !== null && visibleLeadImage.width <= 320 && visibleLeadImage.height <= 240;
 
   // Sanitize full HTML content or format plain text snippet, removing duplicate hero image
   const sanitizedContent = useMemo(() => {
     if (!item) return "";
     if (activeContentHtml) {
-      return sanitizeHtml(activeContentHtml, { heroImageUrl: item.image_url, baseUrl: item.link });
+      return sanitizeHtml(activeContentHtml, { heroImageUrl, baseUrl: item.link });
     }
     return "";
-  }, [item, activeContentHtml]);
+  }, [item, activeContentHtml, heroImageUrl]);
 
   // Estimated reading time
   const readingTime = useMemo(() => {
@@ -232,17 +241,12 @@ export function ArticleReaderModal({
         >
           {/* Source info with Favicon (top left) */}
           <div className="flex items-center gap-2.5 min-w-0 pr-2">
-            {faviconUrl && (
-              <img
-                src={faviconUrl}
-                alt=""
-                className="w-4 h-4 rounded-xs shrink-0 object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = "none";
-                }}
-              />
-            )}
+            <Favicon
+              siteUrl={item.feed_site_url}
+              feedUrl={item.feed_url}
+              articleUrl={item.link}
+              className="w-4 h-4 rounded-xs shrink-0 object-contain"
+            />
             <span className="truncate text-sm font-medium text-[var(--c-text)]">
               {item.feed_title}
             </span>
@@ -264,46 +268,45 @@ export function ArticleReaderModal({
         </header>
 
         {/* Scrollable Article Body */}
-        <main
-          className="flex-1 overflow-y-auto px-5 sm:px-10 py-6 sm:py-8 overscroll-contain"
-          style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 0px))" }}
-        >
+        <main className="flex-1 overflow-y-auto overscroll-contain">
+          {visibleLeadImage && !compactLeadImage && (
+            <img
+              src={visibleLeadImage.src}
+              alt=""
+              className="block w-full max-h-[380px] object-cover"
+              onError={() => setLeadImage(null)}
+            />
+          )}
+          <div
+            className="px-5 sm:px-10 py-6 sm:py-8"
+            style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 0px))" }}
+          >
           <article className="max-w-prose mx-auto">
-            {/* Optional Hero Image */}
-            {item.image_url && (
-              <div className="mb-6 rounded-xl overflow-hidden border border-[var(--c-border)] bg-[var(--c-bg)] shadow-xs">
-                <img
-                  src={item.image_url}
-                  alt=""
-                  className="w-full max-h-[380px] object-cover"
-                  loading="eager"
-                  onError={(e) => {
-                    const parent = (e.currentTarget as HTMLElement).parentElement;
-                    if (parent) parent.style.display = "none";
-                  }}
-                />
-              </div>
-            )}
+            <div className="flow-root">
+              {visibleLeadImage && compactLeadImage && (
+                <div
+                  className="float-right ml-4 mb-3 sm:ml-6 rounded-xl overflow-hidden border border-[var(--c-border)] bg-[var(--c-bg)] shadow-xs"
+                  style={{ width: visibleLeadImage.width, maxWidth: "42%" }}
+                >
+                  <img src={visibleLeadImage.src} alt="" className="block w-full h-auto" onError={() => setLeadImage(null)} />
+                </div>
+              )}
 
-            {/* Article Headline */}
-            <h1 className="text-2xl sm:text-3xl font-bold font-['Manrope'] text-[var(--c-text)] leading-snug tracking-tight mb-3">
-              {item.title}
-            </h1>
+              {/* Article Headline */}
+              <h1 className="text-2xl sm:text-3xl font-bold font-['Manrope'] text-[var(--c-text)] leading-snug tracking-tight mb-3">
+                {item.title}
+              </h1>
+            </div>
 
             {/* Meta information row */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--c-text-muted)] pb-5 border-b border-[var(--c-border)] mb-6 font-medium">
               <span className="inline-flex items-center gap-1.5 text-[var(--c-text)] font-semibold">
-                {faviconUrl && (
-                  <img
-                    src={faviconUrl}
-                    alt=""
-                    className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLElement).style.display = "none";
-                    }}
-                  />
-                )}
+                <Favicon
+                  siteUrl={item.feed_site_url}
+                  feedUrl={item.feed_url}
+                  articleUrl={item.link}
+                  className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"
+                />
                 <span>{item.feed_title}</span>
               </span>
               {extractedByline && (
@@ -315,7 +318,22 @@ export function ArticleReaderModal({
               {formattedDate && (
                 <>
                   <span>•</span>
-                  <span>{formattedDate}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    <span>{formattedDate}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>{formattedTime}</span>
+                  </span>
                 </>
               )}
               <span>•</span>
@@ -493,6 +511,7 @@ export function ArticleReaderModal({
               </div>
             </div>
           </article>
+          </div>
         </main>
       </div>
     </div>,

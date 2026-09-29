@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api, type Feed, type Folder, type Item } from "../api/client.ts";
 import { CustomSelect, type SelectOption } from "../components/CustomSelect.tsx";
 import { ArticleReaderModal } from "../components/ArticleReaderModal.tsx";
+import { Favicon } from "../components/Favicon.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
 
@@ -360,19 +361,6 @@ export function ItemsPage() {
     timeStyle: "short",
   });
 
-  function getFaviconUrl(item: Item): string | null {
-    for (const source of [item.feed_site_url, item.feed_url, item.link]) {
-      if (!source) continue;
-      try {
-        const url = new URL(source);
-        if (url.protocol === "https:" || url.protocol === "http:") return `${url.origin}/favicon.ico`;
-      } catch {
-        // Try the next source URL.
-      }
-    }
-    return null;
-  }
-
   const scopeOptions = useMemo<SelectOption[]>(() => {
     const list: SelectOption[] = [{ value: "", label: t("items.allFeeds") }];
     if (folders.length > 0) {
@@ -512,7 +500,6 @@ export function ItemsPage() {
       ) : (
         <ul className="flex flex-col gap-3 animate-page-fade">
           {items.map((item) => {
-            const favicon = getFaviconUrl(item);
             const pubDate = item.published_at ? new Date(item.published_at) : null;
 
             return (
@@ -546,17 +533,12 @@ export function ItemsPage() {
                     <div>
                       {/* Source row above headline with optional Favicon */}
                       <div className="flex items-center gap-2 text-xs mb-1.5 font-medium" style={{ color: "var(--c-text-muted)" }}>
-                        {favicon && (
-                          <img
-                            src={favicon}
-                            alt=""
-                            className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLElement).style.display = "none";
-                            }}
-                          />
-                        )}
+                        <Favicon
+                          siteUrl={item.feed_site_url}
+                          feedUrl={item.feed_url}
+                          articleUrl={item.link}
+                          className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"
+                        />
                         <span className="truncate">{item.feed_title}</span>
                       </div>
 
