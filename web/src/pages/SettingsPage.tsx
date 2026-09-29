@@ -11,6 +11,55 @@ import {
   type MutedKeyword,
 } from "../api/client.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
+import { LanguageSwitcher } from "../components/LanguageSwitcher.tsx";
+import { CustomSelect } from "../components/CustomSelect.tsx";
+
+function PreferencesSection() {
+  const { t } = useTranslation();
+  const [autoReaderMode, setAutoReaderMode] = useState(() => {
+    return localStorage.getItem("feedkeeper_auto_reader_mode") !== "false";
+  });
+
+  const handleToggleAutoReader = (checked: boolean) => {
+    setAutoReaderMode(checked);
+    localStorage.setItem("feedkeeper_auto_reader_mode", checked ? "true" : "false");
+  };
+
+  return (
+    <section className="card p-5 flex flex-col gap-6">
+      <div>
+        <h2 className="text-lg font-semibold">{t("settings.language")}</h2>
+        <p className="text-sm mt-0.5" style={{ color: "var(--c-text-muted)" }}>
+          {t("settings.languageHint")}
+        </p>
+        <div className="mt-3">
+          <LanguageSwitcher />
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-[var(--c-border)] flex items-center justify-between gap-4">
+        <div>
+          <label htmlFor="auto-reader-toggle" className="text-base font-semibold cursor-pointer select-none">
+            {t("settings.autoReaderMode")}
+          </label>
+          <p className="text-sm mt-0.5" style={{ color: "var(--c-text-muted)" }}>
+            {t("settings.autoReaderModeHint")}
+          </p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+          <input
+            id="auto-reader-toggle"
+            type="checkbox"
+            className="sr-only peer"
+            checked={autoReaderMode}
+            onChange={(e) => handleToggleAutoReader(e.target.checked)}
+          />
+          <div className="w-11 h-6 bg-[var(--c-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--c-blue1)]" />
+        </label>
+      </div>
+    </section>
+  );
+}
 
 function ChangePasswordSection() {
   const { t } = useTranslation();
@@ -78,7 +127,7 @@ function ChangePasswordSection() {
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
         {message && (
-          <p className={`text-sm ${message.type === "error" ? "text-red-500" : ""}`} style={message.type === "success" ? { color: "var(--c-green3)" } : undefined}>
+          <p className={`text-sm ${message.type === "error" ? "text-danger" : ""}`} style={message.type === "success" ? { color: "var(--c-green3)" } : undefined}>
             {message.text}
           </p>
         )}
@@ -254,15 +303,20 @@ function UsersSection() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <select className="input" value={role} onChange={(e) => setRole(e.target.value as "admin" | "user")}>
-          <option value="user">{t("settings.roleUser")}</option>
-          <option value="admin">{t("settings.roleAdmin")}</option>
-        </select>
+        <CustomSelect
+          value={role}
+          onChange={(val) => setRole(val as "admin" | "user")}
+          options={[
+            { value: "user", label: t("settings.roleUser") },
+            { value: "admin", label: t("settings.roleAdmin") },
+          ]}
+          className="w-full"
+        />
         <button type="submit" className="btn-primary sm:col-span-2">
           {t("settings.addUser")}
         </button>
       </form>
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
 
       <ul className="flex flex-col gap-2">
         {users.map((u) => (
@@ -390,7 +444,7 @@ function RetentionSection() {
       )}
 
       {message && (
-        <p className={`text-sm ${message.type === "success" ? "text-emerald-500" : "text-red-500"}`}>
+        <p className={`text-sm ${message.type === "success" ? "text-emerald-500" : "text-danger"}`}>
           {message.text}
         </p>
       )}
@@ -525,7 +579,7 @@ function MutedKeywordsSection() {
         </p>
       </div>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
 
       <form onSubmit={onAdd} className="flex gap-2 max-w-md">
         <input
@@ -557,9 +611,12 @@ function MutedKeywordsSection() {
                 type="button"
                 onClick={() => onRemove(k.id)}
                 title={t("settings.removeMutedKeyword")}
-                className="hover:opacity-75 font-bold leading-none p-0.5 text-xs text-red-500"
+                className="hover:opacity-75 p-0.5 text-xs text-danger flex items-center justify-center cursor-pointer"
               >
-                ✕
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </span>
           ))}
@@ -580,6 +637,7 @@ export function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
+      <PreferencesSection />
       <ChangePasswordSection />
       <TokensSection />
       <MutedKeywordsSection />

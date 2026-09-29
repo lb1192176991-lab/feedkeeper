@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Feedkeeper",
+    "appName": "FeedKeeper",
     "loading": "読み込み中…",
     "save": "保存",
     "cancel": "キャンセル",
@@ -9,17 +9,20 @@
     "close": "閉じる",
     "error": "問題が発生しました",
     "retry": "再試行",
-    "never": "なし"
+    "never": "なし",
+    "noOptions": "選択肢がありません",
+    "metaTitle": "FeedKeeper – RSSリーダー & MCPサーバー",
+    "metaDescription": "AIアシスタント連携に対応したセルフホスト型RSS/Atomフィードリーダー & MCPサーバー。"
   },
   "nav": {
-    "feeds": "フィード",
     "items": "記事",
+    "feeds": "フィード",
     "settings": "設定",
     "logout": "ログアウト",
     "menu": "メニュー"
   },
   "onboarding": {
-    "title": "Feedkeeperへようこそ",
+    "title": "FeedKeeperへようこそ",
     "subtitle": "セットアップを完了するには、最初の管理者アカウントを作成してください。",
     "emailLabel": "メールアドレス",
     "displayNameLabel": "表示名",
@@ -31,15 +34,17 @@
   },
   "login": {
     "title": "ログイン",
+    "subtitle": "RSSリーダー & MCPサーバー",
     "emailLabel": "メールアドレス",
     "passwordLabel": "パスワード",
     "submit": "ログイン",
-    "error": "メールアドレスまたはパスワードが正しくありません。"
+    "error": "メールアドレスまたはパスワードが正しくありません。",
+    "viewOnGithub": "GitHubでFeedKeeperを見る"
   },
   "feeds": {
     "title": "フィード一覧",
     "addFeed": "フィードを追加",
-    "urlPlaceholder": "https://example.com またはフィードURL",
+    "urlPlaceholder": "example.com またはフィードURL",
     "labelPlaceholder": "ラベル(任意)",
     "subscribe": "登録",
     "subscribing": "登録中…",
@@ -58,7 +63,9 @@
     "minutesShort": "{{count}}分",
     "hoursShort": "{{count}}時間",
     "edit": "編集",
+    "editFeedTitle": "フィードを編集",
     "markAllRead": "すべて既読にする",
+    "markReadShort": "既読にする",
     "importOpml": "OPMLをインポート",
     "exportOpml": "OPMLをエクスポート",
     "importing": "フィードをインポート中…",
@@ -71,7 +78,19 @@
     "statusHealthy": "正常",
     "statusFailing": "取得エラー ({{count}}回連続失敗)",
     "statusPending": "初回確認待ち",
-    "lastSuccess": "最終成功日時"
+    "lastSuccess": "最終成功日時",
+    "folders": "フォルダー",
+    "manageFolders": "フォルダーの管理",
+    "noFolder": "フォルダーなし",
+    "folder": "フォルダー",
+    "newFolderPlaceholder": "新しいフォルダー (例: Tech)",
+    "addFolder": "フォルダーを作成",
+    "deleteFolderConfirm": "フォルダー「{{name}}」を削除しますか？登録フィードは保持されます。",
+    "folderGroup": "フォルダー",
+    "feedGroup": "個別フィード",
+    "folderPrefix": "フォルダー: {{name}}",
+    "dragHandle": "ドラッグして並び替え",
+    "uncategorized": "未分類"
   },
   "items": {
     "title": "記事",
@@ -79,6 +98,7 @@
     "markUnread": "未読にする",
     "searchPlaceholder": "記事を検索…",
     "unreadOnly": "未読のみ",
+    "all": "すべて表示",
     "bookmarkedOnly": "ブックマークのみ",
     "bookmarkedBadge": "保存済み",
     "bookmark": "保存",
@@ -89,10 +109,33 @@
     "noItems": "表示する記事がありません。",
     "openLink": "開く"
   },
+  "reader": {
+    "close": "閉じる (Esc)",
+    "previous": "前の記事 (K または ←)",
+    "next": "次の記事 (J または →)",
+    "openOriginal": "元記事を開く",
+    "copyLink": "リンクをコピー",
+    "linkCopied": "リンクをコピーしました！",
+    "readingTime": "読了目安 {{count}}分",
+    "readMore": "{{source}} で記事全文を読む",
+    "originalOn": "{{source}} の元記事",
+    "teaserTitle": "記事の全文を読む",
+    "teaserHint": "このフィードは概要のみを提供しています。全文は直接 {{source}} でお読みいただけます。",
+    "loadFullText": "全文を読み込む",
+    "loadingFullText": "全文を読み込み中...",
+    "toggleFullText": "ウェブから全文を抽出 (R)",
+    "togglePreview": "プレビューに戻る (R)",
+    "fullTextExtracted": "全文",
+    "extractionFailed": "ウェブサイトから記事の全文を抽出できませんでした。",
+    "bookmark": "保存 (S)",
+    "unbookmark": "保存を解除 (S)",
+    "markRead": "既読にする (M)",
+    "markUnread": "未読にする (M)"
+  },
   "settings": {
     "title": "設定",
     "tokensTitle": "パーソナルアクセストークン",
-    "tokensHint": "トークンを使うと、MCPクライアント(Claudeなど)からこのFeedkeeperインスタンスにリモート接続できます。",
+    "tokensHint": "トークンを使うと、MCPクライアント(Claudeなど)からこのFeedKeeperインスタンスにリモート接続できます。",
     "createToken": "トークンを作成",
     "tokenNamePlaceholder": "トークン名(例:「Claude Desktop」)",
     "tokenCreated": "トークンを作成しました",
@@ -113,6 +156,7 @@
     "removeMutedKeyword": "削除",
     "noMutedKeywords": "ミュートされたキーワードはありません。",
     "language": "言語",
+    "languageHint": "表示言語を選択してください。",
     "theme": "テーマ",
     "themeLight": "ライト",
     "themeDark": "ダーク",
@@ -144,6 +188,6 @@
     "retentionSaved": "設定を保存しました。",
     "runCleanupNow": "今すぐクリーンアップを実行 (VACUUM)",
     "cleaning": "クリーンアップ中…",
-    "cleanupSuccess": "クリーンアップが完了しました: {{total}} 件の記事を削除しました。サイズ: {{before}} MB ➔ {{after}} MB。"
+    "cleanupSuccess": "クリーンアップが完了しました: {{total}} 件の記事を削除しました。サイズ: {{before}} MB -> {{after}} MB。"
   }
 }

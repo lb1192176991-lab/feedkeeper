@@ -29,6 +29,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+export interface PublicConfig {
+  showGithubLink: boolean;
+  githubUrl: string;
+}
+
 export interface DiscoveredFeed {
   url: string;
   title: string | null;
@@ -79,6 +84,18 @@ export interface Feed {
   consecutive_errors: number;
   subscription_id: number;
   label: string | null;
+  folder_id: number | null;
+  folder_name: string | null;
+  unread_count: number;
+  position: number;
+}
+
+export interface Folder {
+  id: number;
+  user_id: number;
+  name: string;
+  created_at: string;
+  feed_count: number;
   unread_count: number;
 }
 
@@ -86,9 +103,14 @@ export interface Item {
   id: number;
   feed_id: number;
   feed_title: string | null;
+  feed_site_url?: string | null;
+  feed_url?: string;
   title: string | null;
   link: string | null;
   content_snippet: string | null;
+  content_html?: string | null;
+  full_content_html?: string | null;
+  image_url?: string | null;
   published_at: string | null;
   read: boolean;
   bookmarked: boolean;
@@ -117,6 +139,7 @@ export interface OpmlImportResult {
 }
 
 export const api = {
+  getConfig: () => request<PublicConfig>("/config"),
   onboardingStatus: () => request<{ needsOnboarding: boolean }>("/onboarding/status"),
   onboard: (data: { email: string; password: string; displayName: string }) =>
     request<User>("/onboarding", { method: "POST", body: JSON.stringify(data) }),
@@ -133,11 +156,13 @@ export const api = {
 
   listFeeds: () => request<Feed[]>("/feeds"),
   discoverFeeds: (url: string) => request<{ feeds: DiscoveredFeed[] }>("/feeds/discover", { method: "POST", body: JSON.stringify({ url }) }),
-  subscribeFeed: (url: string, label: string | null) =>
-    request<Feed>("/feeds", { method: "POST", body: JSON.stringify({ url, label }) }),
+  subscribeFeed: (url: string, label: string | null, folderId?: number | null) =>
+    request<Feed>("/feeds", { method: "POST", body: JSON.stringify({ url, label, folderId }) }),
   unsubscribeFeed: (feedId: number) => request<void>(`/feeds/${feedId}`, { method: "DELETE" }),
-  updateFeed: (feedId: number, data: { label?: string | null; pollIntervalMinutes?: number }) =>
+  updateFeed: (feedId: number, data: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number }) =>
     request<Feed>(`/feeds/${feedId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  reorderFeeds: (feedIds: number[]) =>
+    request<{ ok: boolean }>("/feeds/reorder", { method: "PUT", body: JSON.stringify({ feedIds }) }),
   exportOpmlUrl: () => "/api/feeds/opml",
   importOpml: (opmlContent: string) =>
     request<OpmlImportResult>("/feeds/opml", {
@@ -150,9 +175,18 @@ export const api = {
   refreshAllFeeds: () =>
     request<{ refreshed: number; newItems: number; errors: number }>("/feeds/refresh-all", { method: "POST" }),
 
+  listFolders: () => request<{ folders: Folder[] }>("/folders"),
+  createFolder: (name: string) =>
+    request<Folder>("/folders", { method: "POST", body: JSON.stringify({ name }) }),
+  updateFolder: (id: number, name: string) =>
+    request<Folder>(`/folders/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  deleteFolder: (id: number) => request<{ success: boolean }>(`/folders/${id}`, { method: "DELETE" }),
+  markFolderRead: (id: number) => request<{ read: number }>(`/folders/${id}/read`, { method: "POST" }),
+
   listItems: (
     params: {
       feedId?: number;
+      folderId?: number;
       unreadOnly?: boolean;
       bookmarkedOnly?: boolean;
       includeMuted?: boolean;
@@ -161,6 +195,7 @@ export const api = {
   ) => {
     const query = new URLSearchParams();
     if (params.feedId) query.set("feedId", String(params.feedId));
+    if (params.folderId) query.set("folderId", String(params.folderId));
     if (params.unreadOnly) query.set("unreadOnly", "true");
     if (params.bookmarkedOnly) query.set("bookmarkedOnly", "true");
     if (params.includeMuted) query.set("includeMuted", "true");
@@ -172,8 +207,22 @@ export const api = {
   markUnread: (itemId: number) => request<void>(`/items/${itemId}/unread`, { method: "POST" }),
   bookmarkItem: (itemId: number) => request<void>(`/items/${itemId}/bookmark`, { method: "POST" }),
   unbookmarkItem: (itemId: number) => request<void>(`/items/${itemId}/bookmark`, { method: "DELETE" }),
-  markAllRead: (feedId?: number) =>
-    request<{ marked: number }>("/items/mark-all-read", { method: "POST", body: JSON.stringify({ feedId }) }),
+  extractContent: (itemId: number) =>
+    request<{
+      id: number;
+      full_content_html: string;
+      title?: string;
+      byline?: string;
+      cached: boolean;
+    }>(`/items/${itemId}/extract-content`, { method: "POST" }),
+  markAllRead: (options?: number | { feedId?: number; folderId?: number }) => {
+    const feedId = typeof options === "number" ? options : options?.feedId;
+    const folderId = typeof options === "object" ? options?.folderId : undefined;
+    return request<{ marked: number }>("/items/mark-all-read", {
+      method: "POST",
+      body: JSON.stringify({ feedId, folderId }),
+    });
+  },
 
   listMutedKeywords: () => request<{ keywords: MutedKeyword[] }>("/filters/muted"),
   addMutedKeyword: (keyword: string) =>

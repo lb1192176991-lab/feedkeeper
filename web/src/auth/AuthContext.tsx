@@ -32,9 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error instanceof ApiError && error.status === 401) {
           setUser(null);
         } else {
-          throw error;
+          console.error("Auth check failed:", error);
+          setUser(null);
         }
       }
+    } catch (err) {
+      console.error("Failed to check onboarding/auth status:", err);
+      setUser(null);
     } finally {
       setLoading(false);
     }

@@ -1,26 +1,22 @@
 import { useTranslation } from "react-i18next";
+import { CustomSelect } from "./CustomSelect.tsx";
 
 const LANGUAGES = [
-  { code: "de", label: "DE" },
-  { code: "en", label: "EN" },
-  { code: "ja", label: "JA" },
+  { value: "de", label: "Deutsch" },
+  { value: "en", label: "English" },
+  { value: "ja", label: "日本語" },
 ];
 
 export function LanguageSwitcher() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   return (
-    <select
-      value={i18n.resolvedLanguage}
-      onChange={(e) => i18n.changeLanguage(e.target.value)}
-      className="input text-sm py-1 w-auto"
-      aria-label="Language"
-    >
-      {LANGUAGES.map((lang) => (
-        <option key={lang.code} value={lang.code}>
-          {lang.label}
-        </option>
-      ))}
-    </select>
+    <CustomSelect
+      value={i18n.resolvedLanguage ?? "de"}
+      onChange={(lang) => i18n.changeLanguage(lang)}
+      options={LANGUAGES}
+      className="w-44"
+      ariaLabel={t("settings.language")}
+    />
   );
 }

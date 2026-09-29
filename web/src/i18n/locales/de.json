@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Feedkeeper",
+    "appName": "FeedKeeper",
     "loading": "Lädt…",
     "save": "Speichern",
     "cancel": "Abbrechen",
@@ -9,17 +9,20 @@
     "close": "Schließen",
     "error": "Etwas ist schiefgelaufen",
     "retry": "Erneut versuchen",
-    "never": "nie"
+    "never": "nie",
+    "noOptions": "Keine Optionen",
+    "metaTitle": "FeedKeeper – RSS-Reader & MCP-Server",
+    "metaDescription": "Selbstgehosteter RSS/Atom-Feed-Reader und MCP-Server für KI-Assistenten."
   },
   "nav": {
     "feeds": "Feeds",
-    "items": "Einträge",
+    "items": "Artikel",
     "settings": "Einstellungen",
     "logout": "Abmelden",
     "menu": "Menü"
   },
   "onboarding": {
-    "title": "Willkommen bei Feedkeeper",
+    "title": "Willkommen bei FeedKeeper",
     "subtitle": "Lege den ersten Admin-Account an, um die Einrichtung abzuschließen.",
     "emailLabel": "E-Mail",
     "displayNameLabel": "Anzeigename",
@@ -31,16 +34,18 @@
   },
   "login": {
     "title": "Anmelden",
+    "subtitle": "RSS-Reader & MCP-Server",
     "emailLabel": "E-Mail",
     "passwordLabel": "Passwort",
     "submit": "Anmelden",
-    "error": "E-Mail oder Passwort ungültig."
+    "error": "E-Mail oder Passwort ungültig.",
+    "viewOnGithub": "FeedKeeper auf GitHub"
   },
   "feeds": {
     "title": "Deine Feeds",
     "addFeed": "Feed hinzufügen",
-    "urlPlaceholder": "https://beispiel.de oder Feed-URL",
-    "labelPlaceholder": "Label (optional)",
+    "urlPlaceholder": "beispiel.de oder Feed-URL",
+    "labelPlaceholder": "Bezeichnung (optional)",
     "subscribe": "Abonnieren",
     "subscribing": "Wird abonniert…",
     "discovering": "Suche Feeds…",
@@ -58,7 +63,9 @@
     "minutesShort": "{{count}} Min.",
     "hoursShort": "{{count}} Std.",
     "edit": "Bearbeiten",
+    "editFeedTitle": "Feed bearbeiten",
     "markAllRead": "Alle als gelesen markieren",
+    "markReadShort": "Gelesen",
     "importOpml": "OPML importieren",
     "exportOpml": "OPML exportieren",
     "importing": "Feeds werden importiert…",
@@ -71,14 +78,27 @@
     "statusHealthy": "Aktiv & fehlerfrei",
     "statusFailing": "Fehler beim Abruf ({{count}}x fehlgeschlagen)",
     "statusPending": "Wartet auf ersten Abruf",
-    "lastSuccess": "Zuletzt erfolgreich"
+    "lastSuccess": "Zuletzt erfolgreich",
+    "folders": "Kategorien",
+    "manageFolders": "Kategorien verwalten",
+    "noFolder": "Keine Kategorie",
+    "folder": "Kategorie",
+    "newFolderPlaceholder": "Neue Kategorie (z. B. Tech)",
+    "addFolder": "Kategorie anlegen",
+    "deleteFolderConfirm": "\"{{name}}\" wirklich löschen? Die Feeds bleiben erhalten.",
+    "folderGroup": "Kategorien",
+    "feedGroup": "Einzelne Feeds",
+    "folderPrefix": "Kategorie: {{name}}",
+    "dragHandle": "Reihenfolge durch Ziehen ändern",
+    "uncategorized": "Ohne Kategorie"
   },
   "items": {
-    "title": "Einträge",
+    "title": "Artikel",
     "markRead": "Als gelesen markieren",
     "markUnread": "Als ungelesen markieren",
-    "searchPlaceholder": "Einträge durchsuchen…",
+    "searchPlaceholder": "Artikel durchsuchen…",
     "unreadOnly": "Nur ungelesene",
+    "all": "Alle anzeigen",
     "bookmarkedOnly": "Nur Favoriten",
     "bookmarkedBadge": "Gemerkt",
     "bookmark": "Merken",
@@ -86,13 +106,36 @@
     "save": "Merken",
     "saved": "Gemerkt",
     "allFeeds": "Alle Feeds",
-    "noItems": "Keine Einträge vorhanden.",
+    "noItems": "Keine Artikel vorhanden.",
     "openLink": "Öffnen"
+  },
+  "reader": {
+    "close": "Schließen (Esc)",
+    "previous": "Vorheriger Artikel (K oder ←)",
+    "next": "Nächster Artikel (J oder →)",
+    "openOriginal": "Im Original öffnen",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert!",
+    "readingTime": "{{count}} Min. Lesezeit",
+    "readMore": "Vollständigen Artikel auf {{source}} lesen",
+    "originalOn": "Original auf {{source}}",
+    "teaserTitle": "Vollständiger Artikel verfügbar",
+    "teaserHint": "Dieser Feed enthält eine Zusammenfassung. Lies den kompletten Beitrag direkt auf {{source}}.",
+    "loadFullText": "Volltext laden",
+    "loadingFullText": "Volltext wird geladen...",
+    "toggleFullText": "Volltext aus Webseite laden (R)",
+    "togglePreview": "Zurück zur Vorschau (R)",
+    "fullTextExtracted": "Volltext",
+    "extractionFailed": "Der vollständige Artikel konnte nicht geladen werden.",
+    "bookmark": "Merken (S)",
+    "unbookmark": "Gemerkt entfernen (S)",
+    "markRead": "Als gelesen markieren (M)",
+    "markUnread": "Als ungelesen markieren (M)"
   },
   "settings": {
     "title": "Einstellungen",
     "tokensTitle": "Personal Access Tokens",
-    "tokensHint": "Nutze ein Token, um einen MCP-Client (z. B. Claude) remote mit dieser Feedkeeper-Instanz zu verbinden.",
+    "tokensHint": "Nutze ein Token, um einen MCP-Client (z. B. Claude) remote mit dieser FeedKeeper-Instanz zu verbinden.",
     "createToken": "Token erstellen",
     "tokenNamePlaceholder": "Token-Name (z. B. \"Claude Desktop\")",
     "tokenCreated": "Token erstellt",
@@ -113,6 +156,9 @@
     "removeMutedKeyword": "Entfernen",
     "noMutedKeywords": "Keine stummgeschalteten Begriffe hinterlegt.",
     "language": "Sprache",
+    "languageHint": "Wähle deine bevorzugte Anzeigesprache.",
+    "autoReaderMode": "Standardmäßig im Lesemodus öffnen",
+    "autoReaderModeHint": "Lädt den bereinigten Volltext des Artikels automatisch beim Öffnen der Detailansicht.",
     "theme": "Design",
     "themeLight": "Hell",
     "themeDark": "Dunkel",
@@ -144,6 +190,6 @@
     "retentionSaved": "Einstellungen gespeichert.",
     "runCleanupNow": "Jetzt bereinigen (VACUUM)",
     "cleaning": "Wird bereinigt…",
-    "cleanupSuccess": "Bereinigung erfolgreich: {{total}} Einträge entfernt. Größe: {{before}} MB ➔ {{after}} MB."
+    "cleanupSuccess": "Bereinigung erfolgreich: {{total}} Einträge entfernt. Größe: {{before}} MB -> {{after}} MB."
   }
 }

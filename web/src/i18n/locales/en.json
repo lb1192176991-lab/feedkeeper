@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Feedkeeper",
+    "appName": "FeedKeeper",
     "loading": "Loading…",
     "save": "Save",
     "cancel": "Cancel",
@@ -9,17 +9,20 @@
     "close": "Close",
     "error": "Something went wrong",
     "retry": "Retry",
-    "never": "never"
+    "never": "never",
+    "noOptions": "No options",
+    "metaTitle": "FeedKeeper – RSS Reader & MCP Server",
+    "metaDescription": "Self-hosted RSS/Atom feed manager and remote MCP server for AI assistants."
   },
   "nav": {
+    "items": "Articles",
     "feeds": "Feeds",
-    "items": "Items",
     "settings": "Settings",
     "logout": "Log out",
     "menu": "Menu"
   },
   "onboarding": {
-    "title": "Welcome to Feedkeeper",
+    "title": "Welcome to FeedKeeper",
     "subtitle": "Create the first admin account to finish setting up this instance.",
     "emailLabel": "Email",
     "displayNameLabel": "Display name",
@@ -31,15 +34,17 @@
   },
   "login": {
     "title": "Log in",
+    "subtitle": "RSS Reader & MCP Server",
     "emailLabel": "Email",
     "passwordLabel": "Password",
     "submit": "Log in",
-    "error": "Invalid email or password."
+    "error": "Invalid email or password.",
+    "viewOnGithub": "FeedKeeper on GitHub"
   },
   "feeds": {
     "title": "Your feeds",
     "addFeed": "Add feed",
-    "urlPlaceholder": "https://example.com or feed URL",
+    "urlPlaceholder": "example.com or feed URL",
     "labelPlaceholder": "Label (optional)",
     "subscribe": "Subscribe",
     "subscribing": "Subscribing…",
@@ -58,7 +63,9 @@
     "minutesShort": "{{count}} min",
     "hoursShort": "{{count}} h",
     "edit": "Edit",
+    "editFeedTitle": "Edit feed",
     "markAllRead": "Mark all read",
+    "markReadShort": "Mark read",
     "importOpml": "Import OPML",
     "exportOpml": "Export OPML",
     "importing": "Importing feeds…",
@@ -71,7 +78,19 @@
     "statusHealthy": "Healthy",
     "statusFailing": "Failing ({{count}} consecutive errors)",
     "statusPending": "Waiting for first check",
-    "lastSuccess": "Last successful check"
+    "lastSuccess": "Last successful check",
+    "folders": "Folders",
+    "manageFolders": "Manage folders",
+    "noFolder": "No folder",
+    "folder": "Folder",
+    "newFolderPlaceholder": "New folder (e.g. Tech)",
+    "addFolder": "Create folder",
+    "deleteFolderConfirm": "Delete folder \"{{name}}\"? Your feeds will be kept.",
+    "folderGroup": "Folders",
+    "feedGroup": "Individual feeds",
+    "folderPrefix": "Folder: {{name}}",
+    "dragHandle": "Drag to reorder",
+    "uncategorized": "Uncategorized"
   },
   "items": {
     "title": "Items",
@@ -79,6 +98,7 @@
     "markUnread": "Mark unread",
     "searchPlaceholder": "Search items…",
     "unreadOnly": "Unread only",
+    "all": "Show all",
     "bookmarkedOnly": "Bookmarks only",
     "bookmarkedBadge": "Saved",
     "bookmark": "Bookmark",
@@ -89,10 +109,33 @@
     "noItems": "No items to show.",
     "openLink": "Open"
   },
+  "reader": {
+    "close": "Close (Esc)",
+    "previous": "Previous article (K or ←)",
+    "next": "Next article (J or →)",
+    "openOriginal": "Open original",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied!",
+    "readingTime": "{{count}} min read",
+    "readMore": "Read full article on {{source}}",
+    "originalOn": "Original on {{source}}",
+    "teaserTitle": "Full article available",
+    "teaserHint": "This feed provides a summary preview. Read the complete story directly on {{source}}.",
+    "loadFullText": "Load full text",
+    "loadingFullText": "Loading full text...",
+    "toggleFullText": "Extract full text from web (R)",
+    "togglePreview": "Back to preview (R)",
+    "fullTextExtracted": "Full text",
+    "extractionFailed": "Could not extract full article from website.",
+    "bookmark": "Bookmark (S)",
+    "unbookmark": "Remove bookmark (S)",
+    "markRead": "Mark as read (M)",
+    "markUnread": "Mark as unread (M)"
+  },
   "settings": {
     "title": "Settings",
     "tokensTitle": "Personal access tokens",
-    "tokensHint": "Use a token to connect an MCP client (e.g. Claude) to this Feedkeeper instance remotely.",
+    "tokensHint": "Use a token to connect an MCP client (e.g. Claude) to this FeedKeeper instance remotely.",
     "createToken": "Create token",
     "tokenNamePlaceholder": "Token name (e.g. \"Claude Desktop\")",
     "tokenCreated": "Token created",
@@ -113,6 +156,9 @@
     "removeMutedKeyword": "Remove",
     "noMutedKeywords": "No muted keywords configured.",
     "language": "Language",
+    "languageHint": "Choose your preferred display language.",
+    "autoReaderMode": "Open in Reader View by default",
+    "autoReaderModeHint": "Automatically extract and display full article content when opening an article.",
     "theme": "Theme",
     "themeLight": "Light",
     "themeDark": "Dark",
@@ -144,6 +190,6 @@
     "retentionSaved": "Settings saved successfully.",
     "runCleanupNow": "Run cleanup now (VACUUM)",
     "cleaning": "Cleaning…",
-    "cleanupSuccess": "Cleanup complete: removed {{total}} items. Size: {{before}} MB ➔ {{after}} MB."
+    "cleanupSuccess": "Cleanup complete: removed {{total}} items. Size: {{before}} MB -> {{after}} MB."
   }
 }
