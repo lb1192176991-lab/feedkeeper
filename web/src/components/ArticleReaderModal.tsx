@@ -266,6 +266,7 @@ export function ArticleReaderModal({
           {/* Source, in the same style as the article cards */}
           <div className="flex min-w-0 items-center gap-2 pr-2 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--c-text-muted)]">
             <Favicon
+              iconUrl={item.feed_icon_url}
               siteUrl={item.feed_site_url}
               feedUrl={item.feed_url}
               articleUrl={item.link}
@@ -325,7 +326,8 @@ export function ArticleReaderModal({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--c-text-muted)] pb-5 border-b border-[var(--c-border)] mb-6 font-medium">
               <span className="inline-flex items-center gap-1.5 text-[var(--c-text)] font-semibold">
                 <Favicon
-                  siteUrl={item.feed_site_url}
+                  iconUrl={item.feed_icon_url}
+              siteUrl={item.feed_site_url}
                   feedUrl={item.feed_url}
                   articleUrl={item.link}
                   className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"

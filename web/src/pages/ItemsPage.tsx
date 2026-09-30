@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Feed, type Folder, type Item } from "../api/client.ts";
@@ -20,6 +20,20 @@ function SearchIcon() {
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
+  );
+}
+
+const PHONE_QUERY = "(max-width: 639px)";
+
+/** Phones only get the newspaper layout; the list view needs the wider screen. */
+function useIsPhone() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(PHONE_QUERY);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(PHONE_QUERY).matches,
   );
 }
 
@@ -45,6 +59,9 @@ export function ItemsPage() {
       return "list";
     }
   });
+
+  const isPhone = useIsPhone();
+  const activeView = isPhone ? "newspaper" : viewMode;
 
   function changeViewMode(mode: "list" | "newspaper") {
     if (mode === viewMode) return;
@@ -492,7 +509,7 @@ export function ItemsPage() {
           <TodayDate className="block" />
         </div>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="relative grid h-11 w-[108px] shrink-0 grid-cols-2 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-1 sm:w-[220px]" role="group" aria-label={t("items.viewMode")}>
+          <div className="relative hidden h-11 w-[220px] shrink-0 grid-cols-2 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-1 sm:grid" role="group" aria-label={t("items.viewMode")}>
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/2)] rounded-lg border border-[var(--c-mobile-nav-active-border)] bg-[var(--c-mobile-nav-active)] shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] motion-reduce:transition-none"
@@ -665,10 +682,10 @@ export function ItemsPage() {
         <LoadingSpinner size="lg" />
       ) : items.length === 0 ? (
         <p style={{ color: "var(--c-text-muted)" }}>{t("items.noItems")}</p>
-      ) : viewMode === "newspaper" ? (
+      ) : activeView === "newspaper" ? (
         <NewspaperGrid items={items} onOpen={openArticle} onBookmark={toggleBookmark} onRead={toggleRead} />
       ) : (
-        <ul className="flex flex-col gap-3 animate-page-fade">
+        <ul className="flex flex-col gap-4 sm:gap-5 animate-page-fade">
           {items.map((item) => {
             const pubDate = item.published_at ? new Date(item.published_at) : null;
 
@@ -699,11 +716,12 @@ export function ItemsPage() {
                     </div>
                   )}
 
-                  <div className="min-w-0 flex-1 sm:p-4 sm:pr-2 flex flex-col justify-between">
+                  <div className="min-w-0 flex-1 sm:p-5 sm:pr-3 flex flex-col justify-between">
                     <div>
                       {/* Source row above headline with optional Favicon */}
-                      <div className="flex items-center gap-2 text-xs mb-1.5 font-medium" style={{ color: "var(--c-text-muted)" }}>
+                      <div className="mb-3 flex min-w-0 items-center gap-2 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--c-text-muted)]">
                         <Favicon
+                          iconUrl={item.feed_icon_url}
                           siteUrl={item.feed_site_url}
                           feedUrl={item.feed_url}
                           articleUrl={item.link}
@@ -712,17 +730,15 @@ export function ItemsPage() {
                         <span className="truncate">{item.feed_title}</span>
                       </div>
 
-                      <h2 className="font-medium text-base leading-snug">
-                        <span className="text-[var(--c-text)]">
-                          {item.title}
-                        </span>
+                      <h2 className="text-lg leading-snug font-semibold text-[var(--c-text)]">
+                        {item.title}
                       </h2>
 
-                      <ArticleExcerpt item={item} className="text-sm mt-1.5 line-clamp-3 text-[var(--c-text-muted)]" />
+                      <ArticleExcerpt item={item} className="mt-3 text-sm leading-relaxed line-clamp-3 text-[var(--c-text-muted)]" />
                     </div>
 
                     {/* Meta information row BELOW article text with icons and mobile action buttons */}
-                    <div className="flex items-center justify-between gap-3 text-xs mt-3" style={{ color: "var(--c-text-muted)" }}>
+                    <div className="flex items-center justify-between gap-3 text-xs pt-5" style={{ color: "var(--c-text-muted)" }}>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0">
                         {pubDate && (
                           <>
@@ -826,7 +842,7 @@ export function ItemsPage() {
 
                   {/* Desktop action buttons (top right) */}
                   <div
-                    className="hidden sm:flex items-center gap-2 pt-4 pr-4 shrink-0 self-start"
+                    className="hidden sm:flex items-center gap-2 pt-5 pr-5 shrink-0 self-start"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button

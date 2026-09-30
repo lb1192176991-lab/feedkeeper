@@ -14,6 +14,8 @@ export interface Feed {
   last_modified: string | null;
   full_text_blocks: number;
   full_text_blocked_at: string | null;
+  icon_url: string | null;
+  icon_checked_at: string | null;
   created_at: string;
 }
 
@@ -258,6 +260,7 @@ export function listItemsForUser(
   feed_site_url: string | null;
   feed_url: string;
   feed_full_text_mode: FullTextMode;
+  feed_icon_url: string | null;
 })[] {
   const conditions: string[] = ["s.user_id = ?"];
   const params: unknown[] = [userId];
@@ -325,6 +328,7 @@ export function listItemsForUser(
               f.site_url AS feed_site_url,
               f.url AS feed_url,
               s.full_text_mode AS feed_full_text_mode,
+              f.icon_url AS feed_icon_url,
               (r.item_id IS NOT NULL) AS read,
               (b.item_id IS NOT NULL) AS bookmarked
        FROM items i
@@ -343,13 +347,14 @@ export function listItemsForUser(
       feed_site_url: string | null;
       feed_url: string;
       feed_full_text_mode: FullTextMode;
+      feed_icon_url: string | null;
     })[];
 }
 
 export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
   return db.prepare<[number, number], ReturnType<typeof listItemsForUser>[number]>(
     `SELECT i.*, COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
-            f.site_url AS feed_site_url, f.url AS feed_url, s.full_text_mode AS feed_full_text_mode,
+            f.site_url AS feed_site_url, f.url AS feed_url, s.full_text_mode AS feed_full_text_mode, f.icon_url AS feed_icon_url,
             (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
      FROM items i
      JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
@@ -587,4 +592,8 @@ export function moveSubscription(userId: number, fromFeedId: number, toFeedId: n
     db.prepare("UPDATE subscriptions SET feed_id = ? WHERE user_id = ? AND feed_id = ?").run(toFeedId, userId, fromFeedId);
     if (countFeedSubscribers(fromFeedId) === 0) db.prepare("DELETE FROM feeds WHERE id = ?").run(fromFeedId);
   })();
+}
+
+export function updateFeedIcon(feedId: number, iconUrl: string | null): void {
+  db.prepare("UPDATE feeds SET icon_url = ?, icon_checked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").run(iconUrl, feedId);
 }

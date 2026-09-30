@@ -1,7 +1,8 @@
 import Parser from "rss-parser";
 import cron from "node-cron";
 import { fetchFeed } from "./fetcher.js";
-import { listFeedsDueForPoll, updateFeedAfterPoll, upsertItems, type Feed } from "./repository.js";
+import { discoverIconUrl, iconCheckDue } from "./icon.js";
+import { listFeedsDueForPoll, updateFeedAfterPoll, updateFeedIcon, upsertItems, type Feed } from "./repository.js";
 
 type CustomItem = Parser.Item & {
   mediaContent?: unknown;
@@ -114,6 +115,12 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
     }));
 
     const newItems = upsertItems(feed.id, items);
+
+    // Refresh the site's declared icon about once a week; failures keep the previous icon.
+    const siteUrl = parsed.link || feed.site_url;
+    if (siteUrl && iconCheckDue(feed.icon_checked_at)) {
+      updateFeedIcon(feed.id, (await discoverIconUrl(siteUrl)) ?? feed.icon_url);
+    }
 
     updateFeedAfterPoll(feed.id, {
       title: parsed.title,

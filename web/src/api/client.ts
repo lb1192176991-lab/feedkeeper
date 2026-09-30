@@ -96,6 +96,7 @@ export interface Feed {
   position: number;
   full_text_mode: "auto" | "never";
   full_text_blocked_at: string | null;
+  icon_url: string | null;
 }
 
 export interface Folder {
@@ -114,6 +115,7 @@ export interface Item {
   feed_site_url?: string | null;
   feed_url?: string;
   feed_full_text_mode?: "auto" | "never";
+  feed_icon_url?: string | null;
   title: string | null;
   link: string | null;
   content_snippet: string | null;

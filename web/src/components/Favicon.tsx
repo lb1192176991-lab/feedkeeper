@@ -17,14 +17,16 @@ function loadFavicon(url: string): Promise<boolean> {
 }
 
 interface FaviconProps {
+  /** Icon declared by the site, discovered by the server; tried before guessing /favicon.ico. */
+  iconUrl?: string | null;
   siteUrl?: string | null;
   feedUrl?: string | null;
   articleUrl?: string | null;
   className: string;
 }
 
-export function Favicon({ siteUrl, feedUrl, articleUrl, className }: FaviconProps) {
-  const sourceKey = JSON.stringify([siteUrl, feedUrl, articleUrl]);
+export function Favicon({ iconUrl, siteUrl, feedUrl, articleUrl, className }: FaviconProps) {
+  const sourceKey = JSON.stringify([iconUrl, siteUrl, feedUrl, articleUrl]);
   const [loaded, setLoaded] = useState<{ key: string; url: string } | null>(null);
 
   useEffect(() => {
@@ -33,6 +35,7 @@ export function Favicon({ siteUrl, feedUrl, articleUrl, className }: FaviconProp
 
     async function findFavicon() {
       const candidates = new Set<string>();
+      if (iconUrl && /^https?:\/\//i.test(iconUrl)) candidates.add(iconUrl);
       for (const source of [siteUrl, feedUrl, articleUrl]) {
         if (!source) continue;
         try {
