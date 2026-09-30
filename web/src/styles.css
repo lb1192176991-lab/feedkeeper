@@ -281,8 +281,10 @@ input[type="checkbox"]:disabled {
   animation: drawerSlideIn 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* No fill-mode: the end state is the default, and a lingering animation would keep
+   a stacking context that traps dropdowns (z-index) inside the faded-in panel. */
 .animate-fade-in {
-  animation: backdropFadeIn 0.2s ease-out forwards;
+  animation: backdropFadeIn 0.2s ease-out;
 }
 
 /* Article reader typography */

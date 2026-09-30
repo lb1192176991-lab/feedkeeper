@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { DesktopNav } from "./DesktopNav.tsx";
 import { ProfileMenu } from "./ProfileMenu.tsx";
+import { Toaster } from "./Toaster.tsx";
 import { resetItemsScrollY } from "../utils/scrollState.ts";
 
 export function Layout() {
@@ -69,6 +70,8 @@ export function Layout() {
           <Outlet />
         </div>
       </main>
+
+      <Toaster />
 
       {/* Apple-style Floating Liquid Glass Tab Bar for Mobile */}
       <nav
