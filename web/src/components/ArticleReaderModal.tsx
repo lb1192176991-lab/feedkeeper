@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { api, type Item } from "../api/client.js";
+import { api, ApiError, type Item } from "../api/client.js";
 import { sanitizeHtml, leadingArticleImage, estimateReadingTime, safeHttpUrl } from "../utils/sanitizeHtml.js";
 import { Favicon } from "./Favicon.js";
 
@@ -47,6 +47,9 @@ export function ArticleReaderModal({
   const [showFullText, setShowFullText] = useState(false);
   const [extractedByline, setExtractedByline] = useState<string | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [consentWall, setConsentWall] = useState(false);
+  // The subscription can opt out of fetching articles from the website.
+  const fullTextDisabled = item?.feed_full_text_mode === "never";
   const [leadImage, setLeadImage] = useState<{ src: string; width: number; height: number } | null>(null);
   const articleUrl = item?.link ? safeHttpUrl(item.link) : null;
 
@@ -54,6 +57,7 @@ export function ArticleReaderModal({
   useEffect(() => {
     setShowFullText(Boolean(item?.full_content_html));
     setExtractionError(null);
+    setConsentWall(false);
     setExtractedByline(null);
   }, [item?.id, item?.full_content_html]);
 
@@ -61,7 +65,7 @@ export function ArticleReaderModal({
   useEffect(() => {
     if (!isOpen || !item || !articleUrl) return;
     const isAutoReader = localStorage.getItem("feedkeeper_auto_reader_mode") !== "false";
-    if (isAutoReader && !item.full_content_html) {
+    if (isAutoReader && !item.full_content_html && !fullTextDisabled) {
       handleToggleFullText();
     }
   }, [isOpen, item?.id]);
@@ -90,6 +94,7 @@ export function ArticleReaderModal({
 
     setExtracting(true);
     setExtractionError(null);
+    setConsentWall(false);
     try {
       const res = await api.extractContent(item.id);
       const updatedItem = {
@@ -102,8 +107,12 @@ export function ArticleReaderModal({
       setShowFullText(true);
       onItemUpdated?.(updatedItem);
     } catch (err: unknown) {
-      console.error("Failed to extract full text:", err);
-      setExtractionError(t("reader.extractionFailed"));
+      if (err instanceof ApiError && err.code === "consent_wall") {
+        setConsentWall(true);
+      } else if (!(err instanceof ApiError && err.code === "full_text_disabled")) {
+        console.error("Failed to extract full text:", err);
+        setExtractionError(t("reader.extractionFailed"));
+      }
     } finally {
       setExtracting(false);
     }
@@ -354,6 +363,18 @@ export function ArticleReaderModal({
               <span>{t("reader.readingTime", { count: readingTime })}</span>
             </div>
 
+            {/* Consent walls are expected, so they get a calm hint instead of an error */}
+            {consentWall && (
+              <div className="mb-6 p-4 rounded-xl border border-[var(--c-border)] bg-[var(--c-bg)] text-sm text-[var(--c-text-muted)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span>{t("reader.consentWall")}</span>
+                {articleUrl && (
+                  <a href={articleUrl} target="_blank" rel="noreferrer noopener" className="btn-primary text-sm whitespace-nowrap self-start sm:self-center">
+                    {t("reader.readOriginal")}
+                  </a>
+                )}
+              </div>
+            )}
+
             {/* Extraction Error Notice */}
             {extractionError && (
               <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs flex items-center justify-between gap-3">
@@ -425,7 +446,7 @@ export function ArticleReaderModal({
               {/* Right group: Actions (Reader View, Bookmark, Read/Unread, Copy Link, Open in Browser) */}
               <div className="flex items-center gap-2">
                 {/* Reader View toggle */}
-                {articleUrl && (
+                {articleUrl && (!fullTextDisabled || item.full_content_html) && (
                   <button
                     type="button"
                     onClick={handleToggleFullText}

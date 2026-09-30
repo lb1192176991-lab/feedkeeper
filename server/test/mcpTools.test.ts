@@ -64,6 +64,8 @@ test("MCP batch actions, date filters and feed management stay scoped to the use
   assert.equal(renamed.label, "My Feed");
   assert.ok(renamed.poll_interval_minutes >= 1);
   assert.equal((await owner.call("update_feed", { feedId: foreignFeedId, label: "x" })).isError, true);
+  assert.equal((await owner.call("update_feed", { feedId, fullText: "never" })).json().full_text_mode, "never");
+  assert.equal((await owner.call("fetch_full_text", { itemId: early })).text, "item_has_no_link");
 
   // Folders: rename, reject duplicates, delete keeps the subscription.
   const folder = createFolder(ownerId, "News");

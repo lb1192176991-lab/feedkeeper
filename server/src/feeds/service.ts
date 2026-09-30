@@ -9,10 +9,16 @@ import {
   updateSubscriptionLabel,
   updateSubscriptionFolder,
   updateFeedPollInterval,
+  updateSubscriptionFullTextMode,
   findFolderById,
+  findFeedById,
+  countFeedSubscribers,
+  replaceFeedUrl,
+  moveSubscription,
+  type FullTextMode,
   type SubscribedFeed,
 } from "./repository.js";
-import { pollFeed } from "./poller.js";
+import { pollFeed, probeFeed } from "./poller.js";
 import { assertPublicHttpUrl } from "./ssrfGuard.js";
 
 import { discoverFeeds } from "./discovery.js";
@@ -31,6 +37,26 @@ export class MultipleFeedsFoundError extends FeedError {
   }
 }
 
+/** Turn a feed or website URL into a feed URL, using auto-discovery for website addresses. */
+async function resolveFeedUrl(inputUrl: string): Promise<{ url: string; discovered: boolean }> {
+  const validated = await assertPublicHttpUrl(inputUrl.trim());
+  const targetUrl = validated.toString();
+
+  try {
+    const discovered = await discoverFeeds(targetUrl);
+    if (discovered.length === 1) return { url: discovered[0].url, discovered: true };
+    if (discovered.length > 1) {
+      const exact = discovered.find((d) => d.url === targetUrl);
+      if (exact) return { url: exact.url, discovered: true };
+      throw new MultipleFeedsFoundError(discovered);
+    }
+  } catch (err) {
+    if (err instanceof FeedError) throw err;
+    // Otherwise fall back to trying the given URL directly
+  }
+  return { url: targetUrl, discovered: false };
+}
+
 export async function subscribeToFeed(
   userId: number,
   inputUrl: string,
@@ -40,29 +66,7 @@ export async function subscribeToFeed(
   if (folderId !== null && !findFolderById(userId, folderId)) {
     throw new FeedError("folder_not_found");
   }
-  const validated = await assertPublicHttpUrl(inputUrl.trim());
-  let targetUrl = validated.toString();
-  let hadDiscoverySuccess = false;
-
-  // Try auto-discovery in case the user entered a website URL instead of a direct feed URL
-  try {
-    const discovered = await discoverFeeds(targetUrl);
-    if (discovered.length === 1) {
-      targetUrl = discovered[0].url;
-      hadDiscoverySuccess = true;
-    } else if (discovered.length > 1) {
-      const exact = discovered.find((d) => d.url === targetUrl);
-      if (exact) {
-        targetUrl = exact.url;
-        hadDiscoverySuccess = true;
-      } else {
-        throw new MultipleFeedsFoundError(discovered);
-      }
-    }
-  } catch (err) {
-    if (err instanceof FeedError) throw err;
-    // Otherwise fallback to trying the given targetUrl directly
-  }
+  const { url: targetUrl, discovered: hadDiscoverySuccess } = await resolveFeedUrl(inputUrl);
 
   let feed = findFeedByUrl(targetUrl);
   if (!feed) {
@@ -101,7 +105,7 @@ export function unsubscribeFromFeed(userId: number, feedId: number): void {
 export function updateFeedSettings(
   userId: number,
   feedId: number,
-  settings: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number },
+  settings: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number; fullTextMode?: FullTextMode },
 ): SubscribedFeed {
   if (!isUserSubscribed(userId, feedId)) {
     throw new FeedError("not_subscribed");
@@ -119,6 +123,10 @@ export function updateFeedSettings(
     updateSubscriptionFolder(userId, feedId, settings.folderId);
   }
 
+  if (settings.fullTextMode !== undefined) {
+    updateSubscriptionFullTextMode(userId, feedId, settings.fullTextMode);
+  }
+
   if (settings.pollIntervalMinutes !== undefined) {
     // The poll interval is stored per feed (shared across every subscriber),
     // so it's floored account-wide rather than trusting each caller's input.
@@ -129,4 +137,52 @@ export function updateFeedSettings(
   const subscription = listSubscriptionsForUser(userId).find((s) => s.id === feedId);
   if (!subscription) throw new FeedError("subscription_lookup_failed");
   return subscription;
+}
+
+/**
+ * Switch a subscription to a new feed URL, e.g. after a site moved its feed. The new URL is
+ * fetched and parsed first, so a broken address never replaces a working one. When the user
+ * is the only subscriber, the feed is updated in place and keeps its items, read state and
+ * bookmarks; otherwise the subscription moves to a separate feed for the new URL.
+ */
+export async function changeFeedUrl(
+  userId: number,
+  feedId: number,
+  inputUrl: string,
+): Promise<{ subscription: SubscribedFeed; previousItemsKept: boolean }> {
+  const current = findFeedById(feedId);
+  if (!current || !isUserSubscribed(userId, feedId)) throw new FeedError("not_subscribed");
+
+  const { url } = await resolveFeedUrl(inputUrl);
+  let target = feedId;
+  const lookup = () => {
+    const subscription = listSubscriptionsForUser(userId).find((s) => s.id === target);
+    if (!subscription) throw new FeedError("subscription_lookup_failed");
+    return subscription;
+  };
+  if (url === current.url) return { subscription: lookup(), previousItemsKept: true };
+
+  const existing = findFeedByUrl(url);
+  if (existing && isUserSubscribed(userId, existing.id)) throw new FeedError("already_subscribed");
+
+  try {
+    await probeFeed(url);
+  } catch (error) {
+    throw new FeedError(`feed_unreachable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  let previousItemsKept: boolean;
+  if (!existing && countFeedSubscribers(feedId) === 1) {
+    replaceFeedUrl(feedId, url);
+    previousItemsKept = true;
+  } else {
+    const next = existing ?? createFeed(url, current.poll_interval_minutes);
+    moveSubscription(userId, feedId, next.id);
+    target = next.id;
+    previousItemsKept = false;
+  }
+
+  const feed = findFeedById(target);
+  if (feed) await pollFeed(feed);
+  return { subscription: lookup(), previousItemsKept };
 }

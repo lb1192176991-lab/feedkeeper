@@ -83,7 +83,10 @@
     "deleteFolderConfirm": "Delete folder \"{{name}}\"? Your feeds will be kept.",
     "folderGroup": "Folders",
     "feedGroup": "Individual feeds",
-    "dragHandle": "Drag to reorder"
+    "dragHandle": "Drag to reorder",
+    "fullText": "Load full text from the website",
+    "fullTextHint": "The reader fetches the complete article when the feed only contains a teaser.",
+    "fullTextBlocked": "This site recently asked for cookie consent or a subscription. FeedKeeper will try again in a few days."
   },
   "items": {
     "title": "Items",
@@ -118,7 +121,9 @@
     "bookmark": "Bookmark (S)",
     "unbookmark": "Remove bookmark (S)",
     "markRead": "Mark as read (M)",
-    "markUnread": "Mark as unread (M)"
+    "markUnread": "Mark as unread (M)",
+    "consentWall": "This site asks for cookie consent or a subscription. You're seeing the preview from the feed.",
+    "readOriginal": "Read on the website"
   },
   "settings": {
     "title": "Settings",

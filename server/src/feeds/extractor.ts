@@ -154,7 +154,18 @@ async function fetchArticleHtml(rawUrl: string, signal: AbortSignal, dispatcher:
   return null;
 }
 
+export type ExtractionResult =
+  | { status: "ok"; article: ExtractedArticle }
+  | { status: "consent_wall" }
+  | { status: "failed" };
+
 export async function extractArticleFromUrl(rawUrl: string, fetchImpl: ArticleFetch = defaultFetch): Promise<ExtractedArticle | null> {
+  const result = await extractArticle(rawUrl, fetchImpl);
+  return result.status === "ok" ? result.article : null;
+}
+
+/** Like extractArticleFromUrl, but reports whether the site answered with a consent wall. */
+export async function extractArticle(rawUrl: string, fetchImpl: ArticleFetch = defaultFetch): Promise<ExtractionResult> {
   const safeUrl = await assertPublicHttpUrl(rawUrl);
   const dispatcher = createPublicDispatcher();
 
@@ -163,28 +174,31 @@ export async function extractArticleFromUrl(rawUrl: string, fetchImpl: ArticleFe
 
   try {
     const fetched = await fetchArticleHtml(safeUrl.toString(), controller.signal, dispatcher, fetchImpl);
-    if (!fetched) return null;
+    if (!fetched) return { status: "failed" };
 
     const dom = new JSDOM(fetched.html, { url: fetched.url });
     cleanConsentDom(dom.window.document);
 
     const parsed = new Readability(dom.window.document, { charThreshold: 60 }).parse();
-    // A consent wall instead of the article is treated as "no full text available".
-    if (!parsed?.content || isConsentContent(fetched.url, parsed.content, parsed.title, parsed.textContent)) {
-      return null;
+    if (isConsentContent(fetched.url, parsed?.content ?? fetched.html, parsed?.title, parsed?.textContent)) {
+      return { status: "consent_wall" };
     }
+    if (!parsed?.content) return { status: "failed" };
 
     return {
-      title: parsed.title || null,
-      byline: parsed.byline || null,
-      contentHtml: parsed.content,
-      textContent: parsed.textContent || "",
-      excerpt: parsed.excerpt || null,
-      siteName: parsed.siteName || null,
+      status: "ok",
+      article: {
+        title: parsed.title || null,
+        byline: parsed.byline || null,
+        contentHtml: parsed.content,
+        textContent: parsed.textContent || "",
+        excerpt: parsed.excerpt || null,
+        siteName: parsed.siteName || null,
+      },
     };
   } catch (error) {
     if (error instanceof SsrfBlockedError) throw error;
-    return null;
+    return { status: "failed" };
   } finally {
     clearTimeout(timeout);
     dispatcher.destroy();

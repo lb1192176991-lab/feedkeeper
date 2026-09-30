@@ -139,6 +139,7 @@ const updateSchema = z.object({
   label: z.string().max(200).nullable().optional(),
   folderId: z.number().int().positive().nullable().optional(),
   pollIntervalMinutes: z.number().int().positive().max(10080).optional(),
+  fullTextMode: z.enum(["auto", "never"]).optional(),
 });
 
 feedsRouter.patch("/:feedId", (req, res) => {

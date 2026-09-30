@@ -83,7 +83,10 @@
     "deleteFolderConfirm": "フォルダー「{{name}}」を削除しますか？登録フィードは保持されます。",
     "folderGroup": "フォルダー",
     "feedGroup": "個別フィード",
-    "dragHandle": "ドラッグして並び替え"
+    "dragHandle": "ドラッグして並び替え",
+    "fullText": "ウェブサイトから全文を読み込む",
+    "fullTextHint": "フィードに概要しかない場合、リーダーが記事全文を取得します。",
+    "fullTextBlocked": "このサイトは最近 Cookie への同意または購読を求めました。数日後に再試行します。"
   },
   "items": {
     "title": "記事",
@@ -118,7 +121,9 @@
     "bookmark": "保存 (S)",
     "unbookmark": "保存を解除 (S)",
     "markRead": "既読にする (M)",
-    "markUnread": "未読にする (M)"
+    "markUnread": "未読にする (M)",
+    "consentWall": "このサイトは Cookie への同意または購読を求めています。フィードのプレビューを表示しています。",
+    "readOriginal": "元のサイトで読む"
   },
   "settings": {
     "title": "設定",

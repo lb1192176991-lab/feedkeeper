@@ -94,6 +94,8 @@ export interface Feed {
   folder_name: string | null;
   unread_count: number;
   position: number;
+  full_text_mode: "auto" | "never";
+  full_text_blocked_at: string | null;
 }
 
 export interface Folder {
@@ -111,6 +113,7 @@ export interface Item {
   feed_title: string | null;
   feed_site_url?: string | null;
   feed_url?: string;
+  feed_full_text_mode?: "auto" | "never";
   title: string | null;
   link: string | null;
   content_snippet: string | null;
@@ -171,7 +174,7 @@ export const api = {
   subscribeFeed: (url: string, label: string | null, folderId?: number | null) =>
     request<Feed>("/feeds", { method: "POST", body: JSON.stringify({ url, label, folderId }) }),
   unsubscribeFeed: (feedId: number) => request<void>(`/feeds/${feedId}`, { method: "DELETE" }),
-  updateFeed: (feedId: number, data: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number }) =>
+  updateFeed: (feedId: number, data: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number; fullTextMode?: "auto" | "never" }) =>
     request<Feed>(`/feeds/${feedId}`, { method: "PATCH", body: JSON.stringify(data) }),
   reorderFeeds: (feedIds: number[]) =>
     request<{ ok: boolean }>("/feeds/reorder", { method: "PUT", body: JSON.stringify({ feedIds }) }),

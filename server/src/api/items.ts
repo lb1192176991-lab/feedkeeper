@@ -9,7 +9,16 @@ import {
   bookmarkItem,
   unbookmarkItem,
 } from "../feeds/repository.js";
-import { loadFullText } from "../feeds/fullText.js";
+import { loadFullText, type FullTextError } from "../feeds/fullText.js";
+
+const FULL_TEXT_STATUS: Record<FullTextError, number> = {
+  item_not_found: 404,
+  item_has_no_link: 400,
+  full_text_disabled: 409,
+  consent_wall: 422,
+  could_not_extract_content: 422,
+  extraction_failed: 502,
+};
 
 export const itemsRouter = Router();
 itemsRouter.use(requireSession);
@@ -85,8 +94,7 @@ itemsRouter.post("/:itemId/extract-content", async (req, res) => {
 
   const result = await loadFullText(req.user!.id, itemId, { force: req.query.force === "true" });
   if (!result.ok) {
-    const status = { item_not_found: 404, item_has_no_link: 400, could_not_extract_content: 422, extraction_failed: 502 }[result.error];
-    res.status(status).json({ error: result.error, ...(result.message ? { message: result.message } : {}) });
+    res.status(FULL_TEXT_STATUS[result.error]).json({ error: result.error, ...(result.message ? { message: result.message } : {}) });
     return;
   }
 

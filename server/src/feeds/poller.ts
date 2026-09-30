@@ -131,6 +131,13 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
   }
 }
 
+/** Fetch and parse a feed without storing anything, to validate a URL before switching to it. */
+export async function probeFeed(url: string): Promise<{ title: string | null; itemCount: number }> {
+  const fetched = await fetchFeed(url);
+  const parsed = await parser.parseString(fetched.body);
+  return { title: parsed.title ?? null, itemCount: parsed.items.length };
+}
+
 export async function pollDueFeeds(): Promise<void> {
   const due = listFeedsDueForPoll();
   for (const feed of due) {

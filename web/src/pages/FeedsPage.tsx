@@ -36,6 +36,7 @@ export function FeedsPage() {
   const [editLabelChanged, setEditLabelChanged] = useState(false);
   const [editFolderId, setEditFolderId] = useState<number | null>(null);
   const [editInterval, setEditInterval] = useState(15);
+  const [editFullText, setEditFullText] = useState(true);
 
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set());
   const [refreshingAll, setRefreshingAll] = useState(false);
@@ -185,6 +186,7 @@ export function FeedsPage() {
     setEditLabelChanged(false);
     setEditFolderId(feed.folder_id ?? null);
     setEditInterval(feed.poll_interval_minutes);
+    setEditFullText(feed.full_text_mode !== "never");
   }
 
   async function saveEdit(feedId: number) {
@@ -192,6 +194,7 @@ export function FeedsPage() {
       ...(editLabelChanged ? { label: editLabel.trim() || null } : {}),
       folderId: editFolderId,
       pollIntervalMinutes: editInterval,
+      fullTextMode: editFullText ? "auto" : "never",
     });
     setEditingFeedId(null);
     await load();
@@ -791,6 +794,21 @@ export function FeedsPage() {
                         />
                       </div>
                     </div>
+
+                    <label className="flex items-start gap-2.5 text-sm cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 rounded"
+                        checked={editFullText}
+                        onChange={(e) => setEditFullText(e.target.checked)}
+                      />
+                      <span>
+                        {t("feeds.fullText")}
+                        <span className="block text-xs mt-0.5 text-[var(--c-text-muted)]">
+                          {feed.full_text_blocked_at ? t("feeds.fullTextBlocked") : t("feeds.fullTextHint")}
+                        </span>
+                      </span>
+                    </label>
 
                     <div className="flex justify-end items-center gap-2 pt-1 border-t" style={{ borderColor: "var(--c-border)" }}>
                       <button

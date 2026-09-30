@@ -32,7 +32,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Remote MCP access** — stream items directly into Claude or any MCP-compatible environment via standard Streamable HTTP, with read-only or read-write tokens and cursor-based paging for incremental sync.
 - **Privacy & self-hosting first** — a single Node.js process and one SQLite file. No external database engines, no telemetry, no tracking.
 - **OPML 2.0 import & export** — switch back and forth from Feedly, NetNewsWire, Inoreader, or Reeder at any time.
-- **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls.
+- **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls. Sites that answer with a cookie-consent or subscription wall are remembered per feed, and full-text fetching can be turned off for any subscription.
 - **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews.
 - **Mobile-friendly web app** — responsive layout with tab navigation and pull to refresh, installable on the home screen, with light, dark and system themes.
 - **Personal profiles** — each account can set its display name and a profile photo.
@@ -158,7 +158,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `subscribe_feed` | Subscribe to a feed URL or website URL (auto-discovering the feed) |
 | `discover_feeds` | Discover available RSS/Atom feeds on a website URL |
 | `unsubscribe_feed` | Remove a subscription |
-| `update_feed` | Rename a subscription or change its poll interval |
+| `update_feed` | Change a subscription's feed URL, name, poll interval or full-text setting; a new URL is validated before it replaces the old one |
 | `list_folders` | List folders with feed and unread counts |
 | `create_folder` | Create a folder |
 | `rename_folder` | Rename a folder |

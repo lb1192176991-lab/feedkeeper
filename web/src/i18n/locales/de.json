@@ -83,7 +83,10 @@
     "deleteFolderConfirm": "\"{{name}}\" wirklich löschen? Die Feeds bleiben erhalten.",
     "folderGroup": "Kategorien",
     "feedGroup": "Einzelne Feeds",
-    "dragHandle": "Reihenfolge durch Ziehen ändern"
+    "dragHandle": "Reihenfolge durch Ziehen ändern",
+    "fullText": "Volltext von der Website laden",
+    "fullTextHint": "Der Reader lädt den vollständigen Artikel, wenn der Feed nur einen Anriss enthält.",
+    "fullTextBlocked": "Diese Seite hat zuletzt eine Cookie-Zustimmung oder ein Abo verlangt. FeedKeeper versucht es in einigen Tagen erneut."
   },
   "items": {
     "title": "Artikel",
@@ -118,7 +121,9 @@
     "bookmark": "Merken (S)",
     "unbookmark": "Gemerkt entfernen (S)",
     "markRead": "Als gelesen markieren (M)",
-    "markUnread": "Als ungelesen markieren (M)"
+    "markUnread": "Als ungelesen markieren (M)",
+    "consentWall": "Diese Seite verlangt eine Cookie-Zustimmung oder ein Abo. Du siehst die Vorschau aus dem Feed.",
+    "readOriginal": "Im Original lesen"
   },
   "settings": {
     "title": "Einstellungen",

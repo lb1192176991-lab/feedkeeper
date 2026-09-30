@@ -12,8 +12,12 @@ export interface Feed {
   consecutive_errors: number;
   etag: string | null;
   last_modified: string | null;
+  full_text_blocks: number;
+  full_text_blocked_at: string | null;
   created_at: string;
 }
+
+export type FullTextMode = "auto" | "never";
 
 export interface Item {
   id: number;
@@ -43,6 +47,7 @@ export interface SubscribedFeed extends Feed {
   folder_name: string | null;
   unread_count: number;
   position: number;
+  full_text_mode: FullTextMode;
 }
 
 export interface MutedKeyword {
@@ -112,6 +117,7 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
          s.folder_id AS folder_id,
          fo.name AS folder_name,
          s.position AS position,
+         s.full_text_mode AS full_text_mode,
          (
            SELECT COUNT(*) FROM items i
            WHERE i.feed_id = f.id
@@ -251,6 +257,7 @@ export function listItemsForUser(
   feed_title: string | null;
   feed_site_url: string | null;
   feed_url: string;
+  feed_full_text_mode: FullTextMode;
 })[] {
   const conditions: string[] = ["s.user_id = ?"];
   const params: unknown[] = [userId];
@@ -317,6 +324,7 @@ export function listItemsForUser(
               COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
               f.site_url AS feed_site_url,
               f.url AS feed_url,
+              s.full_text_mode AS feed_full_text_mode,
               (r.item_id IS NOT NULL) AS read,
               (b.item_id IS NOT NULL) AS bookmarked
        FROM items i
@@ -334,13 +342,14 @@ export function listItemsForUser(
       feed_title: string | null;
       feed_site_url: string | null;
       feed_url: string;
+      feed_full_text_mode: FullTextMode;
     })[];
 }
 
 export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
   return db.prepare<[number, number], ReturnType<typeof listItemsForUser>[number]>(
     `SELECT i.*, COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
-            f.site_url AS feed_site_url, f.url AS feed_url,
+            f.site_url AS feed_site_url, f.url AS feed_url, s.full_text_mode AS feed_full_text_mode,
             (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
      FROM items i
      JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
@@ -532,4 +541,50 @@ export function updateItemFullContent(id: number, fullContentHtml: string): void
 /** Apply a per-item change to many items atomically; returns how many rows changed. */
 export function applyToItems(itemIds: readonly number[], change: (itemId: number) => number): number {
   return db.transaction(() => [...new Set(itemIds)].reduce((total, itemId) => total + change(itemId), 0))();
+}
+
+export function updateSubscriptionFullTextMode(userId: number, feedId: number, mode: FullTextMode): void {
+  db.prepare("UPDATE subscriptions SET full_text_mode = ? WHERE user_id = ? AND feed_id = ?").run(mode, userId, feedId);
+}
+
+/** The user's full-text mode for a feed, or undefined when they are not subscribed. */
+export function findSubscriptionFullTextMode(userId: number, feedId: number): FullTextMode | undefined {
+  return db
+    .prepare<[number, number], { full_text_mode: FullTextMode }>("SELECT full_text_mode FROM subscriptions WHERE user_id = ? AND feed_id = ?")
+    .get(userId, feedId)?.full_text_mode;
+}
+
+/** Count a consent wall for a feed; after `threshold` in a row the feed is marked as blocked. */
+export function recordFullTextBlock(feedId: number, threshold: number): void {
+  db.prepare(
+    `UPDATE feeds SET
+       full_text_blocks = full_text_blocks + 1,
+       full_text_blocked_at = CASE WHEN full_text_blocks + 1 >= ? THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE full_text_blocked_at END
+     WHERE id = ?`,
+  ).run(threshold, feedId);
+}
+
+export function clearFullTextBlock(feedId: number): void {
+  db.prepare("UPDATE feeds SET full_text_blocks = 0, full_text_blocked_at = NULL WHERE id = ? AND full_text_blocks > 0").run(feedId);
+}
+
+export function countFeedSubscribers(feedId: number): number {
+  return db.prepare<[number], { count: number }>("SELECT COUNT(*) AS count FROM subscriptions WHERE feed_id = ?").get(feedId)!.count;
+}
+
+/** Point a feed at a new URL in place, keeping its items; resets fetch state so the next poll starts fresh. */
+export function replaceFeedUrl(feedId: number, url: string): void {
+  db.prepare(
+    `UPDATE feeds SET url = ?, etag = NULL, last_modified = NULL, last_error = NULL, consecutive_errors = 0,
+       full_text_blocks = 0, full_text_blocked_at = NULL
+     WHERE id = ?`,
+  ).run(url, feedId);
+}
+
+/** Move a user's subscription to another feed, keeping label, folder, order and full-text mode. */
+export function moveSubscription(userId: number, fromFeedId: number, toFeedId: number): void {
+  db.transaction(() => {
+    db.prepare("UPDATE subscriptions SET feed_id = ? WHERE user_id = ? AND feed_id = ?").run(toFeedId, userId, fromFeedId);
+    if (countFeedSubscribers(fromFeedId) === 0) db.prepare("DELETE FROM feeds WHERE id = ?").run(fromFeedId);
+  })();
 }

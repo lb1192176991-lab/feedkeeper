@@ -23,7 +23,7 @@ import {
 } from "../feeds/repository.js";
 import type { TokenScope } from "../auth/tokens.js";
 import { getItemForMcp, listItemsPage } from "./items.js";
-import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
+import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, changeFeedUrl, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { loadFullText } from "../feeds/fullText.js";
 import { SsrfBlockedError, normalizeUrlCandidate } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
@@ -194,17 +194,35 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     "update_feed",
     {
       title: "Update feed settings",
-      description: "Renames a subscription or changes how often its feed is polled. The poll interval applies to every subscriber of the feed and has a server-wide minimum.",
+      description: "Changes a subscription: its feed URL (e.g. when a site moved its feed and polling keeps failing), display name, poll interval or whether the reader may fetch full articles. A new URL is fetched and validated before it replaces the old one. If the returned feed ID differs from the one passed in, use the new ID from now on. The poll interval applies to every subscriber of the feed and has a server-wide minimum.",
       inputSchema: {
         feedId: z.number().int().positive(),
+        url: mcpUrlSchema.optional().describe("New feed URL or website URL (the feed is auto-discovered)"),
         label: z.string().max(200).nullable().optional().describe("Custom display name; null or empty restores the feed title"),
         pollIntervalMinutes: z.number().int().positive().max(10_080).optional(),
+        fullText: z.enum(["auto", "never"]).optional().describe("auto: the reader may fetch full articles; never: always show the feed content"),
       },
     },
-    async ({ feedId, label, pollIntervalMinutes }) => {
+    async ({ feedId, url, label, pollIntervalMinutes, fullText }) => {
       try {
-        return textResult(updateFeedSettings(userId, feedId, { label, pollIntervalMinutes }));
+        let targetFeedId = feedId;
+        let previousItemsKept: boolean | undefined;
+        if (url) {
+          const changed = await changeFeedUrl(userId, feedId, url);
+          targetFeedId = changed.subscription.id;
+          previousItemsKept = changed.previousItemsKept;
+        }
+        const subscription = updateFeedSettings(userId, targetFeedId, { label, pollIntervalMinutes, fullTextMode: fullText });
+        return textResult(previousItemsKept === undefined ? subscription : { ...subscription, previousItemsKept });
       } catch (error) {
+        if (error instanceof MultipleFeedsFoundError) {
+          return textResult({
+            error: "multiple_feeds_found",
+            message: "Multiple feeds found. Call again with one of these feed URLs:",
+            feeds: error.feeds,
+          });
+        }
+        if (error instanceof SsrfBlockedError) return errorResult(error.message);
         return errorResult(error instanceof Error ? error.message : String(error));
       }
     },
