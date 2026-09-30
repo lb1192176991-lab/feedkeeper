@@ -1,0 +1,86 @@
+import { useState, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "../LanguageSwitcher.tsx";
+import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../../utils/installPrompt.ts";
+import { getTheme, setTheme, subscribeTheme, type Theme } from "../../utils/theme.ts";
+import { SettingsCard, SettingRow, Toggle } from "./ui.tsx";
+
+function ThemeSwitch() {
+  const { t } = useTranslation();
+  const theme = useSyncExternalStore(subscribeTheme, getTheme);
+  const options: { value: Theme; label: string }[] = [
+    { value: "light", label: t("settings.themeLight") },
+    { value: "dark", label: t("settings.themeDark") },
+    { value: "system", label: t("settings.themeSystem") },
+  ];
+
+  return (
+    <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--c-border)] p-0.5" role="group" aria-label={t("settings.theme")}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setTheme(option.value)}
+          aria-pressed={theme === option.value}
+          className={`h-8 rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer ${
+            theme === option.value
+              ? "border border-[var(--c-mobile-nav-active-border)] bg-[var(--c-mobile-nav-active)] text-[var(--c-text)] shadow-sm"
+              : "text-[var(--c-text-muted)] hover:text-[var(--c-text)]"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function InstallRow() {
+  const { t } = useTranslation();
+  const mode = useSyncExternalStore(subscribeInstallPrompt, currentInstallMode);
+  if (mode === "installed" || mode === "unsupported") return null;
+
+  return (
+    <SettingRow
+      label={t("settings.installApp")}
+      hint={mode === "ios" ? t("settings.installAppIos") : mode === "mac-safari" ? t("settings.installAppMacSafari") : t("settings.installAppHint")}
+    >
+      {mode === "prompt" && (
+        <button type="button" onClick={() => void promptInstall()} className="btn-primary whitespace-nowrap">{t("settings.installAppButton")}</button>
+      )}
+    </SettingRow>
+  );
+}
+
+export function GeneralSettings() {
+  const { t } = useTranslation();
+  const [autoReaderMode, setAutoReaderMode] = useState(() => localStorage.getItem("feedkeeper_auto_reader_mode") !== "false");
+
+  return (
+    <div className="flex flex-col gap-5">
+      <SettingsCard title={t("settings.appearanceTitle")}>
+        <SettingRow label={t("settings.theme")} hint={t("settings.themeHint")}>
+          <ThemeSwitch />
+        </SettingRow>
+        <SettingRow label={t("settings.language")} hint={t("settings.languageHint")}>
+          <LanguageSwitcher />
+        </SettingRow>
+      </SettingsCard>
+
+      <SettingsCard title={t("settings.readingTitle")}>
+        <SettingRow label={t("settings.autoReaderMode")} hint={t("settings.autoReaderModeHint")} htmlFor="auto-reader-toggle" inline>
+          <Toggle
+            id="auto-reader-toggle"
+            label={t("settings.autoReaderMode")}
+            checked={autoReaderMode}
+            onChange={(checked) => {
+              setAutoReaderMode(checked);
+              localStorage.setItem("feedkeeper_auto_reader_mode", checked ? "true" : "false");
+            }}
+          />
+        </SettingRow>
+        <InstallRow />
+      </SettingsCard>
+    </div>
+  );
+}
