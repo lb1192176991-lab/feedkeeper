@@ -38,23 +38,23 @@ export class MultipleFeedsFoundError extends FeedError {
 }
 
 /** Turn a feed or website URL into a feed URL, using auto-discovery for website addresses. */
-async function resolveFeedUrl(inputUrl: string): Promise<{ url: string; discovered: boolean }> {
+async function resolveFeedUrl(inputUrl: string): Promise<{ url: string }> {
   const validated = await assertPublicHttpUrl(inputUrl.trim());
   const targetUrl = validated.toString();
 
   try {
     const discovered = await discoverFeeds(targetUrl);
-    if (discovered.length === 1) return { url: discovered[0].url, discovered: true };
+    if (discovered.length === 1) return { url: discovered[0].url };
     if (discovered.length > 1) {
       const exact = discovered.find((d) => d.url === targetUrl);
-      if (exact) return { url: exact.url, discovered: true };
+      if (exact) return { url: exact.url };
       throw new MultipleFeedsFoundError(discovered);
     }
   } catch (err) {
     if (err instanceof FeedError) throw err;
     // Otherwise fall back to trying the given URL directly
   }
-  return { url: targetUrl, discovered: false };
+  return { url: targetUrl };
 }
 
 export async function subscribeToFeed(
@@ -66,7 +66,7 @@ export async function subscribeToFeed(
   if (folderId !== null && !findFolderById(userId, folderId)) {
     throw new FeedError("folder_not_found");
   }
-  const { url: targetUrl, discovered: hadDiscoverySuccess } = await resolveFeedUrl(inputUrl);
+  const { url: targetUrl } = await resolveFeedUrl(inputUrl);
 
   let feed = findFeedByUrl(targetUrl);
   if (!feed) {
@@ -83,9 +83,9 @@ export async function subscribeToFeed(
   // for the next scheduler tick.
   const pollResult = await pollFeed(feed);
 
-  // If auto-discovery didn't find anything and the initial poll of this URL failed,
-  // roll back the subscription so we don't keep dead/non-feed URLs around:
-  if (!hadDiscoverySuccess && pollResult.error && !feed.title) {
+  // A feed that has never been read successfully and fails right away is not a feed
+  // (e.g. a homepage that announces itself as RSS); don't keep the subscription.
+  if (pollResult.error && !findFeedById(feed.id)?.last_success_at) {
     unsubscribeRepo(userId, feed.id);
     throw new NoFeedsFoundError();
   }

@@ -1,4 +1,5 @@
 import { db } from "../db/index.js";
+import { decodeEntities } from "./text.js";
 
 export interface Feed {
   id: number;
@@ -596,4 +597,40 @@ export function moveSubscription(userId: number, fromFeedId: number, toFeedId: n
 
 export function updateFeedIcon(feedId: number, iconUrl: string | null): void {
   db.prepare("UPDATE feeds SET icon_url = ?, icon_checked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").run(iconUrl, feedId);
+}
+
+/** Fix item titles, snippets, feed titles and labels stored before entity decoding existed; cheap once nothing matches. */
+export function repairEncodedText(): number {
+  const rows = db
+    .prepare<[], { id: number; title: string | null; content_snippet: string | null }>(
+      "SELECT id, title, content_snippet FROM items WHERE title LIKE '%&%;%' OR content_snippet LIKE '%&%;%'",
+    )
+    .all();
+  const update = db.prepare("UPDATE items SET title = ?, content_snippet = ? WHERE id = ?");
+  let fixed = 0;
+  db.transaction(() => {
+    for (const row of rows) {
+      const title = decodeEntities(row.title);
+      const snippet = decodeEntities(row.content_snippet);
+      if (title !== row.title || snippet !== row.content_snippet) {
+        update.run(title ?? null, snippet ?? null, row.id);
+        fixed++;
+      }
+    }
+    for (const feed of db.prepare<[], { id: number; title: string }>("SELECT id, title FROM feeds WHERE title LIKE '%&%;%'").all()) {
+      const title = decodeEntities(feed.title);
+      if (title !== feed.title) {
+        db.prepare("UPDATE feeds SET title = ? WHERE id = ?").run(title, feed.id);
+        fixed++;
+      }
+    }
+    for (const sub of db.prepare<[], { id: number; label: string }>("SELECT id, label FROM subscriptions WHERE label LIKE '%&%;%'").all()) {
+      const label = decodeEntities(sub.label);
+      if (label !== sub.label) {
+        db.prepare("UPDATE subscriptions SET label = ? WHERE id = ?").run(label, sub.id);
+        fixed++;
+      }
+    }
+  })();
+  return fixed;
 }

@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import cron from "node-cron";
 import { fetchFeed } from "./fetcher.js";
 import { discoverIconUrl, iconCheckDue } from "./icon.js";
+import { decodeEntities } from "./text.js";
 import { listFeedsDueForPoll, updateFeedAfterPoll, updateFeedIcon, upsertItems, type Feed } from "./repository.js";
 
 type CustomItem = Parser.Item & {
@@ -106,9 +107,9 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
 
     const items = parsed.items.map((item) => ({
       guid: item.guid ?? item.link ?? item.title ?? crypto.randomUUID(),
-      title: item.title,
+      title: decodeEntities(item.title) ?? undefined,
       link: item.link,
-      contentSnippet: item.contentSnippet ?? item.content,
+      contentSnippet: decodeEntities(item.contentSnippet ?? item.content) ?? undefined,
       contentHtml: item.contentEncoded ?? item["content:encoded"] ?? item.content ?? null,
       publishedAt: item.isoDate ?? item.pubDate,
       imageUrl: extractImageUrl(item),
@@ -123,7 +124,7 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
     }
 
     updateFeedAfterPoll(feed.id, {
-      title: parsed.title,
+      title: decodeEntities(parsed.title) ?? undefined,
       siteUrl: parsed.link,
       etag: fetched.etag,
       lastModified: fetched.lastModified,

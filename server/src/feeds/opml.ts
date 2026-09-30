@@ -13,6 +13,7 @@ import {
 } from "./repository.js";
 import { assertPublicHttpUrl, SsrfBlockedError } from "./ssrfGuard.js";
 import { pollFeed } from "./poller.js";
+import { decodeEntities } from "./text.js";
 
 export interface OpmlFeedItem {
   url: string;
@@ -127,10 +128,10 @@ function extractOutlines(node: unknown, items: OpmlFeedItem[] = [], currentFolde
     (typeof record["@_title"] === "string" ? record["@_title"] : undefined);
 
   if (xmlUrl) {
-    const label = rawLabel?.trim() ? rawLabel.trim() : undefined;
+    const label = rawLabel?.trim() ? decodeEntities(rawLabel.trim()) : undefined;
     items.push({ url: xmlUrl.trim(), label, folder: currentFolder });
   } else if (rawLabel && record.outline) {
-    currentFolder = rawLabel.trim();
+    currentFolder = decodeEntities(rawLabel.trim());
   }
 
   if (record.outline) {
