@@ -9,6 +9,7 @@ import { FeedsPage } from "./pages/FeedsPage.tsx";
 import { ItemsPage } from "./pages/ItemsPage.tsx";
 import { SettingsPage } from "./pages/SettingsPage.tsx";
 import { LoadingSpinner } from "./components/LoadingSpinner.tsx";
+import { hideSplash, isSplashVisible } from "./utils/splash.ts";
 
 function MetaSync() {
   const { t, i18n } = useTranslation();
@@ -44,7 +45,13 @@ function MetaSync() {
 function Gate({ children }: { children: React.ReactNode }) {
   const { user, loading, needsOnboarding } = useAuth();
 
+  useEffect(() => {
+    if (!loading) hideSplash();
+  }, [loading]);
+
   if (loading) {
+    // On first launch the static splash from index.html covers the session check.
+    if (isSplashVisible()) return null;
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-[var(--c-bg)] z-50">
         <LoadingSpinner size="lg" center={false} />

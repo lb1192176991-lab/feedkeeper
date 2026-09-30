@@ -28,8 +28,20 @@
     <meta name="twitter:title" content="FeedKeeper – RSS Reader & MCP Server" />
     <meta name="twitter:description" content="Self-hosted RSS/Atom feed manager and remote MCP server for AI assistants." />
     <meta name="twitter:image" content="/logo.svg" />
+    <!-- Inline so the splash paints before any script or stylesheet loads -->
+    <style>
+      html { background: #f8fafc; }
+      html[data-theme="dark"] { background: #0b0f17; }
+      @media (prefers-color-scheme: dark) { html:not([data-theme="light"]) { background: #0b0f17; } }
+      #splash { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: inherit; transition: opacity 0.3s ease; }
+      #splash img { width: 72px; height: 72px; animation: splash-in 0.4s ease both; }
+      #splash.splash-hidden { opacity: 0; pointer-events: none; }
+      @keyframes splash-in { from { opacity: 0; transform: scale(0.92); } }
+      @media (prefers-reduced-motion: reduce) { #splash, #splash img { transition: none; animation: none; } }
+    </style>
   </head>
   <body>
+    <div id="splash" aria-hidden="true"><img src="/logo.svg" alt="" /></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
