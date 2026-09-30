@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Item } from "../api/client.js";
@@ -31,6 +31,17 @@ export function ArticleReaderModal({
   hasPrev = false,
 }: ArticleReaderModalProps) {
   const { t, i18n } = useTranslation();
+  // The header floats over the article; its height becomes the article's top offset.
+  const [headerHeight, setHeaderHeight] = useState(61);
+  const headerObserver = useRef<ResizeObserver | null>(null);
+  const headerRef = useCallback((node: HTMLElement | null) => {
+    headerObserver.current?.disconnect();
+    if (!node) return;
+    const update = () => setHeaderHeight(node.offsetHeight);
+    update();
+    headerObserver.current = new ResizeObserver(update);
+    headerObserver.current.observe(node);
+  }, []);
   const [copied, setCopied] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [showFullText, setShowFullText] = useState(false);
@@ -234,22 +245,24 @@ export function ArticleReaderModal({
         aria-modal="true"
         aria-label={item.title ?? t("items.title")}
       >
-        {/* Sticky App-like Navigation Bar */}
+        {/* Translucent bar over the scrolling article, styled like the app header */}
         <header
-          className="sticky top-0 z-20 px-4 py-3 border-b border-[var(--c-border)] bg-[var(--c-surface)]/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0"
-          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+          ref={headerRef}
+          className="absolute inset-x-0 top-0 z-20 px-4 py-3 border-b border-[var(--c-border)] backdrop-blur-md transform-gpu flex items-center justify-between gap-3"
+          style={{
+            paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))",
+            backgroundColor: "color-mix(in srgb, var(--c-surface) 85%, transparent)",
+          }}
         >
-          {/* Source info with Favicon (top left) */}
-          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+          {/* Source, in the same style as the article cards */}
+          <div className="flex min-w-0 items-center gap-2 pr-2 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--c-text-muted)]">
             <Favicon
               siteUrl={item.feed_site_url}
               feedUrl={item.feed_url}
               articleUrl={item.link}
-              className="w-4 h-4 rounded-xs shrink-0 object-contain"
+              className="h-3.5 w-3.5 shrink-0 rounded-xs object-contain"
             />
-            <span className="truncate text-sm font-medium text-[var(--c-text)]">
-              {item.feed_title}
-            </span>
+            <span className="truncate">{item.feed_title}</span>
           </div>
 
           {/* Close button (top right, touch-friendly & larger) */}
@@ -268,7 +281,8 @@ export function ArticleReaderModal({
         </header>
 
         {/* Scrollable Article Body */}
-        <main className="flex-1 overflow-y-auto overscroll-contain">
+        {/* Own compositing layer: keeps WebKit from dropping images under the blurred header while scrolling */}
+        <main className="flex-1 overflow-y-auto overscroll-contain transform-gpu" style={{ paddingTop: headerHeight }}>
           {visibleLeadImage && !compactLeadImage && (
             <img
               src={visibleLeadImage.src}

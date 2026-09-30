@@ -25,7 +25,7 @@ function imageFilename(url: string | null): string {
 
 const sanitizeConfig = {
   USE_PROFILES: { html: true },
-  ALLOWED_ATTR: ["href", "src", "alt", "title", "width", "height", "loading"],
+  ALLOWED_ATTR: ["href", "src", "alt", "title", "width", "height"],
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ["form", "input", "button", "textarea", "select", "style", "video", "audio", "source"],
 };
@@ -90,7 +90,9 @@ export function sanitizeHtml(rawHtml: string, options: SanitizeOptions = {}): st
       img.remove();
     } else {
       img.setAttribute("src", src);
-      img.setAttribute("loading", "lazy");
+      // Load eagerly: Safari lazy-loads images inside the reader's own scroll area
+      // unreliably, so they briefly vanish while scrolling.
+      img.removeAttribute("loading");
       previousImage = img;
       previousImageSrc = src;
     }

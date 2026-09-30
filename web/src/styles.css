@@ -322,8 +322,14 @@ input[type="checkbox"]:disabled {
   transition: opacity 0.15s ease;
 }
 
-.reader-content a:hover {
+/* Only text links fade on hover; images wrapped in links would flicker in brightness. */
+.reader-content a:hover:not(:has(img, picture, video)) {
   opacity: 0.8;
+}
+
+.reader-content a:has(img, picture, video) {
+  text-decoration: none;
+  transition: none;
 }
 
 .reader-content img,
