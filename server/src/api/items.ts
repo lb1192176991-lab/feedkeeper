@@ -8,11 +8,8 @@ import {
   markItemUnread,
   bookmarkItem,
   unbookmarkItem,
-  findItemById,
-  isUserSubscribed,
-  updateItemFullContent,
 } from "../feeds/repository.js";
-import { extractArticleFromUrl, isCachedConsentSnippet } from "../feeds/extractor.js";
+import { loadFullText } from "../feeds/fullText.js";
 
 export const itemsRouter = Router();
 itemsRouter.use(requireSession);
@@ -86,47 +83,17 @@ itemsRouter.post("/:itemId/extract-content", async (req, res) => {
     return;
   }
 
-  const item = findItemById(itemId);
-  if (!item || !isUserSubscribed(req.user!.id, item.feed_id)) {
-    res.status(404).json({ error: "item_not_found" });
+  const result = await loadFullText(req.user!.id, itemId, { force: req.query.force === "true" });
+  if (!result.ok) {
+    const status = { item_not_found: 404, item_has_no_link: 400, could_not_extract_content: 422, extraction_failed: 502 }[result.error];
+    res.status(status).json({ error: result.error, ...(result.message ? { message: result.message } : {}) });
     return;
   }
 
-  const force = req.query.force === "true";
-
-  // If already extracted and not forced, return cached version unless it was an old saved consent banner
-  if (!force && item.full_content_html && !isCachedConsentSnippet(item.full_content_html)) {
-    res.json({
-      id: item.id,
-      full_content_html: item.full_content_html,
-      cached: true,
-    });
-    return;
-  }
-
-  if (!item.link) {
-    res.status(400).json({ error: "item_has_no_link" });
-    return;
-  }
-
-  try {
-    const extracted = await extractArticleFromUrl(item.link);
-    if (!extracted || !extracted.contentHtml) {
-      res.status(422).json({ error: "could_not_extract_content" });
-      return;
-    }
-
-    updateItemFullContent(itemId, extracted.contentHtml);
-
-    res.json({
-      id: item.id,
-      full_content_html: extracted.contentHtml,
-      title: extracted.title,
-      byline: extracted.byline,
-      cached: false,
-    });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(502).json({ error: "extraction_failed", message: msg });
-  }
+  res.json({
+    id: result.id,
+    full_content_html: result.fullContentHtml,
+    ...(result.cached ? {} : { title: result.title, byline: result.byline }),
+    cached: result.cached,
+  });
 });

@@ -32,6 +32,8 @@ export function listItemsPage(
     bookmarkedOnly?: boolean;
     before?: string;
     after?: string;
+    since?: string;
+    until?: string;
     limit?: number;
   },
 ) {
@@ -43,6 +45,8 @@ export function listItemsPage(
     bookmarkedOnly: options.bookmarkedOnly,
     before: options.before ? decodeCursor(options.before) : undefined,
     after: options.after ? decodeCursor(options.after) : undefined,
+    publishedSince: options.since,
+    publishedUntil: options.until,
     sortByAdded: true,
     limit: limit + 1,
   });

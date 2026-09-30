@@ -239,6 +239,8 @@ export function listItemsForUser(
     limit?: number;
     offset?: number;
     since?: string;
+    publishedSince?: string;
+    publishedUntil?: string;
     before?: { createdAt: string; id: number };
     after?: { createdAt: string; id: number };
     sortByAdded?: boolean;
@@ -286,6 +288,15 @@ export function listItemsForUser(
   if (opts.since) {
     conditions.push("i.created_at > ?");
     params.push(opts.since);
+  }
+  // Feeds without a parseable publish date fall back to when FeedKeeper stored the item.
+  if (opts.publishedSince) {
+    conditions.push("COALESCE(julianday(i.published_at), julianday(i.created_at)) >= julianday(?)");
+    params.push(opts.publishedSince);
+  }
+  if (opts.publishedUntil) {
+    conditions.push("COALESCE(julianday(i.published_at), julianday(i.created_at)) <= julianday(?)");
+    params.push(opts.publishedUntil);
   }
   if (opts.before) {
     conditions.push("(i.created_at < ? OR (i.created_at = ? AND i.id < ?))");
@@ -441,40 +452,40 @@ export function markAllRead(userId: number, filter?: number | { feedId?: number;
   return result.changes;
 }
 
-export function markItemRead(userId: number, itemId: number): void {
-  db.prepare(
+export function markItemRead(userId: number, itemId: number): number {
+  return db.prepare(
     `INSERT INTO item_reads (user_id, item_id)
      SELECT ?, i.id FROM items i
      JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
      WHERE i.id = ?
      ON CONFLICT (user_id, item_id) DO NOTHING`,
-  ).run(userId, userId, itemId);
+  ).run(userId, userId, itemId).changes;
 }
 
-export function markItemUnread(userId: number, itemId: number): void {
-  db.prepare(
+export function markItemUnread(userId: number, itemId: number): number {
+  return db.prepare(
     `DELETE FROM item_reads WHERE user_id = ? AND item_id = ?
      AND EXISTS (SELECT 1 FROM items i JOIN subscriptions s ON s.feed_id = i.feed_id
                  WHERE i.id = ? AND s.user_id = ?)`,
-  ).run(userId, itemId, itemId, userId);
+  ).run(userId, itemId, itemId, userId).changes;
 }
 
-export function bookmarkItem(userId: number, itemId: number): void {
-  db.prepare(
+export function bookmarkItem(userId: number, itemId: number): number {
+  return db.prepare(
     `INSERT INTO item_bookmarks (user_id, item_id)
      SELECT ?, i.id FROM items i
      JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
      WHERE i.id = ?
      ON CONFLICT (user_id, item_id) DO NOTHING`,
-  ).run(userId, userId, itemId);
+  ).run(userId, userId, itemId).changes;
 }
 
-export function unbookmarkItem(userId: number, itemId: number): void {
-  db.prepare(
+export function unbookmarkItem(userId: number, itemId: number): number {
+  return db.prepare(
     `DELETE FROM item_bookmarks WHERE user_id = ? AND item_id = ?
      AND EXISTS (SELECT 1 FROM items i JOIN subscriptions s ON s.feed_id = i.feed_id
                  WHERE i.id = ? AND s.user_id = ?)`,
-  ).run(userId, itemId, itemId, userId);
+  ).run(userId, itemId, itemId, userId).changes;
 }
 
 export function listMutedKeywords(userId: number): MutedKeyword[] {
@@ -516,4 +527,9 @@ export function findItemById(id: number): Item | undefined {
 
 export function updateItemFullContent(id: number, fullContentHtml: string): void {
   db.prepare("UPDATE items SET full_content_html = ? WHERE id = ?").run(fullContentHtml, id);
+}
+
+/** Apply a per-item change to many items atomically; returns how many rows changed. */
+export function applyToItems(itemIds: readonly number[], change: (itemId: number) => number): number {
+  return db.transaction(() => [...new Set(itemIds)].reduce((total, itemId) => total + change(itemId), 0))();
 }

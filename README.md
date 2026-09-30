@@ -154,23 +154,27 @@ Every tool call is scoped to the token's owner — a client can only see and man
 
 | Tool | Description |
 |---|---|
-| `list_feeds` | List subscribed feeds with unread counts and health status |
+| `list_feeds` | List subscribed feeds with unread counts and health status, optionally only feeds with errors |
 | `subscribe_feed` | Subscribe to a feed URL or website URL (auto-discovering the feed) |
 | `discover_feeds` | Discover available RSS/Atom feeds on a website URL |
 | `unsubscribe_feed` | Remove a subscription |
+| `update_feed` | Rename a subscription or change its poll interval |
 | `list_folders` | List folders with feed and unread counts |
 | `create_folder` | Create a folder |
+| `rename_folder` | Rename a folder |
+| `delete_folder` | Delete a folder; its feeds stay subscribed |
 | `move_feed_to_folder` | Move a subscription into or out of a folder |
 | `refresh_feed` | Force an immediate check/poll of a subscribed feed |
 | `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks |
 | `list_items` | Page through compact items by time added; use cursors to fetch older or newly added items |
 | `get_item` | Fetch one article and its cached content |
+| `fetch_full_text` | Download and cache the full article when the feed only has a teaser |
 | `search_items` | Search titles and summaries across all items (with optional bookmarks filter) |
-| `mark_read` | Mark an item as read |
-| `mark_unread` | Mark an item as unread |
+| `mark_read` | Mark one or more items as read |
+| `mark_unread` | Mark one or more items as unread |
 | `mark_all_read` | Mark all subscribed items as read, optionally within a feed or folder |
-| `bookmark_item` | Save/bookmark an item for later reading |
-| `unbookmark_item` | Remove bookmark from an item |
+| `bookmark_item` | Bookmark one or more items for later reading |
+| `unbookmark_item` | Remove bookmarks from one or more items |
 | `list_muted_keywords` | List user's active muted keywords |
 | `add_muted_keyword` | Add a keyword to automatically filter out matching articles |
 | `remove_muted_keyword` | Remove a muted keyword rule |
@@ -178,7 +182,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
 | `cleanup_database` | *(Admin only)* Purge old items and reclaim disk space after deletions |
 
-Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `get_item` returns stored feed or reader content; it does not fetch the source website. For incremental synchronization, save `newestCursor`, pass it as `after` next time, and follow `nextCursor` as `before` until there are no more pages.
+Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `get_item` returns stored feed or reader content; `fetch_full_text` downloads the article from its website and needs a read-and-write token. Item actions accept a single `itemId` or up to 200 `itemIds`. `get_new_items`, `search_items` and `list_items` accept `since` and `until` (ISO date or date-time) to filter by publish date. For incremental synchronization, save `newestCursor`, pass it as `after` next time, and follow `nextCursor` as `before` until there are no more pages.
 
 ## Security
 
