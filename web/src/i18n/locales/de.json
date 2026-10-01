@@ -119,14 +119,16 @@
     "searchPlaceholder": "Artikel durchsuchen…",
     "unreadOnly": "Nur ungelesene",
     "all": "Alle anzeigen",
-    "bookmarkedOnly": "Nur Favoriten",
+    "bookmarkedOnly": "Nur gemerkte Artikel",
     "bookmark": "Merken",
-    "unbookmark": "Entfernen",
+    "unbookmark": "Nicht mehr merken",
     "allFeeds": "Alle Feeds",
     "noItems": "Keine Artikel vorhanden.",
     "refresh": "Artikel aktualisieren",
     "refreshing": "Feeds werden aktualisiert…",
-    "refreshFailed": "Aktualisierung fehlgeschlagen. Bitte erneut versuchen."
+    "refreshFailed": "Aktualisierung fehlgeschlagen. Bitte erneut versuchen.",
+    "noSaved": "Noch nichts gemerkt. Tippe auf den Stern, um einen Artikel samt Volltext und Bildern dauerhaft zu sichern.",
+    "unreadIgnoredInSaved": "Die Merkliste zeigt gelesene und ungelesene Artikel."
   },
   "reader": {
     "close": "Schließen (Esc)",
@@ -140,7 +142,7 @@
     "togglePreview": "Zurück zur Vorschau (R)",
     "extractionFailed": "Der vollständige Artikel konnte nicht geladen werden.",
     "bookmark": "Merken (S)",
-    "unbookmark": "Gemerkt entfernen (S)",
+    "unbookmark": "Nicht mehr merken (S)",
     "markRead": "Als gelesen markieren (M)",
     "markUnread": "Als ungelesen markieren (M)",
     "consentWall": "Diese Seite verlangt eine Cookie-Zustimmung oder ein Abo. Du siehst die Vorschau aus dem Feed.",

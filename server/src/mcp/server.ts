@@ -25,6 +25,7 @@ import type { TokenScope } from "../auth/tokens.js";
 import { getItemForMcp, listItemsPage } from "./items.js";
 import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, changeFeedUrl, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { loadFullText } from "../feeds/fullText.js";
+import { pruneArchive, scheduleArchive } from "../feeds/archive.js";
 import { SsrfBlockedError, normalizeUrlCandidate } from "../feeds/ssrfGuard.js";
 import { generateOpml, importOpmlFeeds } from "../feeds/opml.js";
 import { pollFeed } from "../feeds/poller.js";
@@ -364,8 +365,16 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
   const itemActions = [
     ["mark_read", "Mark items as read", "Marks one or more subscribed items as read.", markItemRead],
     ["mark_unread", "Mark items as unread", "Marks one or more subscribed items as unread.", markItemUnread],
-    ["bookmark_item", "Bookmark items", "Bookmarks one or more items for later reading and protects them from retention cleanup.", bookmarkItem],
-    ["unbookmark_item", "Remove bookmarks", "Removes the bookmark from one or more items.", unbookmarkItem],
+    ["bookmark_item", "Bookmark items", "Saves one or more items for later. Saved items keep their full text and images, survive retention cleanup and unsubscribing.", (userId: number, itemId: number) => {
+      const changed = bookmarkItem(userId, itemId);
+      if (changed) scheduleArchive(itemId);
+      return changed;
+    }],
+    ["unbookmark_item", "Remove bookmarks", "Removes the bookmark from one or more items.", (userId: number, itemId: number) => {
+      const changed = unbookmarkItem(userId, itemId);
+      if (changed) pruneArchive();
+      return changed;
+    }],
   ] as const;
   if (scope === "write") for (const [name, title, description, change] of itemActions) {
     server.registerTool(name, { title, description, inputSchema: itemSelection }, async (args) => {

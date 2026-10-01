@@ -1,5 +1,6 @@
 import { extractArticle, isCachedConsentSnippet } from "./extractor.js";
 import {
+  canAccessItem,
   clearFullTextBlock,
   findFeedById,
   findItemById,
@@ -35,7 +36,8 @@ function isBlocked(blockedAt: string | null): boolean {
  */
 export async function loadFullText(userId: number, itemId: number, options: { force?: boolean } = {}): Promise<FullTextResult> {
   const item = findItemById(itemId);
-  const mode = item ? findSubscriptionFullTextMode(userId, item.feed_id) : undefined;
+  // Saved articles stay readable after unsubscribing; they use the default mode then.
+  const mode = item ? findSubscriptionFullTextMode(userId, item.feed_id) ?? (canAccessItem(userId, itemId) ? "auto" : undefined) : undefined;
   if (!item || !mode) return { ok: false, error: "item_not_found" };
 
   // Older versions cached consent banners as article text; those are fetched again.

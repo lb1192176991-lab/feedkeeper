@@ -25,7 +25,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Categories and feed ordering** — group subscriptions into categories, search and filter the feed list, rename categories in place, and reorder feeds by dragging.
 - **Smart feed discovery** — paste a direct feed link or a website address (like `example.com/blog`); FeedKeeper finds RSS and Atom feeds, including ones listed on a site's feed overview page, and checks each one before subscribing.
 - **Automatic character encoding** — parses standard UTF-8 as well as legacy ISO-8859-1/Windows-1252 feeds without garbled umlauts or broken symbols.
-- **Bookmarks** — star articles to read later; bookmarked items are never removed by automatic cleanups.
+- **Saved articles as a lasting archive** — star an article to save it: FeedKeeper keeps its full text and stores its images next to the database, so it stays readable even if the source changes. Saved articles survive cleanups and unsubscribing, ignore the word filter, and their full text is searchable.
 - **Keyword mute filters** — cut through information overload by filtering out articles matching specific keywords before they reach your stream.
 - **Health monitoring** — clear status indicators show polling health, consecutive fetch errors, and timestamps so you instantly spot dead feeds.
 - **Automated database housekeeping** — sensible defaults prune read articles, enforce maximum item retention, and run SQLite `VACUUM` on schedule to keep storage lean.
@@ -90,13 +90,15 @@ Create a consistent SQLite backup while FeedKeeper is running:
 npm run db:backup -- /safe/location/feedkeeper.sqlite
 ```
 
-Without Docker, run `npm run build` once before using the backup commands. The command refuses to overwrite an existing backup and verifies its integrity. Keep the backup outside the application directory and copy it to another machine or storage device.
+Without Docker, run `npm run build` once before using the backup commands. The command refuses to overwrite an existing backup and verifies its integrity. Images of saved articles live in an `archive` folder next to the database (configurable with `ARCHIVE_PATH`); the backup copies them to `<backup>.archive` and restore puts them back. Keep the backup outside the application directory and copy it to another machine or storage device.
 
 With Docker Compose, create the backup in the mounted data volume and copy it to the host:
 
 ```bash
 docker compose exec feedkeeper npm run db:backup -- /app/data/feedkeeper-backup.sqlite
 docker compose cp feedkeeper:/app/data/feedkeeper-backup.sqlite ./feedkeeper-backup.sqlite
+# only present if you have saved articles with images:
+docker compose cp feedkeeper:/app/data/feedkeeper-backup.sqlite.archive ./feedkeeper-backup.sqlite.archive
 ```
 
 To restore, **stop FeedKeeper first**, then run:
@@ -173,7 +175,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `mark_read` | Mark one or more items as read |
 | `mark_unread` | Mark one or more items as unread |
 | `mark_all_read` | Mark all subscribed items as read, optionally within a feed or folder |
-| `bookmark_item` | Bookmark one or more items for later reading |
+| `bookmark_item` | Save one or more items; saved items are archived with full text and images |
 | `unbookmark_item` | Remove bookmarks from one or more items |
 | `list_muted_keywords` | List user's active muted keywords |
 | `add_muted_keyword` | Add a keyword to automatically filter out matching articles |

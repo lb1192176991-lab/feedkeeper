@@ -16,12 +16,21 @@ export interface FetchedFeed {
   finalUrl: string;
 }
 
-// Fetches a feed URL while re-validating every redirect hop against the SSRF
-// guard, capping response size, and honoring conditional GET headers.
-export async function fetchFeed(
+interface Download {
+  notModified: boolean;
+  buffer: Buffer;
+  contentType?: string;
+  etag?: string;
+  lastModified?: string;
+  finalUrl: string;
+}
+
+// Downloads a public URL while re-validating every redirect hop against the SSRF
+// guard and capping both time and response size.
+async function downloadPublic(
   url: string,
-  opts: { etag?: string; lastModified?: string } = {},
-): Promise<FetchedFeed> {
+  opts: { accept: string; maxBytes: number; etag?: string; lastModified?: string },
+): Promise<Download> {
   let currentUrl = url;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -31,10 +40,7 @@ export async function fetchFeed(
     for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
       const validated = await assertPublicHttpUrl(currentUrl);
 
-      const headers: Record<string, string> = {
-        "User-Agent": USER_AGENT,
-        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, application/xhtml+xml;q=0.9, */*;q=0.5",
-      };
+      const headers: Record<string, string> = { "User-Agent": USER_AGENT, Accept: opts.accept };
       if (redirects === 0 && opts.etag) headers["If-None-Match"] = opts.etag;
       if (redirects === 0 && opts.lastModified) headers["If-Modified-Since"] = opts.lastModified;
 
@@ -46,12 +52,7 @@ export async function fetchFeed(
       });
 
       if (response.status === 304) {
-        return {
-          notModified: true,
-          body: "",
-          finalUrl: currentUrl,
-          contentType: response.headers.get("content-type") ?? undefined,
-        };
+        return { notModified: true, buffer: Buffer.alloc(0), finalUrl: currentUrl, contentType: response.headers.get("content-type") ?? undefined };
       }
 
       if (response.status >= 300 && response.status < 400) {
@@ -67,7 +68,7 @@ export async function fetchFeed(
       }
 
       const contentLength = response.headers.get("content-length");
-      if (contentLength && Number(contentLength) > MAX_RESPONSE_BYTES) {
+      if (contentLength && Number(contentLength) > opts.maxBytes) {
         throw new Error("Feed response exceeds the maximum allowed size");
       }
 
@@ -80,23 +81,19 @@ export async function fetchFeed(
         const { done, value } = await reader.read();
         if (done) break;
         total += value.byteLength;
-        if (total > MAX_RESPONSE_BYTES) {
+        if (total > opts.maxBytes) {
           await reader.cancel();
           throw new Error("Feed response exceeds the maximum allowed size");
         }
         chunks.push(value);
       }
 
-      const rawBuffer = Buffer.concat(chunks.map((c) => Buffer.from(c)));
-      const contentType = response.headers.get("content-type") ?? undefined;
-      const body = decodeFeedBuffer(rawBuffer, contentType);
-
       return {
-        body,
         notModified: false,
+        buffer: Buffer.concat(chunks.map((c) => Buffer.from(c))),
+        contentType: response.headers.get("content-type") ?? undefined,
         etag: response.headers.get("etag") ?? undefined,
         lastModified: response.headers.get("last-modified") ?? undefined,
-        contentType,
         finalUrl: currentUrl,
       };
     }
@@ -106,6 +103,36 @@ export async function fetchFeed(
     clearTimeout(timeout);
     dispatcher.destroy();
   }
+}
+
+// Fetches a feed URL with conditional GET headers and decodes it to text.
+export async function fetchFeed(
+  url: string,
+  opts: { etag?: string; lastModified?: string } = {},
+): Promise<FetchedFeed> {
+  const download = await downloadPublic(url, {
+    accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html, application/xhtml+xml;q=0.9, */*;q=0.5",
+    maxBytes: MAX_RESPONSE_BYTES,
+    etag: opts.etag,
+    lastModified: opts.lastModified,
+  });
+  if (download.notModified) {
+    return { notModified: true, body: "", finalUrl: download.finalUrl, contentType: download.contentType };
+  }
+  return {
+    body: decodeFeedBuffer(download.buffer, download.contentType),
+    notModified: false,
+    etag: download.etag,
+    lastModified: download.lastModified,
+    contentType: download.contentType,
+    finalUrl: download.finalUrl,
+  };
+}
+
+/** Downloads an image for the archive; the caller checks the file signature. */
+export async function fetchImage(url: string, maxBytes: number): Promise<{ buffer: Buffer; finalUrl: string }> {
+  const download = await downloadPublic(url, { accept: "image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.5", maxBytes });
+  return { buffer: download.buffer, finalUrl: download.finalUrl };
 }
 
 /**

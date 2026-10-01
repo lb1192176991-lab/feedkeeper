@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import Database from "better-sqlite3";
 
-test("backup includes uncheckpointed WAL changes and restore recovers them", () => {
+test("backup includes uncheckpointed WAL changes and archived images, and restore recovers both", () => {
   const directory = mkdtempSync(join(tmpdir(), "feedkeeper-backup-test-"));
   const databasePath = join(directory, "live.sqlite");
   const backupPath = join(directory, "backup.sqlite");
@@ -32,7 +32,11 @@ test("backup includes uncheckpointed WAL changes and restore recovers them", () 
       live.pragma("wal_autocheckpoint = 0");
       live.exec("CREATE TABLE sample (value TEXT)");
       live.prepare("INSERT INTO sample (value) VALUES (?)").run("in WAL");
+      // Images of saved articles sit in the archive folder next to the database.
+      mkdirSync(join(directory, "archive"));
+      writeFileSync(join(directory, "archive", "1-0123456789abcdef.jpg"), "image");
       runCli("backup", [backupPath]);
+      assert.equal(readFileSync(join(`${backupPath}.archive`, "1-0123456789abcdef.jpg"), "utf8"), "image");
 
       const backup = new Database(backupPath, { readonly: true });
       try {
@@ -45,7 +49,9 @@ test("backup includes uncheckpointed WAL changes and restore recovers them", () 
       live.close();
     }
 
+    rmSync(join(directory, "archive"), { recursive: true });
     runCli("restore", [backupPath, "--force"]);
+    assert.ok(existsSync(join(directory, "archive", "1-0123456789abcdef.jpg")));
     const restored = new Database(databasePath, { readonly: true });
     try {
       assert.equal(restored.prepare("SELECT value FROM sample").get()?.value, "in WAL");

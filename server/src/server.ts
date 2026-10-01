@@ -13,6 +13,7 @@ import { mcpRouter } from "./mcp/http.js";
 import { startPollingScheduler } from "./feeds/poller.js";
 import { startCleanupScheduler } from "./feeds/cleanup.js";
 import { repairEncodedText } from "./feeds/repository.js";
+import { pruneArchive, scheduleMissingArchives } from "./feeds/archive.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = join(__dirname, "../../web/dist");
@@ -20,6 +21,9 @@ const WEB_DIST = join(__dirname, "../../web/dist");
 runMigrations();
 const repairedItems = repairEncodedText();
 if (repairedItems > 0) console.log(`[db] decoded HTML entities in ${repairedItems} stored items`);
+pruneArchive();
+const pendingArchives = scheduleMissingArchives();
+if (pendingArchives > 0) console.log(`[archive] archiving ${pendingArchives} saved articles in the background`);
 startPollingScheduler();
 startCleanupScheduler();
 

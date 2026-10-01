@@ -120,6 +120,8 @@ export function ItemsPage() {
   const [filterScope, setFilterScope] = useState<string>(initialScope);
   const [unreadOnly, setUnreadOnly] = useState<boolean>(initialUnreadOnly);
   const [bookmarkedOnly, setBookmarkedOnly] = useState<boolean>(initialBookmarkedOnly);
+  // The saved list shows every saved article, read or not.
+  const effectiveUnreadOnly = unreadOnly && !bookmarkedOnly;
   const [search, setSearch] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
@@ -311,7 +313,7 @@ export function ItemsPage() {
       const data = await api.listItems({
         feedId: currentFeedId,
         folderId: currentFolderId,
-        unreadOnly,
+        unreadOnly: effectiveUnreadOnly,
         bookmarkedOnly,
         search: search || undefined,
         limit: PAGE_SIZE,
@@ -340,7 +342,7 @@ export function ItemsPage() {
       const data = await api.listItems({
         feedId: currentFeedId,
         folderId: currentFolderId,
-        unreadOnly,
+        unreadOnly: effectiveUnreadOnly,
         bookmarkedOnly,
         search: search || undefined,
         limit: PAGE_SIZE,
@@ -443,6 +445,8 @@ export function ItemsPage() {
     if (item.bookmarked) await api.unbookmarkItem(item.id);
     else await api.bookmarkItem(item.id);
     setItems((prev) => {
+      // In the saved list an unsaved article leaves the list, unless it is open in the reader.
+      if (bookmarkedOnly && !nextBookmarked && selectedArticle?.id !== item.id) return prev.filter((i) => i.id !== item.id);
       return prev.map((i) => (i.id === item.id ? { ...i, bookmarked: nextBookmarked } : i));
     });
     if (selectedArticle?.id === item.id) {
@@ -676,11 +680,12 @@ export function ItemsPage() {
             <button
               type="button"
               onClick={toggleUnreadOnly}
-              title={unreadOnly ? t("items.all") : t("items.unreadOnly")}
+              disabled={bookmarkedOnly}
+              title={bookmarkedOnly ? t("items.unreadIgnoredInSaved") : unreadOnly ? t("items.all") : t("items.unreadOnly")}
               aria-label={t("items.unreadOnly")}
-              aria-pressed={unreadOnly}
-              className={`w-[38px] h-[38px] rounded-lg border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
-                unreadOnly
+              aria-pressed={effectiveUnreadOnly}
+              className={`w-[38px] h-[38px] rounded-lg border flex items-center justify-center shrink-0 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40 ${
+                effectiveUnreadOnly
                   ? "bg-[var(--c-surface-hover)] border-[var(--c-blue3)] text-[var(--c-text)] shadow-xs"
                   : "bg-[var(--c-surface)] border-[var(--c-border)] text-[var(--c-text-muted)] hover:text-[var(--c-text)] hover:border-[var(--c-blue3)]"
               }`}
@@ -688,7 +693,7 @@ export function ItemsPage() {
               <svg
                 className="w-3.5 h-3.5"
                 viewBox="0 0 24 24"
-                fill={unreadOnly ? "currentColor" : "none"}
+                fill={effectiveUnreadOnly ? "currentColor" : "none"}
                 stroke="currentColor"
                 strokeWidth="2.2"
               >
@@ -704,7 +709,7 @@ export function ItemsPage() {
       ) : loading && items.length === 0 ? (
         <LoadingSpinner size="lg" />
       ) : items.length === 0 ? (
-        <p style={{ color: "var(--c-text-muted)" }}>{t("items.noItems")}</p>
+        <p style={{ color: "var(--c-text-muted)" }}>{bookmarkedOnly && !search ? t("items.noSaved") : t("items.noItems")}</p>
       ) : activeView === "newspaper" ? (
         <NewspaperGrid items={items} onOpen={openArticle} onBookmark={toggleBookmark} onRead={toggleRead} />
       ) : (

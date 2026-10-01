@@ -21,6 +21,8 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   publicUrl: required("PUBLIC_URL", "http://localhost:3000"),
   databasePath: required("DATABASE_PATH", "./data/feedkeeper.sqlite"),
+  // Images of saved articles live outside the database so it stays small.
+  archivePath: process.env.ARCHIVE_PATH ?? join(dirname(process.env.DATABASE_PATH ?? "./data/feedkeeper.sqlite"), "archive"),
   sessionSecret: required("SESSION_SECRET"),
   allowSignup: process.env.ALLOW_SIGNUP === "true",
   trustProxy: process.env.TRUST_PROXY === "true",

@@ -100,14 +100,39 @@ export function subscribe(
 }
 
 export function unsubscribe(userId: number, feedId: number): void {
-  db.prepare("DELETE FROM subscriptions WHERE user_id = ? AND feed_id = ?").run(userId, feedId);
-  const remaining = db
-    .prepare<[number], { count: number }>("SELECT COUNT(*) AS count FROM subscriptions WHERE feed_id = ?")
-    .get(feedId)!;
-  if (remaining.count === 0) {
-    // No one subscribes to this feed anymore; stop polling it and drop its items.
-    db.prepare("DELETE FROM feeds WHERE id = ?").run(feedId);
-  }
+  db.transaction(() => {
+    db.prepare("DELETE FROM subscriptions WHERE user_id = ? AND feed_id = ?").run(userId, feedId);
+    removeFeedIfUnused(feedId);
+  })();
+}
+
+/**
+ * Once nobody subscribes to a feed, drop it with its items — except saved articles:
+ * their feed stays (unpolled) so the archive keeps its source and title.
+ */
+export function removeFeedIfUnused(feedId: number): void {
+  if (countFeedSubscribers(feedId) > 0) return;
+  db.prepare("DELETE FROM items WHERE feed_id = ? AND id NOT IN (SELECT item_id FROM item_bookmarks)").run(feedId);
+  db.prepare("DELETE FROM feeds WHERE id = ? AND NOT EXISTS (SELECT 1 FROM items WHERE feed_id = ?)").run(feedId, feedId);
+}
+
+/** Feeds kept only for saved articles whose last bookmark is gone. */
+export function removeUnusedFeeds(): number {
+  return db.prepare(
+    `DELETE FROM feeds
+     WHERE NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
+       AND NOT EXISTS (SELECT 1 FROM items i JOIN item_bookmarks b ON b.item_id = i.id WHERE i.feed_id = feeds.id)`,
+  ).run().changes;
+}
+
+/** Subscribers can open every item of their feeds; anyone can open what they saved. */
+export function canAccessItem(userId: number, itemId: number): boolean {
+  return Boolean(db.prepare(
+    `SELECT 1 FROM items i
+     WHERE i.id = ?
+       AND (EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = i.feed_id AND s.user_id = ?)
+         OR EXISTS (SELECT 1 FROM item_bookmarks b WHERE b.item_id = i.id AND b.user_id = ?))`,
+  ).get(itemId, userId, userId));
 }
 
 export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
@@ -150,8 +175,9 @@ export function listFeedsDueForPoll(): Feed[] {
   return db
     .prepare<[], Feed>(
       `SELECT * FROM feeds
-       WHERE last_polled_at IS NULL
-          OR last_polled_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || poll_interval_minutes || ' minutes')`,
+       WHERE EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
+         AND (last_polled_at IS NULL
+          OR last_polled_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || poll_interval_minutes || ' minutes'))`,
     )
     .all();
 }
@@ -262,9 +288,11 @@ export function listItemsForUser(
   feed_url: string;
   feed_full_text_mode: FullTextMode;
   feed_icon_url: string | null;
+  bookmarked_at: string | null;
 })[] {
-  const conditions: string[] = ["s.user_id = ?"];
-  const params: unknown[] = [userId];
+  // Saved articles stay visible without a subscription (e.g. after unsubscribing).
+  const conditions: string[] = ["(s.id IS NOT NULL OR b.item_id IS NOT NULL)"];
+  const params: unknown[] = [];
 
   if (opts.feedId) {
     conditions.push("i.feed_id = ?");
@@ -280,21 +308,25 @@ export function listItemsForUser(
   if (opts.bookmarkedOnly) {
     conditions.push("b.item_id IS NOT NULL");
   }
-  if (!opts.includeMuted) {
+  // The word filter tidies the stream; it never hides what the user deliberately saved.
+  if (!opts.includeMuted && !opts.bookmarkedOnly) {
     conditions.push(
       `NOT EXISTS (
         SELECT 1 FROM user_muted_keywords m
-        WHERE m.user_id = s.user_id
+        WHERE m.user_id = ?
           AND (
             INSTR(LOWER(COALESCE(i.title, '')), LOWER(m.keyword)) > 0
             OR INSTR(LOWER(COALESCE(i.content_snippet, '')), LOWER(m.keyword)) > 0
           )
       )`,
     );
+    params.push(userId);
   }
   if (opts.search) {
-    conditions.push("(INSTR(LOWER(COALESCE(i.title, '')), LOWER(?)) > 0 OR INSTR(LOWER(COALESCE(i.content_snippet, '')), LOWER(?)) > 0)");
-    params.push(opts.search, opts.search);
+    // Saved articles are searched in their archived full text too.
+    const fields = ["i.title", "i.content_snippet", ...(opts.bookmarkedOnly ? ["i.full_content_html", "i.content_html"] : [])];
+    conditions.push(`(${fields.map((field) => `INSTR(LOWER(COALESCE(${field}, '')), LOWER(?)) > 0`).join(" OR ")})`);
+    params.push(...fields.map(() => opts.search));
   }
   if (opts.since) {
     conditions.push("i.created_at > ?");
@@ -331,17 +363,18 @@ export function listItemsForUser(
               s.full_text_mode AS feed_full_text_mode,
               f.icon_url AS feed_icon_url,
               (r.item_id IS NOT NULL) AS read,
-              (b.item_id IS NOT NULL) AS bookmarked
+              (b.item_id IS NOT NULL) AS bookmarked,
+              b.created_at AS bookmarked_at
        FROM items i
-       JOIN subscriptions s ON s.feed_id = i.feed_id
        JOIN feeds f ON f.id = i.feed_id
-       LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = s.user_id
-       LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = s.user_id
+       LEFT JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+       LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = ?
+       LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = ?
        WHERE ${conditions.join(" AND ")}
-       ORDER BY ${opts.sortByAdded ? "i.created_at DESC, i.id DESC" : "i.published_at DESC, i.created_at DESC, i.id DESC"}
+       ORDER BY ${opts.sortByAdded ? "i.created_at DESC, i.id DESC" : opts.bookmarkedOnly ? "b.created_at DESC, i.id DESC" : "i.published_at DESC, i.created_at DESC, i.id DESC"}
        LIMIT ? OFFSET ?`,
     )
-    .all(...params) as (Item & {
+    .all(userId, userId, userId, ...params) as (Item & {
       read: boolean;
       bookmarked: boolean;
       feed_title: string | null;
@@ -349,21 +382,22 @@ export function listItemsForUser(
       feed_url: string;
       feed_full_text_mode: FullTextMode;
       feed_icon_url: string | null;
+      bookmarked_at: string | null;
     })[];
 }
 
 export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
-  return db.prepare<[number, number], ReturnType<typeof listItemsForUser>[number]>(
+  return db.prepare<[number, number, number, number], ReturnType<typeof listItemsForUser>[number]>(
     `SELECT i.*, COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
             f.site_url AS feed_site_url, f.url AS feed_url, s.full_text_mode AS feed_full_text_mode, f.icon_url AS feed_icon_url,
-            (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked
+            (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked, b.created_at AS bookmarked_at
      FROM items i
-     JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
      JOIN feeds f ON f.id = i.feed_id
-     LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = s.user_id
-     LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = s.user_id
-     WHERE i.id = ?`,
-  ).get(userId, itemId);
+     LEFT JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+     LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = ?
+     LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = ?
+     WHERE i.id = ? AND (s.id IS NOT NULL OR b.item_id IS NOT NULL)`,
+  ).get(userId, userId, userId, itemId);
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {
@@ -468,21 +502,12 @@ export function markAllRead(userId: number, filter?: number | { feedId?: number;
 }
 
 export function markItemRead(userId: number, itemId: number): number {
-  return db.prepare(
-    `INSERT INTO item_reads (user_id, item_id)
-     SELECT ?, i.id FROM items i
-     JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
-     WHERE i.id = ?
-     ON CONFLICT (user_id, item_id) DO NOTHING`,
-  ).run(userId, userId, itemId).changes;
+  if (!canAccessItem(userId, itemId)) return 0;
+  return db.prepare("INSERT INTO item_reads (user_id, item_id) VALUES (?, ?) ON CONFLICT (user_id, item_id) DO NOTHING").run(userId, itemId).changes;
 }
 
 export function markItemUnread(userId: number, itemId: number): number {
-  return db.prepare(
-    `DELETE FROM item_reads WHERE user_id = ? AND item_id = ?
-     AND EXISTS (SELECT 1 FROM items i JOIN subscriptions s ON s.feed_id = i.feed_id
-                 WHERE i.id = ? AND s.user_id = ?)`,
-  ).run(userId, itemId, itemId, userId).changes;
+  return db.prepare("DELETE FROM item_reads WHERE user_id = ? AND item_id = ?").run(userId, itemId).changes;
 }
 
 export function bookmarkItem(userId: number, itemId: number): number {
@@ -496,11 +521,7 @@ export function bookmarkItem(userId: number, itemId: number): number {
 }
 
 export function unbookmarkItem(userId: number, itemId: number): number {
-  return db.prepare(
-    `DELETE FROM item_bookmarks WHERE user_id = ? AND item_id = ?
-     AND EXISTS (SELECT 1 FROM items i JOIN subscriptions s ON s.feed_id = i.feed_id
-                 WHERE i.id = ? AND s.user_id = ?)`,
-  ).run(userId, itemId, itemId, userId).changes;
+  return db.prepare("DELETE FROM item_bookmarks WHERE user_id = ? AND item_id = ?").run(userId, itemId).changes;
 }
 
 export function listMutedKeywords(userId: number): MutedKeyword[] {
@@ -591,7 +612,7 @@ export function replaceFeedUrl(feedId: number, url: string): void {
 export function moveSubscription(userId: number, fromFeedId: number, toFeedId: number): void {
   db.transaction(() => {
     db.prepare("UPDATE subscriptions SET feed_id = ? WHERE user_id = ? AND feed_id = ?").run(toFeedId, userId, fromFeedId);
-    if (countFeedSubscribers(fromFeedId) === 0) db.prepare("DELETE FROM feeds WHERE id = ?").run(fromFeedId);
+    removeFeedIfUnused(fromFeedId);
   })();
 }
 

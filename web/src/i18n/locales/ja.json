@@ -119,14 +119,16 @@
     "searchPlaceholder": "記事を検索…",
     "unreadOnly": "未読のみ",
     "all": "すべて表示",
-    "bookmarkedOnly": "ブックマークのみ",
+    "bookmarkedOnly": "保存した記事のみ",
     "bookmark": "保存",
     "unbookmark": "保存を解除",
     "allFeeds": "すべてのフィード",
     "noItems": "表示する記事がありません。",
     "refresh": "記事を更新",
     "refreshing": "フィードを更新中…",
-    "refreshFailed": "更新に失敗しました。もう一度お試しください。"
+    "refreshFailed": "更新に失敗しました。もう一度お試しください。",
+    "noSaved": "保存した記事はまだありません。星をタップすると、全文と画像を含めて記事を保存できます。",
+    "unreadIgnoredInSaved": "保存した記事は既読・未読にかかわらず表示されます。"
   },
   "reader": {
     "close": "閉じる (Esc)",

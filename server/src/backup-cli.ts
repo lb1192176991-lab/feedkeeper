@@ -1,11 +1,18 @@
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync, statSync, unlinkSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { config } from "./config.js";
 
 function assertHealthy(database: Database.Database): void {
   const result = database.pragma("integrity_check", { simple: true });
   if (result !== "ok") throw new Error(`SQLite integrity check failed: ${String(result)}`);
+}
+
+// Images of saved articles live next to the backup file as "<backup>.archive".
+const archiveCopyOf = (backupFile: string) => `${backupFile}.archive`;
+
+function hasFiles(directory: string): boolean {
+  return existsSync(directory) && readdirSync(directory).length > 0;
 }
 
 async function main(): Promise<void> {
@@ -33,8 +40,14 @@ async function main(): Promise<void> {
         saved.close();
       }
       console.log(`Backup verified: ${filePath}`);
+      const archivePath = resolve(config.archivePath);
+      if (hasFiles(archivePath)) {
+        cpSync(archivePath, archiveCopyOf(filePath), { recursive: true, errorOnExist: true, force: false });
+        console.log(`Archived images copied: ${archiveCopyOf(filePath)}`);
+      }
     } catch (error) {
       if (existsSync(filePath)) unlinkSync(filePath);
+      rmSync(archiveCopyOf(filePath), { recursive: true, force: true });
       throw error;
     } finally {
       db.close();
@@ -60,6 +73,14 @@ async function main(): Promise<void> {
     restored.close();
   }
   console.log(`Database restored and verified: ${databasePath}`);
+
+  const archiveBackup = archiveCopyOf(filePath);
+  if (existsSync(archiveBackup)) {
+    const archivePath = resolve(config.archivePath);
+    rmSync(archivePath, { recursive: true, force: true });
+    cpSync(archiveBackup, archivePath, { recursive: true });
+    console.log(`Archived images restored: ${archivePath}`);
+  }
 }
 
 main().catch((error) => {
