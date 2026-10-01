@@ -21,9 +21,9 @@ Beyond a clean web reader, FeedKeeper includes a native, authenticated **[Model 
 It is multi-user by default, with isolated accounts, personal access tokens, and a trilingual interface (English, German, and Japanese).
 
 <p align="center">
-  <img src="docs/screenshots/iphone.png" alt="FeedKeeper on iPhone: newspaper view with category filter and tab bar" width="194" />
+  <img src="docs/screenshots/iphone.png" alt="FeedKeeper on iPhone: newspaper view with category filter and tab bar" width="170" />
   &nbsp;&nbsp;&nbsp;
-  <img src="docs/screenshots/ipad.png" alt="FeedKeeper on iPad in dark mode: magazine view with lead story" width="675" />
+  <img src="docs/screenshots/ipad.png" alt="FeedKeeper on iPad in dark mode: magazine view with lead story" width="592" />
 </p>
 
 ## Features
