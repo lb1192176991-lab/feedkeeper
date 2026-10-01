@@ -9,7 +9,6 @@
     "error": "Etwas ist schiefgelaufen",
     "retry": "Erneut versuchen",
     "loadMore": "Weitere laden",
-    "never": "nie",
     "noOptions": "Keine Optionen",
     "metaTitle": "FeedKeeper – RSS-Reader & MCP-Server",
     "metaDescription": "Selbstgehosteter RSS/Atom-Feed-Reader und MCP-Server für KI-Assistenten."

@@ -22,8 +22,8 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 
 ## Features
 
-- **Folder organization and feed ordering** — group subscriptions into folders, move feeds between them, and reorder the feed list by dragging.
-- **Smart feed discovery** — paste a direct feed link or a website address (like `example.com/blog`); FeedKeeper discovers RSS and Atom feeds.
+- **Categories and feed ordering** — group subscriptions into categories, search and filter the feed list, rename categories in place, and reorder feeds by dragging.
+- **Smart feed discovery** — paste a direct feed link or a website address (like `example.com/blog`); FeedKeeper finds RSS and Atom feeds, including ones listed on a site's feed overview page, and checks each one before subscribing.
 - **Automatic character encoding** — parses standard UTF-8 as well as legacy ISO-8859-1/Windows-1252 feeds without garbled umlauts or broken symbols.
 - **Bookmarks** — star articles to read later; bookmarked items are never removed by automatic cleanups.
 - **Keyword mute filters** — cut through information overload by filtering out articles matching specific keywords before they reach your stream.
@@ -33,7 +33,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Privacy & self-hosting first** — a single Node.js process and one SQLite file. No external database engines, no telemetry, no tracking.
 - **OPML 2.0 import & export** — switch back and forth from Feedly, NetNewsWire, Inoreader, or Reeder at any time.
 - **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls. Sites that answer with a cookie-consent or subscription wall are remembered per feed, and full-text fetching can be turned off for any subscription.
-- **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews.
+- **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews; phones always use the newspaper layout.
 - **Mobile-friendly web app** — responsive layout with tab navigation and pull to refresh, installable on the home screen, with light, dark and system themes.
 - **Personal profiles** — each account can set its display name and a profile photo.
 - **Online backups** — create verified SQLite backups while the service keeps running.
@@ -192,7 +192,7 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 - **Personal access tokens** are stored as salted hashes, never in plaintext.
 - **Per-user data isolation**: every query is scoped to the authenticated user; feeds are deduplicated by URL under the hood, but subscriptions, read state, and tokens are always per-user.
 
-The browser loads article images and site favicons from their source websites. Opening a full article through the reader also fetches that page from the FeedKeeper server.
+The browser loads article images and site icons from their source websites. To find a feed's icon, the server fetches the site's homepage about once a week. Opening a full article through the reader also fetches that page from the FeedKeeper server.
 
 Found a security issue? Please report it privately as described in [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
