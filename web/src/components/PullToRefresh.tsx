@@ -3,6 +3,19 @@ import { useTranslation } from "react-i18next";
 
 const TRIGGER_DISTANCE = 68;
 const MAX_DISTANCE = 92;
+// Pulls may start on links and card buttons (newspaper cards are one big button);
+// only fields where touches mean typing or selecting are left alone.
+const IGNORED_TARGETS = "input, select, textarea, [contenteditable='true'], [data-no-pull]";
+
+/** Swallow the click a browser may still fire after a drag that started on a button or link. */
+function suppressNextClick() {
+  const swallow = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 400);
+}
 
 export function PullToRefresh({
   children,
@@ -50,7 +63,7 @@ export function PullToRefresh({
       if (disabled || refreshing || event.touches.length !== 1 || window.scrollY > 1 ||
           !window.matchMedia("(any-pointer: coarse)").matches ||
           document.body.style.overflow === "hidden" ||
-          (event.target as Element).closest("button, a, input, select, textarea, [role='button'], [contenteditable='true']")) return;
+          (event.target as Element).closest(IGNORED_TARGETS)) return;
       start = { x: event.touches[0].clientX, y: event.touches[0].clientY };
     }
 
@@ -77,6 +90,7 @@ export function PullToRefresh({
     function onTouchEnd() {
       if (!start) return;
       const ready = distanceRef.current >= TRIGGER_DISTANCE;
+      if (distanceRef.current > 8) suppressNextClick();
       reset();
       if (ready) startRefresh();
     }

@@ -88,3 +88,40 @@ test("pull refreshes once on tablet touchscreens after crossing the threshold", 
 
   await React.act(async () => root.unmount());
 });
+
+test("pull also starts on article card buttons without opening the article", async () => {
+  coarsePointer = true;
+  window.scrollY = 0;
+  let calls = 0;
+  let opened = 0;
+  const root = createRoot(document.getElementById("root"));
+  await React.act(async () => {
+    root.render(React.createElement(PullToRefresh, { onRefresh: async () => { calls++; } },
+      React.createElement("button", { id: "card", type: "button", onClick: () => { opened++; } }, "Card"),
+      React.createElement("input", { id: "search" })));
+  });
+  const card = document.getElementById("card");
+
+  await React.act(async () => {
+    touch(card, "touchstart", 50, 100);
+    touch(card, "touchmove", 50, 220);
+    touch(card, "touchend", 50, 220);
+    card.click();
+  });
+  assert.equal(calls, 1);
+  assert.equal(opened, 0);
+
+  await React.act(async () => new Promise((resolve) => setTimeout(resolve, 450)));
+  await React.act(async () => card.click());
+  assert.equal(opened, 1);
+
+  await React.act(async () => {
+    const search = document.getElementById("search");
+    touch(search, "touchstart", 50, 100);
+    touch(search, "touchmove", 50, 220);
+    touch(search, "touchend", 50, 220);
+  });
+  assert.equal(calls, 1);
+
+  await React.act(async () => root.unmount());
+});
