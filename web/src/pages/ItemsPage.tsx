@@ -11,6 +11,8 @@ import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { NewspaperGrid } from "../components/NewspaperGrid.tsx";
 import { PullToRefresh } from "../components/PullToRefresh.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
+import { toast } from "../utils/toast.ts";
+import { RefreshIcon } from "../components/feeds/icons.tsx";
 
 const PAGE_SIZE = 50;
 
@@ -453,9 +455,20 @@ export function ItemsPage() {
     await load();
   }
 
+  // Shared by the refresh button and pull to refresh, so both give the same feedback.
+  const [refreshingAll, setRefreshingAll] = useState(false);
   async function refreshArticles() {
-    await api.refreshAllFeeds();
-    await load();
+    setRefreshingAll(true);
+    try {
+      const res = await api.refreshAllFeeds();
+      await load();
+      toast.success(t("feeds.refreshedAllToast", { count: res.refreshed, newItems: res.newItems }));
+      if (res.errors > 0) toast.error(t("feeds.failingCount", { count: res.errors }));
+    } catch {
+      toast.error(t("items.refreshFailed"));
+    } finally {
+      setRefreshingAll(false);
+    }
   }
 
   const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
@@ -538,6 +551,16 @@ export function ItemsPage() {
               <span className="hidden sm:inline">{t("items.newspaperView")}</span>
             </button>
           </div>
+          <button
+            type="button"
+            onClick={refreshArticles}
+            disabled={refreshingAll}
+            title={refreshingAll ? t("items.refreshing") : t("items.refresh")}
+            aria-label={refreshingAll ? t("items.refreshing") : t("items.refresh")}
+            className="btn-secondary hidden h-11 w-11 shrink-0 items-center justify-center p-0! sm:flex"
+          >
+            <RefreshIcon className={`h-5 w-5 ${refreshingAll ? "animate-spin motion-reduce:animate-none" : ""}`} />
+          </button>
           <button
             type="button"
             onClick={onMarkAllRead}

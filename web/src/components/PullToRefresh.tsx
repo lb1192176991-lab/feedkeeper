@@ -113,7 +113,8 @@ export function PullToRefresh({
     <div ref={rootRef}>
       <button
         type="button"
-        className="sr-only focus:not-sr-only"
+        // Keyboard and screen-reader access on phones; larger screens show a visible refresh button.
+        className="sr-only focus:not-sr-only sm:hidden"
         onClick={startRefresh}
         disabled={disabled || refreshing}
       >
