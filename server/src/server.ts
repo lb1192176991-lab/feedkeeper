@@ -78,7 +78,7 @@ app.use(
     standardHeaders: true,
     legacyHeaders: false,
     // Lists load many article images and feed icons at once; those routes have their own, higher limit.
-    skip: (req) => /^\/(items\/\d+\/image|feeds\/\d+\/icon)$/.test(req.path),
+    skip: (req) => /^\/(v1\/)?(items\/\d+\/image|feeds\/\d+\/icon|subscriptions\/\d+\/icon|archive\/images\/\d+)$/.test(req.path),
   }),
 );
 

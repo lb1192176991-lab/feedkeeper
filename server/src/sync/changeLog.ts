@@ -93,6 +93,8 @@ export function listChanges(userId: number, since: number, limit = 200): { chang
   const state = db.prepare<[number], { pruned_through: number }>("SELECT pruned_through FROM sync_state WHERE user_id = ?").get(userId)!;
   // A client that is behind a forgotten deletion cannot know about it and has to start over.
   if (since > 0 && since < state.pruned_through) throw new ResyncRequired();
+  // A position beyond the end of the log means the server was restored from an older backup.
+  if (since > currentSeq(userId)) throw new ResyncRequired();
 
   const page = Math.min(Math.max(limit, 1), MAX_PAGE);
   const rows = db

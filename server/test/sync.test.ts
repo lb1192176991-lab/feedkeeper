@@ -133,6 +133,8 @@ test("the change log and offline mutations keep devices in step", async () => {
     db.prepare("UPDATE changes SET changed_at = '2026-01-01T00:00:00.000Z' WHERE entity = 'folder' AND entity_id = ? AND user_id = ?").run(tombstone.id, ownerId);
     pruneChangeLog();
     assert.equal((await call(`/sync?since=${behind}`, ownerId)).status, 410);
+    // A client that is ahead of the server's log, for example after a restore from backup, starts over too.
+    assert.equal((await call(`/sync?since=${behind + 100000}`, ownerId)).status, 410);
     assert.equal((await call("/sync?since=0", ownerId)).status, 200);
   } finally {
     server.close();
