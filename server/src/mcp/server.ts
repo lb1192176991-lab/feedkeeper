@@ -23,6 +23,8 @@ import {
 } from "../feeds/repository.js";
 import type { TokenScope } from "../auth/tokens.js";
 import { getItemForMcp, listItemsPage } from "./items.js";
+import { buildDigest, buildOverview, truncate } from "./digest.js";
+import { registerPromptsAndResources } from "./promptsAndResources.js";
 import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, changeFeedUrl, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
 import { loadFullText } from "../feeds/fullText.js";
 import { pruneArchive, scheduleArchive } from "../feeds/archive.js";
@@ -195,16 +197,18 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     "update_feed",
     {
       title: "Update feed settings",
-      description: "Changes a subscription: its feed URL (e.g. when a site moved its feed and polling keeps failing), display name, poll interval or whether the reader may fetch full articles. A new URL is fetched and validated before it replaces the old one. If the returned feed ID differs from the one passed in, use the new ID from now on. The poll interval applies to every subscriber of the feed and has a server-wide minimum.",
+      description: "Changes a subscription: its feed URL (e.g. when a site moved its feed and polling keeps failing), display name, poll interval, whether the reader may fetch full articles, and whether new articles trigger push notifications or count in the app icon number. A new URL is fetched and validated before it replaces the old one. If the returned feed ID differs from the one passed in, use the new ID from now on. The poll interval applies to every subscriber of the feed and has a server-wide minimum.",
       inputSchema: {
         feedId: z.number().int().positive(),
         url: mcpUrlSchema.optional().describe("New feed URL or website URL (the feed is auto-discovered)"),
         label: z.string().max(200).nullable().optional().describe("Custom display name; null or empty restores the feed title"),
         pollIntervalMinutes: z.number().int().positive().max(10_080).optional(),
         fullText: z.enum(["auto", "never"]).optional().describe("auto: the reader may fetch full articles; never: always show the feed content"),
+        notify: z.boolean().optional().describe("Send push notifications to the user's devices when this feed has new articles"),
+        badge: z.boolean().optional().describe("Count this feed's unread articles in the number on the app icon"),
       },
     },
-    async ({ feedId, url, label, pollIntervalMinutes, fullText }) => {
+    async ({ feedId, url, label, pollIntervalMinutes, fullText, notify, badge }) => {
       try {
         let targetFeedId = feedId;
         let previousItemsKept: boolean | undefined;
@@ -213,7 +217,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
           targetFeedId = changed.subscription.id;
           previousItemsKept = changed.previousItemsKept;
         }
-        const subscription = updateFeedSettings(userId, targetFeedId, { label, pollIntervalMinutes, fullTextMode: fullText });
+        const subscription = updateFeedSettings(userId, targetFeedId, { label, pollIntervalMinutes, fullTextMode: fullText, notify, badge });
         return textResult(previousItemsKept === undefined ? subscription : { ...subscription, previousItemsKept });
       } catch (error) {
         if (error instanceof MultipleFeedsFoundError) {
@@ -272,12 +276,46 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
         bookmarkedOnly: z.boolean().optional(),
         ...publishedRange,
         limit: z.number().int().positive().max(200).optional(),
+        includeContent: z.boolean().optional().describe("Set to false to leave out the article HTML and save tokens (default: true)"),
+        snippetChars: z.number().int().positive().max(2000).optional().describe("Shorten each item's summary to this many characters"),
       },
     },
-    async ({ feedId, folderId, search, bookmarkedOnly, since, until, limit }) =>
+    async ({ feedId, folderId, search, bookmarkedOnly, since, until, limit, includeContent, snippetChars }) =>
       textResult(listItemsForUser(userId, {
         feedId, folderId, search, bookmarkedOnly, limit, unreadOnly: true, publishedSince: since, publishedUntil: until,
-      })),
+      }).map(({ content_html, full_content_html, ...item }) => ({
+        ...item,
+        ...(includeContent === false ? {} : { content_html, full_content_html }),
+        content_snippet: snippetChars ? truncate(item.content_snippet, snippetChars) : item.content_snippet,
+      }))),
+  );
+
+  server.registerTool(
+    "get_digest",
+    {
+      title: "Digest of new articles",
+      description: "Returns articles grouped by feed with short snippets, newest first: the cheapest way to see what is new. Defaults to unread articles. Use hours (e.g. 24) or since to limit the period, and maxItemsPerFeed / snippetChars to control size. Follow up with get_item for the full article.",
+      inputSchema: {
+        feedId: z.number().int().positive().optional(),
+        folderId: z.number().int().positive().optional(),
+        unreadOnly: z.boolean().optional().describe("Include read articles too when false (default: true)"),
+        hours: z.number().int().positive().max(720).optional().describe("Only articles published in the last N hours"),
+        since: dateInput.optional().describe("Only articles published at or after this ISO date or date-time (overrides hours)"),
+        maxItemsPerFeed: z.number().int().positive().max(20).optional().describe("Articles listed per feed (default: 5)"),
+        snippetChars: z.number().int().positive().max(1000).optional().describe("Length of each snippet (default: 200)"),
+      },
+    },
+    async (args) => textResult(buildDigest(userId, args)),
+  );
+
+  server.registerTool(
+    "get_overview",
+    {
+      title: "Account overview",
+      description: "Returns counts for the whole account: subscribed feeds, unread and saved articles, the feeds with the most unread articles, folders with their unread counts, and feeds that are failing.",
+      inputSchema: {},
+    },
+    async () => textResult(buildOverview(userId)),
   );
 
   server.registerTool(
@@ -309,11 +347,14 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     "get_item",
     {
       title: "Get an article",
-      description: "Returns one subscribed article, including cached feed or reader content when available. Content is capped at 40,000 characters.",
-      inputSchema: { itemId: z.number().int().positive() },
+      description: "Returns one subscribed article, including cached feed or reader content when available. Content is capped at 40,000 characters; pass maxChars for less.",
+      inputSchema: {
+        itemId: z.number().int().positive(),
+        maxChars: z.number().int().positive().max(40_000).optional().describe("Shorten the content to this many characters"),
+      },
     },
-    async ({ itemId }) => {
-      const item = getItemForMcp(userId, itemId);
+    async ({ itemId, maxChars }) => {
+      const item = getItemForMcp(userId, itemId, maxChars);
       return item ? textResult(item) : errorResult("item_not_found");
     },
   );
@@ -513,6 +554,8 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
       },
     );
   }
+
+  registerPromptsAndResources(server, userId, scope);
 
   return server;
 }

@@ -87,12 +87,56 @@ test("MCP batch actions, date filters and feed management stay scoped to the use
   assert.equal((await owner.call("fetch_full_text", { itemId: early })).text, "item_has_no_link");
   assert.equal((await owner.call("fetch_full_text", { itemId: foreign })).text, "item_not_found");
 
+  // Digest: unread articles grouped by feed with short snippets.
+  db.prepare("UPDATE items SET content_snippet = ?, content_html = ? WHERE id = ?").run("A long teaser ".repeat(40), "<p>" + "Body ".repeat(100) + "</p>", late);
+  const digest = (await owner.call("get_digest", { snippetChars: 30, maxItemsPerFeed: 1 })).json();
+  assert.equal(digest.feeds.length, 1);
+  assert.equal(digest.feeds[0].feed, "My Feed");
+  assert.equal(digest.feeds[0].items.length, 1);
+  assert.equal(digest.feeds[0].moreItems, digest.feeds[0].itemCount - 1);
+  assert.ok(digest.feeds[0].items[0].snippet === null || digest.feeds[0].items[0].snippet.length <= 31);
+  assert.equal((await owner.call("get_digest", { hours: 1 })).json().totalItems, 0);
+  assert.equal((await owner.call("get_digest", { feedId: foreignFeedId })).json().totalItems, 0);
+
+  // Overview counts the account's own data only.
+  const overview = (await owner.call("get_overview")).json();
+  assert.equal(overview.feeds, 1);
+  assert.ok(overview.unread >= 1);
+  assert.equal(overview.savedArticles, 2);
+  assert.equal(overview.feedsWithErrors.length, 1);
+
+  // Size controls.
+  const compact = (await owner.call("get_new_items", { includeContent: false, snippetChars: 20 })).json();
+  assert.ok(compact.length > 0 && compact.every((item: Record<string, unknown>) => !("content_html" in item)));
+  assert.ok(compact.every((item: { content_snippet: string | null }) => (item.content_snippet?.length ?? 0) <= 21));
+  const shortItem = (await owner.call("get_item", { itemId: late, maxChars: 50 })).json();
+  assert.equal(shortItem.content_html.length, 50);
+  assert.equal(shortItem.content_truncated, true);
+
+  // Notification and badge options are part of update_feed.
+  const flags = (await owner.call("update_feed", { feedId, notify: true, badge: true })).json();
+  assert.deepEqual([flags.notify, flags.badge], [1, 1]);
+
+  // Prompts and resources, scoped to the user.
+  const prompts = (await owner.client.listPrompts()).prompts.map((prompt) => prompt.name);
+  assert.deepEqual(prompts.sort(), ["catch_up_on_topic", "daily_briefing", "saved_reading_list", "triage_unread"]);
+  const briefing = await owner.client.getPrompt({ name: "daily_briefing", arguments: { hours: "12" } });
+  assert.match((briefing.messages[0].content as { text: string }).text, /hours=12/);
+  const resources = (await owner.client.listResources()).resources.map((resource) => resource.uri);
+  assert.ok(["feedkeeper://feeds", "feedkeeper://opml", "feedkeeper://saved", "feedkeeper://digest"].every((uri) => resources.includes(uri)));
+  const opml = await owner.client.readResource({ uri: "feedkeeper://opml" });
+  assert.match((opml.contents[0] as { text: string }).text, /<opml/);
+  const itemResource = await owner.client.readResource({ uri: `feedkeeper://items/${late}` });
+  assert.equal(JSON.parse((itemResource.contents[0] as { text: string }).text).id, late);
+  await assert.rejects(owner.client.readResource({ uri: `feedkeeper://items/${foreign}` }));
+
   const reader = await connect(ownerId, "read");
   const readTools = (await reader.client.listTools()).tools.map((tool) => tool.name);
   for (const name of ["fetch_full_text", "update_feed", "rename_folder", "delete_folder", "mark_read", "bookmark_item"]) {
     assert.equal(readTools.includes(name), false, name);
   }
   assert.ok(readTools.includes("list_feeds"));
+  assert.ok(readTools.includes("get_digest") && readTools.includes("get_overview"));
 
   for (const session of [owner, reader]) {
     await session.client.close();

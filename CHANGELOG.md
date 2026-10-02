@@ -4,6 +4,12 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+- MCP: `get_digest` returns unread articles grouped by feed with short snippets, and `get_overview` summarizes the account (unread and saved counts, top feeds, folders, failing feeds).
+- MCP: `get_item` accepts `maxChars`, and `get_new_items` can leave out article HTML and shorten summaries, to save tokens.
+- MCP: `update_feed` can switch push notifications and the app icon count per feed.
+- MCP prompts (`daily_briefing`, `catch_up_on_topic`, `saved_reading_list`, `triage_unread`) and resources (feeds, OPML, saved articles, digest, single articles).
+
 ## [0.8.0] - 2026-10-02
 
 ### Added

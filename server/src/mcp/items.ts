@@ -60,11 +60,13 @@ export function listItemsPage(
   };
 }
 
-export function getItemForMcp(userId: number, itemId: number) {
+export const MAX_CONTENT_LENGTH = 40_000;
+
+export function getItemForMcp(userId: number, itemId: number, maxChars = MAX_CONTENT_LENGTH) {
   const item = findItemForUser(userId, itemId);
   if (!item) return null;
   const content = item.full_content_html ?? item.content_html;
-  const maxContentLength = 40_000;
+  const maxContentLength = Math.min(maxChars, MAX_CONTENT_LENGTH);
   return {
     ...item,
     content_html: content?.slice(0, maxContentLength) ?? null,

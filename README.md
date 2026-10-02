@@ -170,16 +170,18 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `subscribe_feed` | Subscribe to a feed URL or website URL (auto-discovering the feed) |
 | `discover_feeds` | Discover available RSS/Atom feeds on a website URL |
 | `unsubscribe_feed` | Remove a subscription |
-| `update_feed` | Change a subscription's feed URL, name, poll interval or full-text setting; a new URL is validated before it replaces the old one |
+| `update_feed` | Change a subscription's feed URL, name, poll interval, full-text setting, push notifications or app icon count; a new URL is validated before it replaces the old one |
 | `list_folders` | List folders with feed and unread counts |
 | `create_folder` | Create a folder |
 | `rename_folder` | Rename a folder |
 | `delete_folder` | Delete a folder; its feeds stay subscribed |
 | `move_feed_to_folder` | Move a subscription into or out of a folder |
 | `refresh_feed` | Force an immediate check/poll of a subscribed feed |
-| `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks |
+| `get_digest` | Unread articles grouped by feed with short snippets, the cheapest way to see what is new |
+| `get_overview` | Counts for the whole account: unread and saved articles, top feeds, folders and failing feeds |
+| `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks; can leave out article HTML and shorten summaries |
 | `list_items` | Page through compact items by time added; use cursors to fetch older or newly added items |
-| `get_item` | Fetch one article and its cached content |
+| `get_item` | Fetch one article and its cached content, optionally shortened with `maxChars` |
 | `fetch_full_text` | Download and cache the full article when the feed only has a teaser |
 | `search_items` | Search titles and summaries across all items (with optional bookmarks filter) |
 | `mark_read` | Mark one or more items as read |
@@ -194,6 +196,8 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
 | `cleanup_database` | *(Admin only)* Purge old items and reclaim disk space after deletions |
 
+Besides tools, the server offers prompts (`daily_briefing`, `catch_up_on_topic`, `saved_reading_list`, `triage_unread`) and resources (`feedkeeper://feeds`, `opml`, `saved`, `digest` and `feedkeeper://items/{id}`) that clients can show as ready-made actions.
+
 Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `get_item` returns stored feed or reader content; `fetch_full_text` downloads the article from its website and needs a read-and-write token. Item actions accept a single `itemId` or up to 200 `itemIds`. `get_new_items`, `search_items` and `list_items` accept `since` and `until` (ISO date or date-time) to filter by publish date. For incremental synchronization, save `newestCursor`, pass it as `after` next time, and follow `nextCursor` as `before` until there are no more pages.
 
 ## Security
@@ -204,7 +208,7 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 - **Personal access tokens** are stored as salted hashes, never in plaintext.
 - **Per-user data isolation**: every query is scoped to the authenticated user; feeds are deduplicated by URL under the hood, but subscriptions, read state, and tokens are always per-user.
 
-The browser loads article images and site icons from their source websites. To find a feed's icon, the server fetches the site's homepage about once a week. Opening a full article through the reader also fetches that page from the FeedKeeper server.
+Feed icons and the images of saved articles are delivered by the FeedKeeper server, so browsing does not contact third-party sites for them; images of other articles still load from their source websites. To find a feed's icon, the server fetches the site's homepage about once a week. Opening a full article through the reader also fetches that page from the FeedKeeper server.
 
 Found a security issue? Please report it privately as described in [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
