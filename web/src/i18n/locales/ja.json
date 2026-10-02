@@ -112,7 +112,11 @@
     "changesSaved": "変更を保存しました。",
     "folderCreated": "カテゴリ「{{name}}」を作成しました。",
     "folderRenamed": "カテゴリ名を「{{name}}」に変更しました。",
-    "folderDeleted": "カテゴリ「{{name}}」を削除しました。"
+    "folderDeleted": "カテゴリ「{{name}}」を削除しました。",
+    "notify": "新着記事を通知する",
+    "notifyHint": "通知をオンにした端末に通知を送ります。",
+    "badge": "アプリアイコンの数に含める",
+    "badgeHint": "このフィードの未読記事をアプリアイコンの数に加えます。初期設定ではオフです。"
   },
   "items": {
     "title": "記事",
@@ -254,6 +258,13 @@
     "addUserHint": "セルフ登録は既定で無効です。新しいアカウントはここで作成します。",
     "offlineSaved": "オフラインで読む",
     "offlineSavedHint": "保存した記事と最新の未読記事を画像ごとこの端末に保持し、接続なしで読めるようにします。オフライン中の変更は後で送信されます。",
-    "offlineSavedCount": "オフラインで読める記事：{{count}}件。"
+    "offlineSavedCount": "オフラインで読める記事：{{count}}件。",
+    "notifications": "通知",
+    "notificationsHint": "選んだフィードに新着記事があると、この端末に通知します。「フィード」→「編集」でフィードごとにオンにします。",
+    "notificationsBlocked": "このアプリの通知はブロックされています。端末またはブラウザの設定で許可してください。",
+    "notificationsIos": "iPhoneとiPadでは、先にFeedKeeperをホーム画面に追加し、そこから開いて通知をオンにしてください。",
+    "notificationsUnsupported": "このブラウザではFeedKeeperの通知を表示できません。",
+    "notificationsTest": "テスト送信",
+    "notificationsTestFailed": "テスト通知を配信できませんでした。"
   }
 }

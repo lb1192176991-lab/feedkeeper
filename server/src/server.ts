@@ -77,8 +77,8 @@ app.use(
     limit: 120,
     standardHeaders: true,
     legacyHeaders: false,
-    // Offline copies fetch many article images in a row; that route has its own, higher limit.
-    skip: (req) => /^\/items\/\d+\/image$/.test(req.path),
+    // Lists load many article images and feed icons at once; those routes have their own, higher limit.
+    skip: (req) => /^\/(items\/\d+\/image|feeds\/\d+\/icon)$/.test(req.path),
   }),
 );
 

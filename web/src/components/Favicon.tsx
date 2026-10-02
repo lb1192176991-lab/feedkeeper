@@ -17,6 +17,8 @@ function loadFavicon(url: string): Promise<boolean> {
 }
 
 interface FaviconProps {
+  /** The feed, whose icon this server can deliver; it is kept for offline use. */
+  feedId?: number;
   /** Icon declared by the site, discovered by the server; tried before guessing /favicon.ico. */
   iconUrl?: string | null;
   siteUrl?: string | null;
@@ -25,8 +27,8 @@ interface FaviconProps {
   className: string;
 }
 
-export function Favicon({ iconUrl, siteUrl, feedUrl, articleUrl, className }: FaviconProps) {
-  const sourceKey = JSON.stringify([iconUrl, siteUrl, feedUrl, articleUrl]);
+export function Favicon({ feedId, iconUrl, siteUrl, feedUrl, articleUrl, className }: FaviconProps) {
+  const sourceKey = JSON.stringify([feedId, iconUrl, siteUrl, feedUrl, articleUrl]);
   const [loaded, setLoaded] = useState<{ key: string; url: string } | null>(null);
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export function Favicon({ iconUrl, siteUrl, feedUrl, articleUrl, className }: Fa
 
     async function findFavicon() {
       const candidates = new Set<string>();
+      if (feedId) candidates.add(`/api/feeds/${feedId}/icon`);
       if (iconUrl && /^https?:\/\//i.test(iconUrl)) candidates.add(iconUrl);
       for (const source of [siteUrl, feedUrl, articleUrl]) {
         if (!source) continue;

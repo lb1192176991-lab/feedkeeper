@@ -8,6 +8,7 @@ import { systemRouter } from "./system.js";
 import { filtersRouter } from "./filters.js";
 import { foldersRouter } from "./folders.js";
 import { archiveRouter } from "./archive.js";
+import { pushRouter } from "./push.js";
 
 import { config } from "../config.js";
 
@@ -33,3 +34,4 @@ apiRouter.use("/system", systemRouter);
 apiRouter.use("/filters", filtersRouter);
 apiRouter.use("/folders", foldersRouter);
 apiRouter.use("/archive", archiveRouter);
+apiRouter.use("/push", pushRouter);

@@ -112,7 +112,11 @@
     "changesSaved": "Changes saved.",
     "folderCreated": "Category \"{{name}}\" created.",
     "folderRenamed": "Category renamed to \"{{name}}\".",
-    "folderDeleted": "Category \"{{name}}\" deleted."
+    "folderDeleted": "Category \"{{name}}\" deleted.",
+    "notify": "Notify me about new articles",
+    "notifyHint": "Sends a notification to the devices where you turned notifications on.",
+    "badge": "Count on the app icon",
+    "badgeHint": "Unread articles of this feed are added to the number on the app icon. Off by default."
   },
   "items": {
     "title": "Items",
@@ -254,6 +258,13 @@
     "addUserHint": "Self-registration is off by default – create new accounts here.",
     "offlineSaved": "Read offline",
     "offlineSavedHint": "Keeps your saved articles and the newest unread ones, with their images, on this device so you can read without a connection. Changes you make offline are sent later.",
-    "offlineSavedCount": "Articles available offline: {{count}}."
+    "offlineSavedCount": "Articles available offline: {{count}}.",
+    "notifications": "Notifications",
+    "notificationsHint": "Get a notification on this device when feeds you chose have new articles. Turn it on per feed under Feeds → Edit.",
+    "notificationsBlocked": "Notifications are blocked for this app. Allow them in your device or browser settings.",
+    "notificationsIos": "On iPhone and iPad, add FeedKeeper to the home screen first, then open it from there to turn notifications on.",
+    "notificationsUnsupported": "This browser cannot show notifications from FeedKeeper.",
+    "notificationsTest": "Send test",
+    "notificationsTestFailed": "The test notification could not be delivered."
   }
 }

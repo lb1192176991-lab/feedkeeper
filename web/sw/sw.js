@@ -14,6 +14,7 @@ const MAX_CACHED_IMAGES = 2000;
 // Read-only API responses worth showing when the network is gone. Everything else
 // (tokens, users, settings, mutations) always goes to the server.
 const READABLE_API = [/^\/api\/onboarding\/status$/, /^\/api\/config$/, /^\/api\/auth\/me$/, /^\/api\/feeds$/, /^\/api\/folders$/, /^\/api\/items$/, /^\/api\/filters\/muted$/];
+const FEED_ICON = /^\/api\/feeds\/\d+\/icon$/;
 const IMMUTABLE_API = [/^\/api\/archive\/images\/\d+$/, /^\/api\/items\/\d+\/image$/, /^\/api\/auth\/me\/avatar$/];
 
 self.addEventListener("install", (event) => {
@@ -48,7 +49,9 @@ self.addEventListener("fetch", (event) => {
   } else if (url.pathname.startsWith("/api/")) {
     // Lists for the offline copy are stored by the app itself.
     if (url.searchParams.has("offline")) return;
-    if (IMMUTABLE_API.some((pattern) => pattern.test(url.pathname))) {
+    if (FEED_ICON.test(url.pathname)) {
+      event.respondWith(staleWhileRevalidate(API_CACHE, request));
+    } else if (IMMUTABLE_API.some((pattern) => pattern.test(url.pathname))) {
       event.respondWith(cacheFirst(API_CACHE, request, MAX_CACHED_IMAGES));
     } else if (READABLE_API.some((pattern) => pattern.test(url.pathname))) {
       event.respondWith(networkFirst(API_CACHE, request, url.pathname === "/api/items" ? MAX_CACHED_ITEM_LISTS : 0));
@@ -139,3 +142,50 @@ async function trim(cache, matches, limit) {
   const keys = (await cache.keys()).filter(matches);
   await Promise.all(keys.slice(0, Math.max(0, keys.length - limit)).map((key) => cache.delete(key)));
 }
+
+// Web Push: show what the server announces and open the app where it leads.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    (async () => {
+      if (typeof data.unread === "number" && self.navigator.setAppBadge) {
+        await (data.unread > 0 ? self.navigator.setAppBadge(data.unread) : self.navigator.clearAppBadge()).catch(() => undefined);
+      }
+      await self.registration.showNotification(data.title || "FeedKeeper", {
+        body: data.body || "",
+        icon: "/app-icon-192.png",
+        tag: data.tag,
+        data: { url: data.url },
+      });
+    })(),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  // Only addresses inside the app are followed.
+  let target = new URL("/items", self.location.origin);
+  try {
+    const requested = new URL(event.notification.data?.url || "/items", self.location.origin);
+    if (requested.origin === self.location.origin) target = requested;
+  } catch {
+    // keep the default
+  }
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+      if (open) {
+        await open.focus().catch(() => undefined);
+        if ("navigate" in open) await open.navigate(target.href).catch(() => undefined);
+      } else {
+        await self.clients.openWindow(target.href);
+      }
+    })(),
+  );
+});

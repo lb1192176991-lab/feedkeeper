@@ -5,6 +5,9 @@ import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../..
 import { getTheme, setTheme, subscribeTheme, type Theme } from "../../utils/theme.ts";
 import { offlineEnabled, offlineItems, readSnapshot, setOfflineEnabled } from "../../utils/offlineStore.ts";
 import { removeOfflineCopy, syncOfflineCopy } from "../../utils/offlineSync.ts";
+import { disablePush, enablePush, pushStatus, type PushStatus } from "../../utils/push.ts";
+import { api } from "../../api/client.ts";
+import { toast } from "../../utils/toast.ts";
 import { SettingsCard, SettingRow, Toggle } from "./ui.tsx";
 
 function ThemeSwitch() {
@@ -50,6 +53,62 @@ function InstallRow() {
       {mode === "prompt" && (
         <button type="button" onClick={() => void promptInstall()} className="btn-primary whitespace-nowrap">{t("settings.installAppButton")}</button>
       )}
+    </SettingRow>
+  );
+}
+
+function NotificationsRow() {
+  const { t, i18n } = useTranslation();
+  const installMode = useSyncExternalStore(subscribeInstallPrompt, currentInstallMode);
+  const [status, setStatus] = useState<PushStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void pushStatus().then(setStatus).catch(() => setStatus("unsupported"));
+  }, []);
+
+  if (status === null) return null;
+  if (status === "unsupported") {
+    // iPhones and iPads only deliver notifications to apps on the home screen.
+    const hint = installMode === "ios" ? t("settings.notificationsIos") : t("settings.notificationsUnsupported");
+    return <SettingRow label={t("settings.notifications")} hint={hint} />;
+  }
+
+  async function onChange(checked: boolean) {
+    setBusy(true);
+    try {
+      if (checked) setStatus(await enablePush());
+      else {
+        await disablePush();
+        setStatus("off");
+      }
+    } catch {
+      toast.error(t("common.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendTest() {
+    try {
+      const { delivered } = await api.sendTestPush(i18n.resolvedLanguage ?? "en");
+      if (delivered === 0) toast.error(t("settings.notificationsTestFailed"));
+    } catch {
+      toast.error(t("common.error"));
+    }
+  }
+
+  return (
+    <SettingRow
+      label={t("settings.notifications")}
+      hint={status === "blocked" ? t("settings.notificationsBlocked") : t("settings.notificationsHint")}
+      htmlFor="notifications-toggle"
+      inline
+    >
+      <div className="flex items-center gap-3">
+        {status === "on" && <button type="button" onClick={() => void sendTest()} className="btn-secondary px-3 py-1.5 text-sm">{t("settings.notificationsTest")}</button>}
+        <Toggle id="notifications-toggle" label={t("settings.notifications")} checked={status === "on"} onChange={(checked) => !busy && status !== "blocked" && void onChange(checked)} />
+      </div>
     </SettingRow>
   );
 }
@@ -115,6 +174,7 @@ export function GeneralSettings() {
           />
         </SettingRow>
         <OfflineRow />
+        <NotificationsRow />
         <InstallRow />
       </SettingsCard>
     </div>

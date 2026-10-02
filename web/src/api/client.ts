@@ -127,6 +127,10 @@ export interface Feed {
   full_text_mode: "auto" | "never";
   full_text_blocked_at: string | null;
   icon_url: string | null;
+  /** 1 when new articles of this feed trigger a notification. */
+  notify: number;
+  /** 1 when this feed's unread articles count towards the number on the app icon. */
+  badge: number;
 }
 
 export interface Folder {
@@ -206,8 +210,16 @@ export const api = {
   subscribeFeed: (url: string, label: string | null, folderId?: number | null) =>
     request<Feed>("/feeds", { method: "POST", body: JSON.stringify({ url, label, folderId }) }),
   unsubscribeFeed: (feedId: number) => request<void>(`/feeds/${feedId}`, { method: "DELETE" }),
-  updateFeed: (feedId: number, data: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number; fullTextMode?: "auto" | "never" }) =>
+  updateFeed: (feedId: number, data: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number; fullTextMode?: "auto" | "never"; notify?: boolean; badge?: boolean }) =>
     request<Feed>(`/feeds/${feedId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  pushKey: () => request<{ publicKey: string }>("/push/key"),
+  savePushDevice: (device: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    request<void>("/push/devices", { method: "POST", body: JSON.stringify(device) }),
+  checkPushDevice: (endpoint: string) =>
+    request<{ registered: boolean }>("/push/devices/check", { method: "POST", body: JSON.stringify({ endpoint }) }),
+  removePushDevice: (endpoint: string) =>
+    request<void>("/push/devices/remove", { method: "POST", body: JSON.stringify({ endpoint }) }),
+  sendTestPush: (language: string) => request<{ delivered: number }>("/push/test", { method: "POST", body: JSON.stringify({ language }) }),
   reorderFeeds: (feedIds: number[]) =>
     request<{ ok: boolean }>("/feeds/reorder", { method: "PUT", body: JSON.stringify({ feedIds }) }),
   exportOpmlUrl: () => "/api/feeds/opml",

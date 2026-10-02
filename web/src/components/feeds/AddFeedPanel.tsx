@@ -6,14 +6,16 @@ import { CustomSelect, type SelectOption } from "../CustomSelect.tsx";
 import { CloseIcon } from "./icons.tsx";
 
 /** Subscribe by website or feed URL; lets the user pick when a site offers several feeds. */
-export function AddFeedPanel({ folderOptions, defaultFolderId, onClose, onAdded }: {
+export function AddFeedPanel({ folderOptions, defaultFolderId, initialUrl = "", onClose, onAdded }: {
   folderOptions: SelectOption[];
   defaultFolderId: number | null;
+  /** Address to start with, e.g. one shared from another app. */
+  initialUrl?: string;
   onClose: () => void;
   onAdded: (feed: Feed) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(initialUrl);
   const [label, setLabel] = useState("");
   const [folderId, setFolderId] = useState<number | null>(defaultFolderId);
   const [submitting, setSubmitting] = useState(false);

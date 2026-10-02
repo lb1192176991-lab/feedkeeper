@@ -1,3 +1,4 @@
+import { updateBadge } from "./badge.ts";
 import { clearQueue } from "./offlineQueue.ts";
 import { API_CACHE, deleteSnapshot } from "./offlineStore.ts";
 
@@ -24,6 +25,7 @@ export function registerServiceWorker(): void {
 /** Forget cached articles, account data and unsent changes, e.g. on logout from a shared device. */
 export async function clearOfflineData(): Promise<void> {
   clearQueue();
+  updateBadge(0);
   if (!("caches" in window)) return;
   await caches.delete(API_CACHE).catch(() => undefined);
   await deleteSnapshot();

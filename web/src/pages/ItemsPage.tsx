@@ -12,6 +12,7 @@ import { NewspaperGrid } from "../components/NewspaperGrid.tsx";
 import { PullToRefresh } from "../components/PullToRefresh.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
 import { toast } from "../utils/toast.ts";
+import { announceItemsChanged } from "../utils/badge.ts";
 import { syncOfflineCopy } from "../utils/offlineSync.ts";
 import { RefreshIcon } from "../components/feeds/icons.tsx";
 
@@ -109,6 +110,8 @@ export function ItemsPage() {
   })();
 
   const initialBookmarkedOnly = (() => {
+    // The home screen shortcut opens the saved articles.
+    if (searchParams.get("saved") === "1") return true;
     try {
       const saved = localStorage.getItem(STORAGE_KEY_BOOKMARKED);
       if (saved !== null) return saved === "true";
@@ -385,6 +388,11 @@ export function ItemsPage() {
     if (articleParam) {
       const found = items.find((i) => i.id === Number(articleParam));
       setSelectedArticle(found ?? null);
+      // Arriving from a notification: opening the article counts as reading it.
+      if (found && !found.read) {
+        api.markRead(found.id).then(announceItemsChanged).catch(() => {});
+        setItems((prev) => prev.map((i) => (i.id === found.id ? { ...i, read: true } : i)));
+      }
     } else {
       setSelectedArticle(null);
     }
@@ -393,7 +401,7 @@ export function ItemsPage() {
   function openArticle(item: Item) {
     setSelectedArticle(item);
     if (!item.read) {
-      api.markRead(item.id).catch(() => {});
+      api.markRead(item.id).then(announceItemsChanged).catch(() => {});
       setItems((prev) => {
         return prev.map((i) => (i.id === item.id ? { ...i, read: true } : i));
       });
@@ -443,6 +451,7 @@ export function ItemsPage() {
     const nextRead = !item.read;
     if (item.read) await api.markUnread(item.id);
     else await api.markRead(item.id);
+    announceItemsChanged();
     setItems((prev) => {
       return prev.map((i) => (i.id === item.id ? { ...i, read: nextRead } : i));
     });
@@ -471,6 +480,7 @@ export function ItemsPage() {
     await whenOnline(async () => {
       await api.markAllRead({ feedId: currentFeedId, folderId: currentFolderId });
       await load();
+      announceItemsChanged();
     });
   }
 
@@ -764,6 +774,7 @@ export function ItemsPage() {
                       {/* Source row above headline with optional Favicon */}
                       <div className="mb-3 flex min-w-0 items-center gap-2 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--c-text-muted)]">
                         <Favicon
+                          feedId={item.feed_id}
                           iconUrl={item.feed_icon_url}
                           siteUrl={item.feed_site_url}
                           feedUrl={item.feed_url}

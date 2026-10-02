@@ -3,6 +3,7 @@ import cron from "node-cron";
 import { fetchFeed } from "./fetcher.js";
 import { discoverIconUrl, iconCheckDue } from "./icon.js";
 import { decodeEntities } from "./text.js";
+import { notifyNewItems } from "../push.js";
 import { listFeedsDueForPoll, updateFeedAfterPoll, updateFeedIcon, upsertItems, type Feed } from "./repository.js";
 
 type CustomItem = Parser.Item & {
@@ -116,6 +117,8 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
     }));
 
     const newItems = upsertItems(feed.id, items);
+    // A feed's first fetch brings in its whole backlog; only later arrivals are news.
+    if (newItems > 0 && feed.last_success_at) void notifyNewItems(feed, newItems).catch(() => undefined);
 
     // Refresh the site's declared icon about once a week; failures keep the previous icon.
     const siteUrl = parsed.link || feed.site_url;

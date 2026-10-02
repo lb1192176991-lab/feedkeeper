@@ -8,6 +8,11 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 - A service worker: the installed app starts without a connection and shows the articles, feeds and images you loaded last, with an offline notice. Cached account data is removed on logout.
 - An offline copy keeps your saved articles (up to 300) and the newest 100 unread ones on the device with their full text and images, so they can be read, searched and filtered without a connection. Images of articles that are not archived are fetched through the server, which only serves images an article itself shows. A setting turns the offline copy off.
 - Marking read and saving work offline: the changes are kept and sent when the connection is back.
+- Web Push notifications for new articles, switched on per feed (Feeds → Edit) and per device (Settings), with a test button. Articles that match your muted keywords are not announced, and a feed's first fetch stays silent. A tap opens the article directly when there is one new article, otherwise the feed.
+- The number of unread articles on the app icon, switched on per feed (off by default), and home screen shortcuts for saved articles and adding a feed.
+- Sharing a web address from another app (Android and desktop Chromium) opens the add-feed dialog with it filled in.
+- Feed icons are delivered through the server, so they also show offline and no third-party site is contacted when you browse.
+- A database migration adds the notification and icon count settings and the registered devices; the server's push keys are created on first start.
 - Prebuilt multi-architecture Docker images (`amd64` and `arm64`) published to the GitHub Container Registry, so FeedKeeper runs without cloning or building.
 - Contribution guides for translations, a code of conduct, and a check that all languages contain the same text keys.
 

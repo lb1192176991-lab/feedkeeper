@@ -6,6 +6,7 @@ import { ProfileMenu } from "./ProfileMenu.tsx";
 import { OfflineBanner } from "./Offline.tsx";
 import { Toaster } from "./Toaster.tsx";
 import { resetItemsScrollY } from "../utils/scrollState.ts";
+import { onItemsChanged, refreshBadge } from "../utils/badge.ts";
 import { syncNow } from "../utils/offlineSync.ts";
 
 export function Layout() {
@@ -22,6 +23,28 @@ export function Layout() {
     return () => {
       window.removeEventListener("online", sync);
       document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  // The app icon shows how many articles are unread.
+  useEffect(() => {
+    let timer: number | undefined;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void refreshBadge(), 800);
+    };
+    const onVisible = () => document.visibilityState === "visible" && refresh();
+    refresh();
+    const interval = window.setInterval(refresh, 2 * 60 * 1000);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    const stop = onItemsChanged(refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+      stop();
     };
   }, []);
 

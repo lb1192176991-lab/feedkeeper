@@ -59,7 +59,7 @@ function EditorialCard({ item, featured, besideFeature, onOpen, onBookmark, onRe
         <EditorialImage key={item.image_url ?? ""} url={item.image_url} featured={featured} />
         <div className={`flex min-w-0 flex-1 flex-col ${featured ? "p-5 sm:p-6" : "p-4 sm:p-5"}`}>
           <div className="mb-3 flex min-w-0 items-center gap-2 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--c-text-muted)]">
-            <Favicon iconUrl={item.feed_icon_url} siteUrl={item.feed_site_url} feedUrl={item.feed_url} articleUrl={item.link} className="h-3.5 w-3.5 shrink-0 rounded-xs object-contain" />
+            <Favicon feedId={item.feed_id} iconUrl={item.feed_icon_url} siteUrl={item.feed_site_url} feedUrl={item.feed_url} articleUrl={item.link} className="h-3.5 w-3.5 shrink-0 rounded-xs object-contain" />
             <span className="truncate">{item.feed_title}</span>
           </div>
           <h2 className={`text-[var(--c-text)] ${featured ? "text-xl leading-tight sm:text-2xl" : "text-lg leading-snug"} font-semibold`}>

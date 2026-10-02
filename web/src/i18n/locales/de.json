@@ -112,7 +112,11 @@
     "changesSaved": "Änderungen gespeichert.",
     "folderCreated": "Kategorie „{{name}}“ angelegt.",
     "folderRenamed": "Kategorie in „{{name}}“ umbenannt.",
-    "folderDeleted": "Kategorie „{{name}}“ gelöscht."
+    "folderDeleted": "Kategorie „{{name}}“ gelöscht.",
+    "notify": "Bei neuen Artikeln benachrichtigen",
+    "notifyHint": "Sendet eine Benachrichtigung an die Geräte, auf denen du Benachrichtigungen aktiviert hast.",
+    "badge": "Zahl am App-Symbol",
+    "badgeHint": "Ungelesene Artikel dieses Feeds zählen zur Zahl am App-Symbol. Standardmäßig aus."
   },
   "items": {
     "title": "Artikel",
@@ -254,6 +258,13 @@
     "addUserHint": "Selbstregistrierung ist standardmäßig aus – neue Konten legst du hier an.",
     "offlineSaved": "Offline lesen",
     "offlineSavedHint": "Hält deine gemerkten Artikel und die neuesten ungelesenen samt Bildern auf diesem Gerät bereit, damit du ohne Verbindung lesen kannst. Änderungen, die du offline machst, werden später gesendet.",
-    "offlineSavedCount": "Offline verfügbare Artikel: {{count}}."
+    "offlineSavedCount": "Offline verfügbare Artikel: {{count}}.",
+    "notifications": "Benachrichtigungen",
+    "notificationsHint": "Erhalte auf diesem Gerät eine Benachrichtigung, wenn Feeds deiner Wahl neue Artikel haben. Aktiviere es pro Feed unter Feeds → Bearbeiten.",
+    "notificationsBlocked": "Benachrichtigungen sind für diese App blockiert. Erlaube sie in den Einstellungen von Gerät oder Browser.",
+    "notificationsIos": "Auf iPhone und iPad füge FeedKeeper zuerst zum Home-Bildschirm hinzu und öffne die App von dort, um Benachrichtigungen zu aktivieren.",
+    "notificationsUnsupported": "Dieser Browser kann keine Benachrichtigungen von FeedKeeper anzeigen.",
+    "notificationsTest": "Test senden",
+    "notificationsTestFailed": "Die Testbenachrichtigung konnte nicht zugestellt werden."
   }
 }

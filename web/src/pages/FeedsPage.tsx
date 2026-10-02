@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { api, type Feed, type Folder } from "../api/client.ts";
 import { type SelectOption } from "../components/CustomSelect.tsx";
@@ -37,6 +38,18 @@ export function FeedsPage() {
   const [refreshingIds, setRefreshingIds] = useState<Set<number>>(new Set());
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Opened from the home screen shortcut or the system share sheet: start adding a feed.
+  const [sharedUrl] = useState(() => {
+    const text = [searchParams.get("url"), searchParams.get("text"), searchParams.get("add")].filter(Boolean).join(" ");
+    return text.match(/https?:\/\/[^\s]+/i)?.[0] ?? "";
+  });
+  useEffect(() => {
+    if (!searchParams.has("add") && !searchParams.has("url") && !searchParams.has("text")) return;
+    setPanel("add");
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [filter, setFilter] = useState<Filter>("all");
   const [drag, setDrag] = useState<{ group: string; from: number; over: number } | null>(null);
   const [importing, setImporting] = useState(false);
@@ -265,6 +278,7 @@ export function FeedsPage() {
         <AddFeedPanel
           folderOptions={folderOptions}
           defaultFolderId={filter.startsWith("folder:") ? Number(filter.slice(7)) : null}
+          initialUrl={sharedUrl}
           onClose={() => setPanel(null)}
           onAdded={onFeedAdded}
         />

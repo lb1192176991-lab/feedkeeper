@@ -10,6 +10,8 @@ import {
   updateSubscriptionFolder,
   updateFeedPollInterval,
   updateSubscriptionFullTextMode,
+  updateSubscriptionNotify,
+  updateSubscriptionBadge,
   findFolderById,
   findFeedById,
   countFeedSubscribers,
@@ -105,7 +107,7 @@ export function unsubscribeFromFeed(userId: number, feedId: number): void {
 export function updateFeedSettings(
   userId: number,
   feedId: number,
-  settings: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number; fullTextMode?: FullTextMode },
+  settings: { label?: string | null; folderId?: number | null; pollIntervalMinutes?: number; fullTextMode?: FullTextMode; notify?: boolean; badge?: boolean },
 ): SubscribedFeed {
   if (!isUserSubscribed(userId, feedId)) {
     throw new FeedError("not_subscribed");
@@ -125,6 +127,14 @@ export function updateFeedSettings(
 
   if (settings.fullTextMode !== undefined) {
     updateSubscriptionFullTextMode(userId, feedId, settings.fullTextMode);
+  }
+
+  if (settings.notify !== undefined) {
+    updateSubscriptionNotify(userId, feedId, settings.notify);
+  }
+
+  if (settings.badge !== undefined) {
+    updateSubscriptionBadge(userId, feedId, settings.badge);
   }
 
   if (settings.pollIntervalMinutes !== undefined) {

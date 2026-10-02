@@ -51,6 +51,8 @@ export interface SubscribedFeed extends Feed {
   unread_count: number;
   position: number;
   full_text_mode: FullTextMode;
+  notify: number;
+  badge: number;
 }
 
 export interface MutedKeyword {
@@ -146,6 +148,8 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
          fo.name AS folder_name,
          s.position AS position,
          s.full_text_mode AS full_text_mode,
+         s.notify AS notify,
+         s.badge AS badge,
          (
            SELECT COUNT(*) FROM items i
            WHERE i.feed_id = f.id
@@ -572,6 +576,14 @@ export function applyToItems(itemIds: readonly number[], change: (itemId: number
 
 export function updateSubscriptionFullTextMode(userId: number, feedId: number, mode: FullTextMode): void {
   db.prepare("UPDATE subscriptions SET full_text_mode = ? WHERE user_id = ? AND feed_id = ?").run(mode, userId, feedId);
+}
+
+export function updateSubscriptionNotify(userId: number, feedId: number, notify: boolean): void {
+  db.prepare("UPDATE subscriptions SET notify = ? WHERE user_id = ? AND feed_id = ?").run(notify ? 1 : 0, userId, feedId);
+}
+
+export function updateSubscriptionBadge(userId: number, feedId: number, badge: boolean): void {
+  db.prepare("UPDATE subscriptions SET badge = ? WHERE user_id = ? AND feed_id = ?").run(badge ? 1 : 0, userId, feedId);
 }
 
 /** The user's full-text mode for a feed, or undefined when they are not subscribed. */
