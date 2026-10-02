@@ -87,9 +87,9 @@ Two streams, because articles and personal state behave differently.
 }
 ```
 
-Entities: `subscription`, `folder`, `item_state`, `annotation`, `tag`, `item_tag`, `muted_keyword`, `bulk_read`. A "mark all read" is one `bulk_read` change `{ scope, upToItemId }`, not one row per article.
+Entities: `item_state` (read, saved, saved time, reading position), `subscription`, `folder`, `muted_keyword`, and later `annotation`, `tag` and `item_tag`. The log is filled by database triggers, so every code path (web app, MCP, native API) is covered. A "mark all read" produces one `item_state` entry per article it touches; compaction keeps that bounded. Feed-level data that changes on every poll (title, icon, health, unread counts) is deliberately not part of the log; clients refresh it with `GET /subscriptions` and compute unread counts from their own copy.
 
-The log is **compacted**: each object has exactly one row whose `seq` moves forward when the object changes, so toggling an article read and unread three times leaves one entry and the log grows with the number of objects, not the number of changes. Only deletions (tombstones) are remembered for 90 days. A client that is new, or whose `since` is older than the oldest remembered tombstone, gets `410 resync_required` and rebuilds from `GET /state/snapshot` (paginated: subscriptions, folders, tags, annotations, then the ids of saved and unread articles). A snapshot ends with a `seq` to continue from.
+The log is **compacted**: each object has exactly one row whose `seq` moves forward when the object changes, so toggling an article read and unread three times leaves one entry and the log grows with the number of objects, not the number of changes. Only deletions (tombstones) are remembered for 90 days. A client that is new, or whose `since` is older than the oldest remembered tombstone, gets `410 resync_required` and starts over: it drops its copy of this state and syncs from `since=0`. Because the log holds one entry per object, `since=0` *is* the complete state, so there is no separate snapshot endpoint. Users whose data predates the log are added to it on their first sync.
 
 ## Mutations from the device
 
@@ -103,7 +103,7 @@ The log is **compacted**: each object has exactly one row whose `seq` moves forw
 ] }
 ```
 
-The server applies them in order and answers per mutation (`applied`, `duplicate`, `rejected` with a code). Replays are harmless thanks to `applied_mutations`. Conflict rules: boolean state (read, saved) is last-writer-wins by `at`, with the server clamping unreasonable clock values; annotations carry a `revision` and an edit based on an old revision is rejected with `409 revision_conflict`, returning the current version for the client to merge. A rejected mutation never blocks the rest of the batch.
+The server applies them in order and answers per mutation (`applied`, `duplicate`, `stale`, `rejected` with a code). Replays are harmless thanks to `applied_mutations`. Conflict rules: read, saved and reading position are last-writer-wins **per field** by `at`. The log records when each field last changed, whether through a device or the web app, and an older change is answered `stale` and not applied. `at` may be at most 5 minutes ahead of the server clock (it is clamped) and at most 30 days old (older is `rejected`). Reading positions below 5 % or above 95 % clear the stored position; annotations carry a `revision` and an edit based on an old revision is rejected with `409 revision_conflict`, returning the current version for the client to merge. A rejected mutation never blocks the rest of the batch.
 
 ## Resources
 

@@ -4,6 +4,7 @@ import { db } from "../db/index.js";
 import { config } from "../config.js";
 import { removeUnusedFeeds } from "./repository.js";
 import { pruneArchive } from "./archive.js";
+import { pruneChangeLog } from "../sync/changeLog.js";
 
 export interface RetentionSettings {
   retentionReadDays: number;
@@ -168,6 +169,7 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
   // Feeds kept only for saved articles go once nothing of them is saved anymore.
   removeUnusedFeeds();
   pruneArchive();
+  pruneChangeLog();
 
   const totalDeleted = deletedReadItems + deletedOldItems + deletedPerFeedExcess;
 

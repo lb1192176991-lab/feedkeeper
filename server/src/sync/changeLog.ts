@@ -1,0 +1,145 @@
+import { db } from "../db/index.js";
+import { listFoldersForUser, listMutedKeywords, listSubscriptionsForUser, type SubscribedFeed } from "../feeds/repository.js";
+
+const TOMBSTONE_DAYS = 90;
+const MAX_PAGE = 500;
+
+export type ChangeEntity = "item_state" | "subscription" | "folder" | "muted_keyword";
+
+export interface Change {
+  seq: number;
+  entity: ChangeEntity;
+  id: number;
+  op: "upsert" | "delete";
+  data?: Record<string, unknown>;
+}
+
+export function serializeSubscription(subscription: SubscribedFeed) {
+  return {
+    id: subscription.id,
+    url: subscription.url,
+    title: subscription.title,
+    siteUrl: subscription.site_url,
+    label: subscription.label,
+    folderId: subscription.folder_id,
+    position: subscription.position,
+    pollIntervalMinutes: subscription.poll_interval_minutes,
+    fullTextMode: subscription.full_text_mode,
+    notify: Boolean(subscription.notify),
+    badge: Boolean(subscription.badge),
+  };
+}
+
+interface ItemStateRow {
+  read: number;
+  saved_at: string | null;
+  progress: number | null;
+}
+
+function itemState(userId: number, itemId: number): Record<string, unknown> | null {
+  const exists = db.prepare("SELECT 1 FROM items WHERE id = ?").get(itemId);
+  if (!exists) return null;
+  const row = db
+    .prepare<[number, number, number, number, number, number], ItemStateRow>(
+      `SELECT EXISTS (SELECT 1 FROM item_reads WHERE user_id = ? AND item_id = ?) AS read,
+              (SELECT created_at FROM item_bookmarks WHERE user_id = ? AND item_id = ?) AS saved_at,
+              (SELECT position FROM item_progress WHERE user_id = ? AND item_id = ?) AS progress`,
+    )
+    .get(userId, itemId, userId, itemId, userId, itemId) as ItemStateRow;
+  return { read: Boolean(row.read), saved: row.saved_at !== null, savedAt: row.saved_at, progress: row.progress };
+}
+
+/**
+ * Add the data a user already had before the log existed. Everything that is in the log
+ * keeps its place; the rest is appended, so a first sync with since=0 delivers the full state.
+ */
+export function ensureChangeLog(userId: number): void {
+  if (db.prepare("SELECT 1 FROM sync_state WHERE user_id = ?").get(userId)) return;
+  db.transaction(() => {
+    db.prepare("INSERT OR IGNORE INTO sync_state (user_id) VALUES (?)").run(userId);
+    let seq = db.prepare<[number], { seq: number }>("SELECT COALESCE(MAX(seq), 0) AS seq FROM changes WHERE user_id = ?").get(userId)!.seq;
+    const add = db.prepare(
+      `INSERT OR IGNORE INTO changes (user_id, entity, entity_id, op, seq, changed_at) VALUES (?, ?, ?, 'upsert', ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+    );
+    const addAll = (entity: ChangeEntity, ids: number[]) => ids.forEach((id) => { if (add.run(userId, entity, id, seq + 1).changes) seq++; });
+    addAll("subscription", listSubscriptionsForUser(userId).map((subscription) => subscription.id));
+    addAll("folder", listFoldersForUser(userId).map((folder) => folder.id));
+    addAll("muted_keyword", listMutedKeywords(userId).map((keyword) => keyword.id));
+    const itemIds = db
+      .prepare<[number, number, number], { item_id: number }>(
+        `SELECT item_id FROM item_reads WHERE user_id = ?
+         UNION SELECT item_id FROM item_bookmarks WHERE user_id = ?
+         UNION SELECT item_id FROM item_progress WHERE user_id = ?`,
+      )
+      .all(userId, userId, userId)
+      .map((row) => row.item_id);
+    addAll("item_state", itemIds);
+  })();
+}
+
+export class ResyncRequired extends Error {
+  constructor() {
+    super("resync_required");
+  }
+}
+
+export function currentSeq(userId: number): number {
+  return db.prepare<[number], { seq: number }>("SELECT COALESCE(MAX(seq), 0) AS seq FROM changes WHERE user_id = ?").get(userId)!.seq;
+}
+
+/** Everything that changed after `since`, oldest first, with the current data of each object. */
+export function listChanges(userId: number, since: number, limit = 200): { changes: Change[]; nextSeq: number; hasMore: boolean } {
+  ensureChangeLog(userId);
+  const state = db.prepare<[number], { pruned_through: number }>("SELECT pruned_through FROM sync_state WHERE user_id = ?").get(userId)!;
+  // A client that is behind a forgotten deletion cannot know about it and has to start over.
+  if (since > 0 && since < state.pruned_through) throw new ResyncRequired();
+
+  const page = Math.min(Math.max(limit, 1), MAX_PAGE);
+  const rows = db
+    .prepare<[number, number, number], { entity: ChangeEntity; entity_id: number; op: "upsert" | "delete"; seq: number }>(
+      "SELECT entity, entity_id, op, seq FROM changes WHERE user_id = ? AND seq > ? ORDER BY seq LIMIT ?",
+    )
+    .all(userId, since, page + 1);
+  const hasMore = rows.length > page;
+  const slice = rows.slice(0, page);
+
+  const subscriptions = new Map(listSubscriptionsForUser(userId).map((subscription) => [subscription.id, subscription]));
+  const folders = new Map(listFoldersForUser(userId).map((folder) => [folder.id, folder]));
+  const keywords = new Map(listMutedKeywords(userId).map((keyword) => [keyword.id, keyword]));
+
+  const changes = slice.map((row): Change => {
+    const change: Change = { seq: row.seq, entity: row.entity, id: row.entity_id, op: row.op };
+    if (row.op === "delete") return change;
+    let data: Record<string, unknown> | null | undefined;
+    if (row.entity === "item_state") data = itemState(userId, row.entity_id);
+    else if (row.entity === "subscription") {
+      const subscription = subscriptions.get(row.entity_id);
+      data = subscription && serializeSubscription(subscription);
+    } else if (row.entity === "folder") {
+      const folder = folders.get(row.entity_id);
+      data = folder && { name: folder.name };
+    } else {
+      const keyword = keywords.get(row.entity_id);
+      data = keyword && { keyword: keyword.keyword };
+    }
+    // The object disappeared after it was logged (for example an article removed by retention).
+    return data ? { ...change, data } : { ...change, op: "delete" };
+  });
+
+  return { changes, nextSeq: slice.length ? slice[slice.length - 1].seq : since, hasMore };
+}
+
+/** Forget deletions older than the tombstone window and objects that no longer exist. */
+export function pruneChangeLog(): number {
+  const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 86_400_000).toISOString();
+  return db.transaction(() => {
+    db.prepare(
+      `UPDATE sync_state SET pruned_through = MAX(pruned_through, COALESCE(
+         (SELECT MAX(seq) FROM changes WHERE changes.user_id = sync_state.user_id AND op = 'delete' AND changed_at < ?), 0))`,
+    ).run(cutoff);
+    const old = db.prepare("DELETE FROM changes WHERE op = 'delete' AND changed_at < ?").run(cutoff).changes;
+    const gone = db.prepare("DELETE FROM changes WHERE entity = 'item_state' AND entity_id NOT IN (SELECT id FROM items)").run().changes;
+    db.prepare("DELETE FROM applied_mutations WHERE applied_at < ?").run(new Date(Date.now() - 30 * 86_400_000).toISOString());
+    return old + gone;
+  })();
+}

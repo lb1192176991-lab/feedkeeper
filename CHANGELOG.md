@@ -6,6 +6,7 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ### Added
 - Groundwork for native apps: `GET /api/v1/meta` and pairing a device with a one-time code (Settings → Devices, with a QR code). Each device gets its own revocable token for the new `/api/v1`, which MCP does not accept. See `docs/design/native-api.md`.
+- Native API: `GET /api/v1/sync` delivers everything that changed in a user's state (article read and saved state and reading position, subscriptions, folders, muted keywords) from a compacted change log, and `POST /api/v1/mutations` applies changes made offline idempotently with last-writer-wins per field.
 - MCP: `get_digest` returns unread articles grouped by feed with short snippets, and `get_overview` summarizes the account (unread and saved counts, top feeds, folders, failing feeds).
 - MCP: `get_item` accepts `maxChars`, and `get_new_items` can leave out article HTML and shorten summaries, to save tokens.
 - MCP: `update_feed` can switch push notifications and the app icon count per feed.

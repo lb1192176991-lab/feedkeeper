@@ -8,12 +8,14 @@ import { findUserById } from "../../auth/users.js";
 import { config } from "../../config.js";
 import { getRetentionSettings } from "../../feeds/cleanup.js";
 import { APP_VERSION } from "../../version.js";
+import { ResyncRequired, currentSeq, listChanges } from "../../sync/changeLog.js";
+import { applyMutations } from "../../sync/mutations.js";
 
 /** The API for native apps. See docs/design/native-api.md for the contract and what is still to come. */
 export const v1Router = Router();
 
 // Features grow with the implementation; clients look here instead of guessing from the version.
-const FEATURES = ["pairing"];
+const FEATURES = ["pairing", "sync", "mutations"];
 
 v1Router.get("/meta", (_req, res) => {
   res.json({
@@ -86,4 +88,43 @@ v1Router.delete("/devices/:deviceId", (req, res) => {
     return;
   }
   res.status(204).end();
+});
+
+const syncQuery = z.object({
+  since: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+// Changes to the user's own data (articles' state, subscriptions, folders, keywords) since `since`.
+// since=0 delivers the complete state, as the log holds one entry per object.
+v1Router.get("/sync", (req, res) => {
+  const parsed = syncQuery.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  try {
+    res.json(listChanges(req.user!.id, parsed.data.since, parsed.data.limit));
+  } catch (error) {
+    if (error instanceof ResyncRequired) {
+      res.status(410).json({ error: "resync_required", message: "Drop the local copy and sync again from since=0." });
+      return;
+    }
+    throw error;
+  }
+});
+
+// Changes made offline; every one carries a client id, so retrying a request is safe.
+v1Router.post("/mutations", (req, res) => {
+  if (req.tokenScope === "read") {
+    res.status(403).json({ error: "read_only_token" });
+    return;
+  }
+  const mutations = req.body?.mutations;
+  if (!Array.isArray(mutations) || mutations.length === 0 || mutations.length > 200) {
+    res.status(400).json({ error: "invalid_input", message: "Send 1 to 200 mutations." });
+    return;
+  }
+  const results = applyMutations(req.user!.id, mutations);
+  res.json({ results, seq: currentSeq(req.user!.id) });
 });
