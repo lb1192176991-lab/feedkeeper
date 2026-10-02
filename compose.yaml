@@ -1,9 +1,6 @@
 services:
   feedkeeper:
-    image: visualfusion/feedkeeper:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/visualfusion/feedkeeper:latest
     container_name: feedkeeper
     restart: unless-stopped
     ports:

@@ -70,23 +70,25 @@ One Node process serves the built web UI, a REST API, and an MCP endpoint (`/mcp
 
 ## Quick start with Docker
 
-The fastest way to run FeedKeeper:
+Prebuilt images for `amd64` and `arm64` (including Raspberry Pi) are published to the GitHub Container Registry. You only need Docker, no clone and no build:
 
 ```bash
-git clone https://github.com/visualfusion/feedkeeper.git
-cd feedkeeper
-cp .env.example .env
+mkdir feedkeeper && cd feedkeeper
+curl -fsSLO https://raw.githubusercontent.com/visualfusion/feedkeeper/main/compose.yaml
+echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
+docker compose up -d
 ```
 
-Generate a secret with `openssl rand -hex 32` and put it in `.env` as `SESSION_SECRET`. For a public domain, also set `PUBLIC_URL` to the URL users open. Then start the container:
+Open `http://localhost:3000` to complete the initial setup via the web onboarding screen. For a public domain, also add `PUBLIC_URL=https://your.domain` to `.env` (see [`.env.example`](.env.example) for all options).
+
+To update, pull the new image and restart:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-Open `PUBLIC_URL` (by default `http://localhost:3000`) to complete the initial setup via the web onboarding screen.
-
-Existing Docker installations must provide `SESSION_SECRET` through `.env` or the shell before using this Compose configuration. Changing it signs out active browser sessions; feeds and accounts stay in the database.
+Changing `SESSION_SECRET` signs out active browser sessions; feeds and accounts stay in the database. Want to build the image yourself? Clone the repository and run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
 ## Back up and restore
 
