@@ -217,7 +217,7 @@ See [.env.example](.env.example) for all available environment variables.
 
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started. This is a young project, so expect some rough edges.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started. Improving or adding a language is a good first contribution, see [docs/translating.md](docs/translating.md). Notable changes are listed in the [changelog](CHANGELOG.md). This is a young project, so expect some rough edges.
 
 ## License
 

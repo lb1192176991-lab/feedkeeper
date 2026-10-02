@@ -39,7 +39,7 @@ body:
       label: Deployment environment
       description: Where is your Feedkeeper instance running?
       options:
-        - Docker / Docker Compose
+        - Docker / Docker Compose (prebuilt image)
         - Uberspace
         - Bare metal Linux (systemd / Node.js)
         - macOS / Local development
@@ -52,7 +52,7 @@ body:
       label: Environment details & logs
       description: Versions and relevant server/console logs or screenshots.
       placeholder: |
-        - Feedkeeper version/commit:
+        - FeedKeeper version (release or Docker image tag):
         - Node.js version:
         - Browser / MCP client (if applicable):
         - Logs:

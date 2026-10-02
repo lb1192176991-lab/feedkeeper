@@ -1,14 +1,14 @@
 # Contributing
 
-Thanks for considering a contribution to Feedkeeper.
+Thanks for considering a contribution to FeedKeeper. Please also read our [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting bugs
 
-Open an [issue](https://github.com/visualfusion/feedkeeper/issues) with:
+Open an [issue](https://github.com/visualfusion/feedkeeper/issues/new/choose) with:
 
 - What you expected to happen vs. what happened
 - Steps to reproduce
-- Your environment (Node version, OS, browser if it's a UI issue)
+- Your FeedKeeper version (shown in the release you installed, or the Docker image tag), how you run it, and your browser if it's a UI issue
 
 For security vulnerabilities, see [SECURITY.md](SECURITY.md) instead — please don't open a public issue.
 
@@ -28,16 +28,17 @@ npm run dev:server   # terminal 1
 npm run dev:web      # terminal 2
 ```
 
-See the [README](README.md#quick-start-local) for the full quick start.
+See the [README](README.md#quick-start-local-development) for the full quick start.
 
 ## Before opening a pull request
 
 ```bash
 npm run lint   # type-checks both workspaces
+npm test       # server and web tests
 npm run build  # verifies the production build succeeds
 ```
 
-Both run in CI on every pull request; please make sure they pass locally first.
+All three run in CI on every pull request; please make sure they pass locally first. If you fix a bug or add behavior, add a test next to the existing ones in `server/test/` or `web/test/`.
 
 ## Codebase architecture
 
@@ -47,8 +48,9 @@ Feedkeeper is an npm workspace with two packages:
   - `src/db/`: SQLite setup with `better-sqlite3` and incremental migrations (`src/db/migrations/`).
   - `src/feeds/`: Polling scheduler (`poller.ts`), feed parser/fetcher, auto-discovery, SSRF guard, OPML generator/parser, and housekeeping (`cleanup.ts`).
   - `src/api/`: REST endpoints for feeds, items, bookmarks, keyword filters, folders, users, and retention settings.
+  - `src/feeds/archive.ts`: Keeps saved articles readable by storing their full text and images.
   - `src/mcp/`: Remote Model Context Protocol server exposing tools over Streamable HTTP (`/mcp`).
-- `web/`: Single-page app built with Vite, React, and Tailwind CSS.
+- `web/`: Single-page app built with Vite, React, and Tailwind CSS (installable as a PWA).
   - `src/pages/`: Feeds, Items, Settings, and Auth views.
   - `src/i18n/`: Translations in `en.json`, `de.json`, and `ja.json`.
 
@@ -56,9 +58,11 @@ Feedkeeper is an npm workspace with two packages:
 
 - Keep PRs focused — one change per PR is easier to review than a bundle of unrelated fixes.
 - Match the existing code style (no linter/formatter is enforced yet beyond TypeScript's own checks).
-- If you touch user-facing text, update all three locale files (`web/src/i18n/locales/{en,de,ja}.json`), not just English. If you don't speak German or Japanese, a best-effort translation (or leaving a `// TODO: translate` note) is fine — it'll get reviewed.
+- If you touch user-facing text, update all three locale files (`web/src/i18n/locales/{en,de,ja}.json`), not just English; a test fails when their keys differ. If you don't speak German or Japanese, a best-effort translation is fine, it will get reviewed. See [docs/translating.md](docs/translating.md) to improve or add a language.
+- User-visible changes get a line under "Unreleased" in [CHANGELOG.md](CHANGELOG.md).
+- Commit messages are a short conventional subject, for example `fix(server): reject empty feed titles` or `feat(web): add a refresh button`.
 - If you change the database schema, add a new migration file under `server/src/db/migrations/` rather than editing an existing one.
 
 ## Code of conduct
 
-Be respectful and constructive. Disagreements about code are fine; personal attacks aren't.
+Be respectful and constructive. See the [code of conduct](CODE_OF_CONDUCT.md).

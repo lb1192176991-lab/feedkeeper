@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Feedkeeper is a young project without tagged releases yet — only the latest commit on `main` is supported. Always run the current `main`.
+Only the latest release receives security fixes. Please update to the newest version from the [releases page](https://github.com/visualfusion/feedkeeper/releases) (or the `latest` Docker image) before reporting, and mention the version you tested.
 
 ## Reporting a Vulnerability
 

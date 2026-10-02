@@ -1,0 +1,23 @@
+name: Translation
+description: Report a wrong or missing translation, or offer a new language
+title: "[Translation]: "
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping FeedKeeper speak more languages. You can also fix text directly with a pull request, see [docs/translating.md](https://github.com/visualfusion/feedkeeper/blob/main/docs/translating.md).
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: German, Japanese, French...
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What should change?
+      description: Where do you see the text, what does it say now, and what should it say? For a new language, tell us whether you would like to translate it yourself.
+    validations:
+      required: true
