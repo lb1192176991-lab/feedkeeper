@@ -9,6 +9,7 @@ import { FeedsPage } from "./pages/FeedsPage.tsx";
 import { ItemsPage } from "./pages/ItemsPage.tsx";
 import { SettingsPage } from "./pages/SettingsPage.tsx";
 import { LoadingSpinner } from "./components/LoadingSpinner.tsx";
+import { OfflineScreen } from "./components/Offline.tsx";
 import { hideSplash, isSplashVisible } from "./utils/splash.ts";
 
 function MetaSync() {
@@ -43,7 +44,7 @@ function MetaSync() {
 }
 
 function Gate({ children }: { children: React.ReactNode }) {
-  const { user, loading, needsOnboarding } = useAuth();
+  const { user, loading, needsOnboarding, unreachable } = useAuth();
 
   useEffect(() => {
     if (!loading) hideSplash();
@@ -58,6 +59,7 @@ function Gate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  if (unreachable) return <OfflineScreen />;
   if (needsOnboarding) return <OnboardingPage />;
   if (!user) return <LoginPage />;
   return <>{children}</>;

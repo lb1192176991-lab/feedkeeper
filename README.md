@@ -41,6 +41,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls. Sites that answer with a cookie-consent or subscription wall are remembered per feed, and full-text fetching can be turned off for any subscription.
 - **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews; phones always use the newspaper layout.
 - **Mobile-friendly web app** — responsive layout with tab navigation and pull to refresh, installable on the home screen, with light, dark and system themes.
+- **Works offline** — a service worker lets the installed app start without a connection. It keeps your saved articles and the newest unread ones on the device with their full text and images, so you can read, search and filter them on the train. Changes such as marking read or saving are kept and sent once you are back online. Switch it off in the settings; cached data is removed when you log out.
 - **Personal profiles** — each account can set its display name and a profile photo.
 - **Online backups** — create verified SQLite backups while the service keeps running.
 - **Hardened security** — SSRF protection against internal network probing, rate limiting on authentication, and hashed API tokens.

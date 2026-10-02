@@ -1,8 +1,10 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "../LanguageSwitcher.tsx";
 import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../../utils/installPrompt.ts";
 import { getTheme, setTheme, subscribeTheme, type Theme } from "../../utils/theme.ts";
+import { offlineEnabled, offlineItems, readSnapshot, setOfflineEnabled } from "../../utils/offlineStore.ts";
+import { removeOfflineCopy, syncOfflineCopy } from "../../utils/offlineSync.ts";
 import { SettingsCard, SettingRow, Toggle } from "./ui.tsx";
 
 function ThemeSwitch() {
@@ -52,6 +54,39 @@ function InstallRow() {
   );
 }
 
+function OfflineRow() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState(offlineEnabled);
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    void readSnapshot().then((snapshot) => setCount(snapshot ? offlineItems(snapshot).length : null));
+  }, [enabled]);
+
+  async function onChange(checked: boolean) {
+    setEnabled(checked);
+    setOfflineEnabled(checked);
+    if (!checked) {
+      await removeOfflineCopy();
+      setCount(null);
+      return;
+    }
+    const stored = await syncOfflineCopy({ force: true });
+    if (stored !== null) setCount(stored);
+  }
+
+  return (
+    <SettingRow
+      label={t("settings.offlineSaved")}
+      hint={`${t("settings.offlineSavedHint")}${enabled && count !== null ? ` ${t("settings.offlineSavedCount", { count })}` : ""}`}
+      htmlFor="offline-saved-toggle"
+      inline
+    >
+      <Toggle id="offline-saved-toggle" label={t("settings.offlineSaved")} checked={enabled} onChange={(checked) => void onChange(checked)} />
+    </SettingRow>
+  );
+}
+
 export function GeneralSettings() {
   const { t } = useTranslation();
   const [autoReaderMode, setAutoReaderMode] = useState(() => localStorage.getItem("feedkeeper_auto_reader_mode") !== "false");
@@ -79,6 +114,7 @@ export function GeneralSettings() {
             }}
           />
         </SettingRow>
+        <OfflineRow />
         <InstallRow />
       </SettingsCard>
     </div>

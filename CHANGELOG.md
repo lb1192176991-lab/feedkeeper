@@ -5,10 +5,14 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 ## [Unreleased]
 
 ### Added
+- A service worker: the installed app starts without a connection and shows the articles, feeds and images you loaded last, with an offline notice. Cached account data is removed on logout.
+- An offline copy keeps your saved articles (up to 300) and the newest 100 unread ones on the device with their full text and images, so they can be read, searched and filtered without a connection. Images of articles that are not archived are fetched through the server, which only serves images an article itself shows. A setting turns the offline copy off.
+- Marking read and saving work offline: the changes are kept and sent when the connection is back.
 - Prebuilt multi-architecture Docker images (`amd64` and `arm64`) published to the GitHub Container Registry, so FeedKeeper runs without cloning or building.
 - Contribution guides for translations, a code of conduct, and a check that all languages contain the same text keys.
 
 ### Changed
+- Built files are served with long-lived cache headers.
 - `compose.yaml` pulls the published image. Building from source moved to `compose.build.yaml`.
 
 ## [0.7.0] - 2026-10-01

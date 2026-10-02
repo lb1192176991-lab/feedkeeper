@@ -1,0 +1,117 @@
+import { api, isUnreachable, sendItemAction, type Item } from "../api/client.ts";
+import { flushQueue } from "./offlineQueue.ts";
+import { API_CACHE, SYNCED_KEY, deleteSnapshot, offlineEnabled, writeSnapshot } from "./offlineStore.ts";
+
+const PAGE_SIZE = 100;
+const MAX_SAVED = 300;
+const RECENT_LIMIT = 100;
+const MIN_INTERVAL_MS = 5 * 60 * 1000;
+// Archived images and images fetched through the server, whatever host the server believed it had.
+const OWN_IMAGE_URL = /https?:\/\/[^"'\s<>)]+(\/api\/(?:archive\/images\/\d+|items\/\d+\/image\?src=[^"'\s<>)]+))/g;
+
+let running: Promise<number | null> | null = null;
+
+function lastSync(): number {
+  try {
+    return Number(localStorage.getItem(SYNCED_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Address images through this page's own origin, so the stored copies are found again offline. */
+function localize(text: string | null | undefined, found: Set<string>): string | null | undefined {
+  return text?.replace(OWN_IMAGE_URL, (_match, path: string) => {
+    const url = `${window.location.origin}${path}`;
+    found.add(url);
+    return url;
+  });
+}
+
+function localizeItem(item: Item, found: Set<string>): Item {
+  return {
+    ...item,
+    image_url: localize(item.image_url, found),
+    content_html: localize(item.content_html, found),
+    full_content_html: localize(item.full_content_html, found),
+  };
+}
+
+async function downloadImages(cache: Cache, urls: string[]): Promise<void> {
+  const queue = [...urls];
+  const worker = async () => {
+    for (let url = queue.shift(); url; url = queue.shift()) {
+      if (await cache.match(url, { ignoreVary: true })) continue;
+      try {
+        const response = await fetch(url, { credentials: "include" });
+        if (response.ok && !(await cache.match(url, { ignoreVary: true }))) await cache.put(url, response);
+      } catch {
+        // The image stays online-only; the next sync tries again.
+      }
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+}
+
+async function dropCachedImages(cache: Cache, keep: Set<string>): Promise<void> {
+  for (const request of await cache.keys()) {
+    if (/\/api\/(archive\/images\/|items\/\d+\/image)/.test(request.url) && !keep.has(request.url)) await cache.delete(request);
+  }
+}
+
+/** Send changes made offline. Returns how many were handled. */
+export async function flushPending(): Promise<number> {
+  return navigator.onLine ? flushQueue(sendItemAction, isUnreachable) : 0;
+}
+
+/** Send pending changes and bring the offline copy up to date; a new copy is made right away when changes were sent. */
+export async function syncNow(): Promise<void> {
+  const sent = await flushPending();
+  await syncOfflineCopy({ force: sent > 0 });
+}
+
+/**
+ * Keep saved articles and the newest unread ones, with their images, on this device.
+ * Returns the number of articles stored, or null when nothing was done (disabled, offline or too recent).
+ */
+export function syncOfflineCopy(options: { force?: boolean } = {}): Promise<number | null> {
+  if (!("caches" in window) || !offlineEnabled() || !navigator.onLine) return Promise.resolve(null);
+  if (running) return running;
+  if (!options.force && Date.now() - lastSync() < MIN_INTERVAL_MS) return Promise.resolve(null);
+
+  running = (async () => {
+    try {
+      const found = new Set<string>();
+      const savedRaw: Item[] = [];
+      for (let offset = 0; savedRaw.length < MAX_SAVED; offset += PAGE_SIZE) {
+        const page = await api.listItems({ bookmarkedOnly: true, limit: PAGE_SIZE, offset, offline: true });
+        savedRaw.push(...page);
+        if (page.length < PAGE_SIZE) break;
+      }
+      const recentRaw = await api.listItems({ unreadOnly: true, limit: RECENT_LIMIT, offline: true });
+      const feeds = await api.listFeeds().catch(() => []);
+
+      const saved = savedRaw.slice(0, MAX_SAVED).map((item) => localizeItem(item, found));
+      const recent = recentRaw.map((item) => localizeItem(item, found));
+      const cache = await caches.open(API_CACHE);
+      await downloadImages(cache, [...found]);
+      await dropCachedImages(cache, found);
+
+      await writeSnapshot({ savedAt: new Date().toISOString(), saved, recent, feedFolders: Object.fromEntries(feeds.map((feed) => [feed.id, feed.folder_id])) });
+      localStorage.setItem(SYNCED_KEY, String(Date.now()));
+      return new Set([...saved, ...recent].map((item) => item.id)).size;
+    } catch {
+      return null;
+    } finally {
+      running = null;
+    }
+  })();
+  return running;
+}
+
+/** Turn the offline copy off and free the space. */
+export async function removeOfflineCopy(): Promise<void> {
+  await deleteSnapshot();
+  if (!("caches" in window)) return;
+  await dropCachedImages(await caches.open(API_CACHE), new Set());
+}

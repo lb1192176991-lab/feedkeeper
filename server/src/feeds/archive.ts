@@ -5,7 +5,7 @@ import { config } from "../config.js";
 import { db } from "../db/index.js";
 import { fetchImage } from "./fetcher.js";
 import { loadFullText } from "./fullText.js";
-import { canAccessItem, findItemById } from "./repository.js";
+import { canAccessItem, findItemById, findItemForUser } from "./repository.js";
 import { decodeEntities } from "./text.js";
 
 const MAX_IMAGES_PER_ARTICLE = 30;
@@ -58,14 +58,22 @@ export function articleImageUrls(html: string, baseUrl: string | null): string[]
   return [...urls];
 }
 
-/** Point archived images in article HTML at their local copies under `origin`. */
-export function rewriteArchivedImages(html: string, baseUrl: string | null, images: Map<string, number>, origin: string): string {
-  if (images.size === 0) return html;
+/** Replace the `src` of every image for which `replacement` knows a new address. */
+function rewriteImageSources(html: string, baseUrl: string | null, replacement: (url: string) => string | undefined): string {
   return html.replace(/<img\b[^>]*>/gi, (tag) => {
     const src = srcAttribute(tag);
     const url = src && resolveImageUrl(src.value, baseUrl);
-    const id = url ? images.get(url) : undefined;
-    return src && id ? `${tag.slice(0, src.start)}${archivedImageUrl(origin, id)}${tag.slice(src.end)}` : tag;
+    const next = url ? replacement(url) : undefined;
+    return src && next ? `${tag.slice(0, src.start)}${next}${tag.slice(src.end)}` : tag;
+  });
+}
+
+/** Point archived images in article HTML at their local copies under `origin`. */
+export function rewriteArchivedImages(html: string, baseUrl: string | null, images: Map<string, number>, origin: string): string {
+  if (images.size === 0) return html;
+  return rewriteImageSources(html, baseUrl, (url) => {
+    const id = images.get(url);
+    return id ? archivedImageUrl(origin, id) : undefined;
   });
 }
 
@@ -214,4 +222,47 @@ export function withArchivedImages<T extends { id: number; link: string | null; 
       full_content_html: item.full_content_html ? rewriteArchivedImages(item.full_content_html, item.link, images, origin) : item.full_content_html,
     };
   });
+}
+
+const MAX_OFFLINE_IMAGES_PER_ITEM = 8;
+
+type ImageSource = { link: string | null; image_url?: string | null; content_html?: string | null; full_content_html?: string | null };
+
+/** Every image address an article shows: the lead image first, then those in the text. */
+export function itemImageUrls(item: ImageSource): string[] {
+  const hero = item.image_url ? resolveImageUrl(item.image_url, item.link) : null;
+  return [...new Set([...(hero ? [hero] : []), ...articleImageUrls(item.full_content_html ?? "", item.link), ...articleImageUrls(item.content_html ?? "", item.link)])];
+}
+
+function proxiedImageUrl(origin: string, itemId: number, imageUrl: string): string {
+  return `${origin.replace(/\/$/, "")}/api/items/${itemId}/image?src=${encodeURIComponent(imageUrl)}`;
+}
+
+/**
+ * For offline copies: point the first images of articles that are not archived at an endpoint
+ * of this server, so the browser can store them without cross-origin requests.
+ */
+export function withProxiedImages<T extends ImageSource & { id: number }>(items: T[], origin: string): T[] {
+  const own = `${origin.replace(/\/$/, "")}/api/`;
+  return items.map((item) => {
+    const urls = new Set(itemImageUrls(item).filter((url) => !url.startsWith(own)).slice(0, MAX_OFFLINE_IMAGES_PER_ITEM));
+    if (urls.size === 0) return item;
+    const replace = (url: string) => (urls.has(url) ? proxiedImageUrl(origin, item.id, url) : undefined);
+    const hero = item.image_url ? resolveImageUrl(item.image_url, item.link) : null;
+    return {
+      ...item,
+      image_url: hero && urls.has(hero) ? proxiedImageUrl(origin, item.id, hero) : item.image_url,
+      content_html: item.content_html ? rewriteImageSources(item.content_html, item.link, replace) : item.content_html,
+      full_content_html: item.full_content_html ? rewriteImageSources(item.full_content_html, item.link, replace) : item.full_content_html,
+    };
+  });
+}
+
+/** Download one of an article's own images for the offline copy, or null when it is not one of them. */
+export async function fetchItemImage(userId: number, itemId: number, imageUrl: string): Promise<{ buffer: Buffer; mime: string } | "forbidden" | "unsupported"> {
+  const item = findItemForUser(userId, itemId);
+  if (!item || !itemImageUrls(item).includes(imageUrl)) return "forbidden";
+  const { buffer } = await fetchImage(imageUrl, MAX_IMAGE_BYTES);
+  const type = detectImageType(buffer);
+  return type ? { buffer, mime: type.mime } : "unsupported";
 }

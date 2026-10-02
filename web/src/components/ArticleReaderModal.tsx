@@ -65,7 +65,8 @@ export function ArticleReaderModal({
   useEffect(() => {
     if (!isOpen || !item || !articleUrl) return;
     const isAutoReader = localStorage.getItem("feedkeeper_auto_reader_mode") !== "false";
-    if (isAutoReader && !item.full_content_html && !fullTextDisabled) {
+    // Offline there is nothing to fetch; the article opens with what the feed provided.
+    if (isAutoReader && !item.full_content_html && !fullTextDisabled && navigator.onLine) {
       handleToggleFullText();
     }
   }, [isOpen, item?.id]);
@@ -109,6 +110,8 @@ export function ArticleReaderModal({
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === "consent_wall") {
         setConsentWall(true);
+      } else if (err instanceof ApiError && err.status === 0) {
+        setExtractionError(t("common.offlineAction"));
       } else if (!(err instanceof ApiError && err.code === "full_text_disabled")) {
         console.error("Failed to extract full text:", err);
         setExtractionError(t("reader.extractionFailed"));

@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import express from "express";
@@ -72,14 +72,29 @@ app.use(
 // per-route limiter on /api/auth/login.
 app.use(
   "/api",
-  rateLimit({ windowMs: 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }),
+  rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Offline copies fetch many article images in a row; that route has its own, higher limit.
+    skip: (req) => /^\/items\/\d+\/image$/.test(req.path),
+  }),
 );
 
 app.use("/api", apiRouter);
 app.use("/mcp", mcpRouter);
 
 if (existsSync(WEB_DIST)) {
-  app.use(express.static(WEB_DIST));
+  app.use(
+    express.static(WEB_DIST, {
+      setHeaders(res, filePath) {
+        // Hashed build files never change; the service worker must always be re-checked.
+        if (filePath.includes(`${sep}assets${sep}`)) res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        if (filePath.endsWith(`${sep}sw.js`)) res.setHeader("Cache-Control", "no-cache");
+      },
+    }),
+  );
   app.get(/(.*)/, (req, res, next) => {
     if (req.path.startsWith("/api") || req.path.startsWith("/mcp")) return next();
     res.sendFile(join(WEB_DIST, "index.html"));

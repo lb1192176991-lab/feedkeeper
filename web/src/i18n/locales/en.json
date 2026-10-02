@@ -11,7 +11,12 @@
     "loadMore": "Load more",
     "noOptions": "No options",
     "metaTitle": "FeedKeeper – RSS Reader & MCP Server",
-    "metaDescription": "Self-hosted RSS/Atom feed manager and remote MCP server for AI assistants."
+    "metaDescription": "Self-hosted RSS/Atom feed manager and remote MCP server for AI assistants.",
+    "offlineBanner": "You are offline. You can keep reading and make changes; they are sent once you are back online.",
+    "offlineTitle": "No connection",
+    "offlineText": "FeedKeeper cannot reach the server right now. Check your connection and try again.",
+    "offlineAction": "You are offline. This needs a connection.",
+    "offlinePending": "Waiting to be sent: {{count}}."
   },
   "nav": {
     "items": "Articles",
@@ -246,6 +251,9 @@
     "tokenLastUsed": "last used {{time}}",
     "tokenNeverUsed": "never used",
     "userCreated": "Account created.",
-    "addUserHint": "Self-registration is off by default – create new accounts here."
+    "addUserHint": "Self-registration is off by default – create new accounts here.",
+    "offlineSaved": "Read offline",
+    "offlineSavedHint": "Keeps your saved articles and the newest unread ones, with their images, on this device so you can read without a connection. Changes you make offline are sent later.",
+    "offlineSavedCount": "Articles available offline: {{count}}."
   }
 }

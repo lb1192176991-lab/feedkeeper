@@ -11,7 +11,12 @@
     "loadMore": "Weitere laden",
     "noOptions": "Keine Optionen",
     "metaTitle": "FeedKeeper – RSS-Reader & MCP-Server",
-    "metaDescription": "Selbstgehosteter RSS/Atom-Feed-Reader und MCP-Server für KI-Assistenten."
+    "metaDescription": "Selbstgehosteter RSS/Atom-Feed-Reader und MCP-Server für KI-Assistenten.",
+    "offlineBanner": "Du bist offline. Du kannst weiterlesen und Änderungen vornehmen; sie werden gesendet, sobald du wieder online bist.",
+    "offlineTitle": "Keine Verbindung",
+    "offlineText": "FeedKeeper erreicht den Server gerade nicht. Prüfe deine Verbindung und versuche es erneut.",
+    "offlineAction": "Du bist offline. Dafür brauchst du eine Verbindung.",
+    "offlinePending": "Wartet auf Senden: {{count}}."
   },
   "nav": {
     "feeds": "Feeds",
@@ -246,6 +251,9 @@
     "tokenLastUsed": "zuletzt genutzt {{time}}",
     "tokenNeverUsed": "noch nie genutzt",
     "userCreated": "Konto angelegt.",
-    "addUserHint": "Selbstregistrierung ist standardmäßig aus – neue Konten legst du hier an."
+    "addUserHint": "Selbstregistrierung ist standardmäßig aus – neue Konten legst du hier an.",
+    "offlineSaved": "Offline lesen",
+    "offlineSavedHint": "Hält deine gemerkten Artikel und die neuesten ungelesenen samt Bildern auf diesem Gerät bereit, damit du ohne Verbindung lesen kannst. Änderungen, die du offline machst, werden später gesendet.",
+    "offlineSavedCount": "Offline verfügbare Artikel: {{count}}."
   }
 }

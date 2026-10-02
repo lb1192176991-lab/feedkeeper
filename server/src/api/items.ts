@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { requireSession } from "../auth/middleware.js";
 import {
@@ -11,7 +12,7 @@ import {
   findItemById,
 } from "../feeds/repository.js";
 import { loadFullText, type FullTextError } from "../feeds/fullText.js";
-import { pruneArchive, scheduleArchive, withArchivedImages } from "../feeds/archive.js";
+import { fetchItemImage, pruneArchive, scheduleArchive, withArchivedImages, withProxiedImages } from "../feeds/archive.js";
 
 const FULL_TEXT_STATUS: Record<FullTextError, number> = {
   item_not_found: 404,
@@ -39,6 +40,7 @@ const listQuerySchema = z.object({
   search: z.string().max(200).optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
   offset: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  offline: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
 });
 
 itemsRouter.get("/", (req, res) => {
@@ -48,7 +50,10 @@ itemsRouter.get("/", (req, res) => {
     return;
   }
   // Saved articles are served with their archived images instead of the originals.
-  const items = withArchivedImages(listItemsForUser(req.user!.id, parsed.data), requestOrigin(req));
+  const origin = requestOrigin(req);
+  const archived = withArchivedImages(listItemsForUser(req.user!.id, parsed.data), origin);
+  // Offline copies also get the images of articles that are not archived, through this server.
+  const items = parsed.data.offline ? withProxiedImages(archived, origin) : archived;
   res.json(
     items.map((item) => ({
       ...item,
@@ -56,6 +61,26 @@ itemsRouter.get("/", (req, res) => {
       bookmarked: Boolean(item.bookmarked),
     })),
   );
+});
+
+const imageLimiter = rateLimit({ windowMs: 60 * 1000, limit: 600, standardHeaders: true, legacyHeaders: false });
+
+// Lets the web app keep an article's images for offline reading; only images the article itself shows are served.
+itemsRouter.get("/:itemId/image", imageLimiter, async (req, res) => {
+  const src = typeof req.query.src === "string" ? req.query.src : "";
+  try {
+    const image = await fetchItemImage(req.user!.id, Number(req.params.itemId), src);
+    if (image === "forbidden") {
+      res.status(404).json({ error: "not_found" });
+    } else if (image === "unsupported") {
+      res.status(415).json({ error: "unsupported_image" });
+    } else {
+      res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+      res.type(image.mime).send(image.buffer);
+    }
+  } catch {
+    res.status(502).json({ error: "image_unavailable" });
+  }
 });
 
 const markAllReadSchema = z.object({

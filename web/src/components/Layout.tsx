@@ -3,12 +3,27 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { DesktopNav } from "./DesktopNav.tsx";
 import { ProfileMenu } from "./ProfileMenu.tsx";
+import { OfflineBanner } from "./Offline.tsx";
 import { Toaster } from "./Toaster.tsx";
 import { resetItemsScrollY } from "../utils/scrollState.ts";
+import { syncNow } from "../utils/offlineSync.ts";
 
 export function Layout() {
   const { t } = useTranslation();
   const location = useLocation();
+
+  // Send changes made offline and keep articles available offline: on start, when the app returns to the foreground and when the connection comes back.
+  useEffect(() => {
+    const sync = () => void syncNow();
+    const onVisible = () => document.visibilityState === "visible" && sync();
+    sync();
+    window.addEventListener("online", sync);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", sync);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   // Scroll to top when switching to non-article pages
   useEffect(() => {
@@ -63,6 +78,8 @@ export function Layout() {
           </div>
         </div>
       </header>
+
+      <OfflineBanner />
 
       {/* Main content with bottom padding for mobile tab bar */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 pt-4 pb-24 md:py-6">

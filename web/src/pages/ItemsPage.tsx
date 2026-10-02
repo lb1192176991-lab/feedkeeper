@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { api, type Feed, type Folder, type Item } from "../api/client.ts";
+import { api, ApiError, type Feed, type Folder, type Item } from "../api/client.ts";
 import { CustomSelect, type SelectOption } from "../components/CustomSelect.tsx";
 import { TodayDate } from "../components/TodayDate.tsx";
 import { ArticleReaderModal } from "../components/ArticleReaderModal.tsx";
@@ -12,6 +12,7 @@ import { NewspaperGrid } from "../components/NewspaperGrid.tsx";
 import { PullToRefresh } from "../components/PullToRefresh.tsx";
 import { getItemsScrollY, setItemsScrollY, resetItemsScrollY } from "../utils/scrollState.ts";
 import { toast } from "../utils/toast.ts";
+import { syncOfflineCopy } from "../utils/offlineSync.ts";
 import { RefreshIcon } from "../components/feeds/icons.tsx";
 
 const PAGE_SIZE = 50;
@@ -428,6 +429,16 @@ export function ItemsPage() {
     }
   }
 
+  // Changes need the server; say so instead of failing silently when there is no connection.
+  async function whenOnline(action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 0)) throw error;
+      toast.error(t("common.offlineAction"));
+    }
+  }
+
   async function toggleRead(item: Item) {
     const nextRead = !item.read;
     if (item.read) await api.markUnread(item.id);
@@ -444,6 +455,8 @@ export function ItemsPage() {
     const nextBookmarked = !item.bookmarked;
     if (item.bookmarked) await api.unbookmarkItem(item.id);
     else await api.bookmarkItem(item.id);
+    // The server archives images in the background, so update the offline copy a little later.
+    window.setTimeout(() => void syncOfflineCopy({ force: true }), nextBookmarked ? 20_000 : 0);
     setItems((prev) => {
       // In the saved list an unsaved article leaves the list, unless it is open in the reader.
       if (bookmarkedOnly && !nextBookmarked && selectedArticle?.id !== item.id) return prev.filter((i) => i.id !== item.id);
@@ -455,8 +468,10 @@ export function ItemsPage() {
   }
 
   async function onMarkAllRead() {
-    await api.markAllRead({ feedId: currentFeedId, folderId: currentFolderId });
-    await load();
+    await whenOnline(async () => {
+      await api.markAllRead({ feedId: currentFeedId, folderId: currentFolderId });
+      await load();
+    });
   }
 
   // Shared by the refresh button and pull to refresh, so both give the same feedback.

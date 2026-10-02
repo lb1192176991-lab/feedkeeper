@@ -1,3 +1,6 @@
+import { applyPending, dequeue, enqueue, type ItemAction } from "../utils/offlineQueue.ts";
+import { filterOffline, offlineItems, readSnapshot } from "../utils/offlineStore.ts";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -14,11 +17,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`/api${path}`, {
-    credentials: "include",
-    ...init,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      credentials: "include",
+      ...init,
+      headers,
+    });
+  } catch {
+    // fetch only rejects when the server cannot be reached at all.
+    throw new ApiError(0, "unreachable");
+  }
 
   if (res.status === 204) return undefined as T;
 
@@ -27,6 +36,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(res.status, body.error ?? "unknown_error", body);
   }
   return body as T;
+}
+
+/** Send a read or bookmark change straight to the server. */
+export function sendItemAction(action: ItemAction, itemId: number, value: boolean): Promise<void> {
+  if (action === "read") return request<void>(`/items/${itemId}/${value ? "read" : "unread"}`, { method: "POST" });
+  return request<void>(`/items/${itemId}/bookmark`, { method: value ? "POST" : "DELETE" });
+}
+
+/** Without a connection the change is kept and sent later, so the app keeps working. */
+async function changeItem(action: ItemAction, itemId: number, value: boolean): Promise<void> {
+  try {
+    await sendItemAction(action, itemId, value);
+    dequeue(action, itemId);
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 0)) throw error;
+    enqueue(action, itemId, value);
+  }
+}
+
+export function isUnreachable(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 0;
 }
 
 export interface PublicConfig {
@@ -200,13 +230,15 @@ export const api = {
   deleteFolder: (id: number) => request<{ success: boolean }>(`/folders/${id}`, { method: "DELETE" }),
   markFolderRead: (id: number) => request<{ read: number }>(`/folders/${id}/read`, { method: "POST" }),
 
-  listItems: (
+  listItems: async (
     params: {
       feedId?: number;
       folderId?: number;
       unreadOnly?: boolean;
       bookmarkedOnly?: boolean;
       includeMuted?: boolean;
+      /** Rewrite images so the web app can keep them for offline reading. */
+      offline?: boolean;
       search?: string;
       limit?: number;
       offset?: number;
@@ -218,16 +250,34 @@ export const api = {
     if (params.unreadOnly) query.set("unreadOnly", "true");
     if (params.bookmarkedOnly) query.set("bookmarkedOnly", "true");
     if (params.includeMuted) query.set("includeMuted", "true");
+    if (params.offline) query.set("offline", "true");
     if (params.search) query.set("search", params.search);
     if (params.limit) query.set("limit", String(params.limit));
     if (params.offset) query.set("offset", String(params.offset));
     const qs = query.toString();
-    return request<Item[]>(`/items${qs ? `?${qs}` : ""}`);
+    // Offline, read from the copy kept on this device, including changes not sent yet.
+    const fromDevice = async () => {
+      const snapshot = await readSnapshot();
+      return snapshot ? filterOffline(applyPending(offlineItems(snapshot)), snapshot.feedFolders, params) : null;
+    };
+    if (!navigator.onLine && !params.offline) {
+      const items = await fromDevice();
+      if (items) return items;
+    }
+    try {
+      return applyPending(await request<Item[]>(`/items${qs ? `?${qs}` : ""}`));
+    } catch (error) {
+      if (isUnreachable(error)) {
+        const items = await fromDevice();
+        if (items) return items;
+      }
+      throw error;
+    }
   },
-  markRead: (itemId: number) => request<void>(`/items/${itemId}/read`, { method: "POST" }),
-  markUnread: (itemId: number) => request<void>(`/items/${itemId}/unread`, { method: "POST" }),
-  bookmarkItem: (itemId: number) => request<void>(`/items/${itemId}/bookmark`, { method: "POST" }),
-  unbookmarkItem: (itemId: number) => request<void>(`/items/${itemId}/bookmark`, { method: "DELETE" }),
+  markRead: (itemId: number) => changeItem("read", itemId, true),
+  markUnread: (itemId: number) => changeItem("read", itemId, false),
+  bookmarkItem: (itemId: number) => changeItem("bookmark", itemId, true),
+  unbookmarkItem: (itemId: number) => changeItem("bookmark", itemId, false),
   extractContent: (itemId: number) =>
     request<{
       id: number;
