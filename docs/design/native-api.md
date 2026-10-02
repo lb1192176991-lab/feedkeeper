@@ -20,7 +20,7 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 - `Idempotency-Key` header on every unsafe request that is not part of `/mutations`. Replaying a request with the same key returns the stored result.
 - Responses are gzip-compressed and carry `ETag` where cheap, so clients can revalidate lists.
 - Rate limits are per token and returned in `RateLimit-*` headers; sync endpoints have higher limits than the web API.
-- The contract is an OpenAPI 3.1 file, `docs/openapi.yaml`, kept next to the code. The Swift client is generated from it and a conformance test suite runs against a real server.
+- The contract is an OpenAPI 3.1 file, `docs/openapi.yaml`, kept next to the code; a test fails when it and the implemented routes drift apart. The Swift client is generated from it and a conformance test suite runs against a real server.
 
 ## Meta and compatibility
 
@@ -122,7 +122,7 @@ All of these require a device token unless noted. Lists are cursor-paged.
 - `GET /items` (filters: feed, folder, unread, saved, tag, date range, `after` cursor), `GET /items/{id}`.
 - Item fields: `id`, `subscriptionId`, `title`, `url`, `author`, `publishedAt`, `addedAt`, `snippet`, `imageUrl`, `contentHtml`, `fullTextHtml`, `state` (`read`, `saved`, `savedAt`, `archivedAt`, `progress`, `tags`), `contentHash` of the archived full text.
 - `POST /items/{id}/full-text` fetches and caches the full article.
-- `GET /items/bundle?ids=…` returns articles with all content and a map of image URLs, so a client can store an offline copy with one request. `GET /items/{id}/media?src=…` serves an article's images (archived copy for saved articles).
+- `GET /items/bundle?ids=…` returns articles with all content and a map of image URLs, so a client can store an offline copy with one request. `GET /items/{id}/image?src=…` serves an article's images and `GET /archive/images/{id}` the stored copies of saved articles. Both the web app and the native API call the route `image`, so there is one name for it.
 - `GET /search?q=…` searches titles, summaries, archived full text, notes and tags (SQLite FTS5, planned alongside).
 
 **Saved articles, tags, annotations, progress**
@@ -158,9 +158,11 @@ Offline copy of saved and recent articles with images, instant state sync across
 
 ## Phases
 
+Status: steps 1 and 2 are implemented (pairing, `/meta`, change log, `/sync`, `/mutations`, subscriptions, folders, keywords, articles, images, OPML, `docs/openapi.yaml`). Annotations, tags, FTS5 search and the push relay are still to do. Route names follow the OpenAPI file, for example `/muted-keywords`, `/items/{id}/image` and `/items/read-all`.
+
 1. Contract: OpenAPI file, error catalogue, review of this draft.
 2. Server foundations: device tokens and pairing, `/meta`, change log and `/sync`, `/mutations`, subscriptions and articles on `/api/v1` with tests.
-3. Saved-article features: tags, annotations, reading position, FTS5 search, `bundle` and `media`.
+3. Saved-article features: tags, annotations, reading position, FTS5 search, `bundle` and the image routes.
 4. Push: relay protocol on the server side, device registration, the relay service and the app's extension.
 5. Google Reader compatible adapter for third-party apps, built on the same services.
 

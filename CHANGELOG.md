@@ -4,9 +4,12 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-02
+
 ### Added
 - Groundwork for native apps: `GET /api/v1/meta` and pairing a device with a one-time code (Settings → Devices, with a QR code). Each device gets its own revocable token for the new `/api/v1`, which MCP does not accept. See `docs/design/native-api.md`.
 - Native API: `GET /api/v1/sync` delivers everything that changed in a user's state (article read and saved state and reading position, subscriptions, folders, muted keywords) from a compacted change log, and `POST /api/v1/mutations` applies changes made offline idempotently with last-writer-wins per field.
+- Native API: subscriptions, folders, muted keywords, articles (cursor paging, search, content, bundles for offline copies), full text, images through the server, OPML and an overview, all under `/api/v1` and described in `docs/openapi.yaml`.
 - MCP: `get_digest` returns unread articles grouped by feed with short snippets, and `get_overview` summarizes the account (unread and saved counts, top feeds, folders, failing feeds).
 - MCP: `get_item` accepts `maxChars`, and `get_new_items` can leave out article HTML and shorten summaries, to save tokens.
 - MCP: `update_feed` can switch push notifications and the app icon count per feed.
@@ -129,7 +132,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/visualfusion/feedkeeper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/visualfusion/feedkeeper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/visualfusion/feedkeeper/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/visualfusion/feedkeeper/compare/v0.6.0...v0.6.1

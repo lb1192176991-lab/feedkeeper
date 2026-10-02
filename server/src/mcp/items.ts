@@ -8,11 +8,11 @@ const cursorSchema = z.object({
 
 type ItemCursor = z.infer<typeof cursorSchema>;
 
-function encodeCursor(item: { created_at: string; id: number }): string {
+export function encodeCursor(item: { created_at: string; id: number }): string {
   return Buffer.from(JSON.stringify({ createdAt: item.created_at, id: item.id })).toString("base64url");
 }
 
-function decodeCursor(value: string): ItemCursor {
+export function decodeCursor(value: string): ItemCursor {
   if (value.length > 256 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("invalid_cursor");
   const decoded = Buffer.from(value, "base64url");
   if (decoded.toString("base64url") !== value) throw new Error("invalid_cursor");

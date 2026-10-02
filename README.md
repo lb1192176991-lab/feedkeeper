@@ -200,6 +200,10 @@ Besides tools, the server offers prompts (`daily_briefing`, `catch_up_on_topic`,
 
 Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `get_item` returns stored feed or reader content; `fetch_full_text` downloads the article from its website and needs a read-and-write token. Item actions accept a single `itemId` or up to 200 `itemIds`. `get_new_items`, `search_items` and `list_items` accept `since` and `until` (ISO date or date-time) to filter by publish date. For incremental synchronization, save `newestCursor`, pass it as `after` next time, and follow `nextCursor` as `before` until there are no more pages.
 
+## Native apps
+
+A native **iOS app** for FeedKeeper is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline and queue changes made without a connection. The design, including how push notifications for native apps will work without exposing your articles, is in [docs/design/native-api.md](docs/design/native-api.md). Third-party clients are welcome to build on the same API.
+
 ## Security
 
 - **Closed signup by default** (`ALLOW_SIGNUP=false`). An admin creates additional accounts from Settings.

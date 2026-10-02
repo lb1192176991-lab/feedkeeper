@@ -14,7 +14,7 @@ import {
 import { loadFullText, type FullTextError } from "../feeds/fullText.js";
 import { fetchItemImage, pruneArchive, scheduleArchive, withArchivedImages, withProxiedImages } from "../feeds/archive.js";
 
-const FULL_TEXT_STATUS: Record<FullTextError, number> = {
+export const FULL_TEXT_STATUS: Record<FullTextError, number> = {
   item_not_found: 404,
   item_has_no_link: 400,
   full_text_disabled: 409,

@@ -10,12 +10,13 @@ import { getRetentionSettings } from "../../feeds/cleanup.js";
 import { APP_VERSION } from "../../version.js";
 import { ResyncRequired, currentSeq, listChanges } from "../../sync/changeLog.js";
 import { applyMutations } from "../../sync/mutations.js";
+import { resourcesRouter } from "./resources.js";
 
 /** The API for native apps. See docs/design/native-api.md for the contract and what is still to come. */
 export const v1Router = Router();
 
 // Features grow with the implementation; clients look here instead of guessing from the version.
-const FEATURES = ["pairing", "sync", "mutations"];
+const FEATURES = ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml"];
 
 v1Router.get("/meta", (_req, res) => {
   res.json({
@@ -62,6 +63,15 @@ v1Router.post("/devices/pair", rateLimit({ windowMs: 60 * 1000, limit: 10, stand
 });
 
 v1Router.use(requireSessionOrDevice);
+
+// A read-only token may look at everything but change nothing.
+v1Router.use((req, res, next) => {
+  if (req.method !== "GET" && req.tokenScope === "read") {
+    res.status(403).json({ error: "read_only_token" });
+    return;
+  }
+  next();
+});
 
 v1Router.get("/me", (req, res) => {
   const { id, email, display_name, role } = req.user!;
@@ -128,3 +138,5 @@ v1Router.post("/mutations", (req, res) => {
   const results = applyMutations(req.user!.id, mutations);
   res.json({ results, seq: currentSeq(req.user!.id) });
 });
+
+v1Router.use(resourcesRouter);

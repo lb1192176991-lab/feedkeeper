@@ -1,0 +1,526 @@
+openapi: 3.1.0
+info:
+  title: FeedKeeper native API
+  version: "1"
+  license: { name: MIT, url: "https://github.com/visualfusion/feedkeeper/blob/main/LICENSE" }
+  description: |
+    The API for native apps, served under `/api/v1`. Design notes and what is still planned
+    are in `docs/design/native-api.md`. A test keeps this file in step with the implemented routes.
+
+    Authenticate with `Authorization: Bearer <token>`: a device token from pairing, or a personal
+    access token. Read-only tokens can call every `GET` and nothing that changes data.
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+tags:
+  - { name: Meta }
+  - { name: Devices }
+  - { name: Sync }
+  - { name: Subscriptions }
+  - { name: Folders }
+  - { name: Keywords }
+  - { name: Articles }
+  - { name: Images }
+paths:
+  /meta:
+    get:
+      tags: [Meta]
+      summary: Server identity and abilities
+      description: Public. Clients read `features` instead of guessing from the version.
+      security: []
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Meta" } } } }
+  /pairing-codes:
+    post:
+      tags: [Devices]
+      summary: Create a one-time pairing code
+      description: Called by the web app with the user's session. The code is valid for 10 minutes and replaces any earlier one.
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/PairingCode" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /devices/pair:
+    post:
+      tags: [Devices]
+      summary: Exchange a pairing code for a device token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, deviceName, platform]
+              properties:
+                code: { type: string, description: "As shown, or typed without dashes and in any case" }
+                deviceName: { type: string, maxLength: 100 }
+                platform: { type: string, maxLength: 40, examples: [ios] }
+                appVersion: { type: string, maxLength: 40 }
+      responses:
+        "201":
+          description: Paired. The token is shown only here.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceId: { type: integer }
+                  token: { type: string }
+                  user: { type: object, properties: { id: { type: integer }, email: { type: string }, displayName: { type: string } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "429": { description: Too many attempts }
+  /me:
+    get:
+      tags: [Devices]
+      summary: The signed-in user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  email: { type: string }
+                  displayName: { type: string }
+                  role: { type: string, enum: [admin, user] }
+                  scope: { type: string, enum: [read, write] }
+                  deviceId: { type: [integer, "null"] }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /devices:
+    get:
+      tags: [Devices]
+      summary: Paired devices
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Device" } } } } }
+  /devices/{id}:
+    delete:
+      tags: [Devices]
+      summary: Revoke a device
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /sync:
+    get:
+      tags: [Sync]
+      summary: Changes to the user's own data since a position
+      description: |
+        The log holds one entry per object, so `since=0` returns the complete state. A client whose
+        position is older than a forgotten deletion gets `410 resync_required` and starts over from 0.
+      parameters:
+        - { name: since, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SyncPage" } } } }
+        "410": { description: resync_required }
+  /mutations:
+    post:
+      tags: [Sync]
+      summary: Apply changes made offline
+      description: Each mutation has a client-made id, so a retried request changes nothing. Read, saved and reading position are last-writer-wins per field.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mutations]
+              properties:
+                mutations: { type: array, minItems: 1, maxItems: 200, items: { $ref: "#/components/schemas/Mutation" } }
+      responses:
+        "200":
+          description: One result per mutation, in order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results: { type: array, items: { $ref: "#/components/schemas/MutationResult" } }
+                  seq: { type: integer, description: Current end of the change log }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "403": { $ref: "#/components/responses/ReadOnly" }
+  /overview:
+    get:
+      tags: [Subscriptions]
+      summary: Counts for the whole account
+      description: Cheap enough for widgets and the app badge.
+      responses:
+        "200": { description: OK }
+  /subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: Subscriptions with unread counts and polling health
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Subscription" } } } } }
+    post:
+      tags: [Subscriptions]
+      summary: Subscribe to a feed or website
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+                label: { type: [string, "null"], maxLength: 200 }
+                folderId: { type: [integer, "null"] }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "409": { description: "already_subscribed, or multiple_feeds_found with a list of candidates" }
+  /subscriptions/order:
+    put:
+      tags: [Subscriptions]
+      summary: Set the order of all subscriptions
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [ids], properties: { ids: { type: array, items: { type: integer } } } } } }
+      responses:
+        "204": { description: Done }
+        "400": { $ref: "#/components/responses/Invalid" }
+  /subscriptions/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Subscriptions]
+      summary: Change a subscription
+      description: A new `url` is checked before it replaces the old one; the returned id may differ from the one passed in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string }
+                label: { type: [string, "null"], maxLength: 200 }
+                folderId: { type: [integer, "null"] }
+                pollIntervalMinutes: { type: integer, minimum: 1, maximum: 10080 }
+                fullTextMode: { type: string, enum: [auto, never] }
+                notify: { type: boolean }
+                badge: { type: boolean }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Subscription" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Subscriptions]
+      summary: Unsubscribe
+      description: Saved articles of the feed stay readable.
+      responses:
+        "204": { description: Done }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /subscriptions/{id}/refresh:
+    post:
+      tags: [Subscriptions]
+      summary: Check one feed now
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: OK }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /refresh:
+    post:
+      tags: [Subscriptions]
+      summary: Check all feeds now
+      responses:
+        "200": { description: "refreshed, newItems and errors counts" }
+  /subscriptions/{id}/icon:
+    get:
+      tags: [Images]
+      summary: The feed's icon, delivered by this server
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: An image, content: { "image/*": { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /discover:
+    post:
+      tags: [Subscriptions]
+      summary: Find the feeds of a website
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [url], properties: { url: { type: string } } } } }
+      responses:
+        "200": { description: OK }
+        "400": { $ref: "#/components/responses/Invalid" }
+  /opml:
+    get:
+      tags: [Subscriptions]
+      summary: Export subscriptions as OPML
+      responses:
+        "200": { description: OPML 2.0, content: { text/x-opml: { schema: { type: string } } } }
+    post:
+      tags: [Subscriptions]
+      summary: Import subscriptions from OPML
+      description: "Send the XML as the body (text/xml) or as JSON { opml: \"...\" }."
+      responses:
+        "200": { description: Import result }
+        "400": { $ref: "#/components/responses/Invalid" }
+  /folders:
+    get:
+      tags: [Folders]
+      summary: Folders with counts
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Folder" } } } } }
+    post:
+      tags: [Folders]
+      summary: Create a folder
+      description: Creating a folder that already exists returns it, so a retried request is harmless.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 100 } } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Folder" } } } }
+  /folders/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Folders]
+      summary: Rename a folder
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 100 } } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Folder" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: folder_name_taken }
+    delete:
+      tags: [Folders]
+      summary: Delete a folder
+      description: Its subscriptions stay and move out of any folder.
+      responses:
+        "204": { description: Done }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /muted-keywords:
+    get:
+      tags: [Keywords]
+      summary: Muted keywords
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Keywords]
+      summary: Mute a keyword
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [keyword], properties: { keyword: { type: string, maxLength: 100 } } } } }
+      responses:
+        "201": { description: Created }
+  /muted-keywords/{id}:
+    delete:
+      tags: [Keywords]
+      summary: Remove a muted keyword
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: Done }
+  /items:
+    get:
+      tags: [Articles]
+      summary: Articles, newest added first, with a cursor
+      description: |
+        Compact by default. Use `nextCursor` as `before` for older pages and `newestCursor` as `after`
+        for newly added articles. With `include=content` the page is limited to 50 articles.
+      parameters:
+        - { name: subscriptionId, in: query, schema: { type: integer } }
+        - { name: folderId, in: query, schema: { type: integer } }
+        - { name: unread, in: query, schema: { type: boolean } }
+        - { name: saved, in: query, schema: { type: boolean } }
+        - { name: q, in: query, description: "Searches titles and summaries, and the full text of saved articles", schema: { type: string, maxLength: 200 } }
+        - { name: since, in: query, schema: { type: string }, description: Published at or after this ISO date or date-time }
+        - { name: until, in: query, schema: { type: string }, description: Published at or before this ISO date or date-time }
+        - { name: after, in: query, schema: { type: string } }
+        - { name: before, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: include, in: query, schema: { type: string, enum: [content] } }
+        - { $ref: "#/components/parameters/Images" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Item" } }
+                  newestCursor: { type: [string, "null"] }
+                  nextCursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/Invalid" }
+  /items/bundle:
+    get:
+      tags: [Articles]
+      summary: Several articles with all their content
+      description: For storing offline copies. Images go through this server by default, so the app can keep them.
+      parameters:
+        - { name: ids, in: query, required: true, description: Up to 50 comma separated article ids, schema: { type: string } }
+        - { $ref: "#/components/parameters/Images" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/Item" } } } } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+  /items/read-all:
+    post:
+      tags: [Articles]
+      summary: Mark articles as read
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { subscriptionId: { type: integer }, folderId: { type: integer } } } } }
+      responses:
+        "200": { description: The number of articles marked }
+  /items/{id}:
+    get:
+      tags: [Articles]
+      summary: One article with its content
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/Images" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /items/{id}/full-text:
+    post:
+      tags: [Articles]
+      summary: Fetch and cache the full article
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: force, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: The article with `fullTextHtml`, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
+        "409": { description: full_text_disabled for this subscription }
+        "422": { description: consent_wall or could_not_extract_content }
+  /items/{id}/image:
+    get:
+      tags: [Images]
+      summary: An image the article shows, through this server
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: src, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: A raster image, content: { "image/*": { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "415": { description: Not a supported image }
+  /archive/images/{imageId}:
+    get:
+      tags: [Images]
+      summary: An image stored with a saved article
+      parameters: [{ name: imageId, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "200": { description: The stored image, content: { "image/*": { schema: { type: string, format: binary } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: integer } }
+    Images:
+      name: images
+      in: query
+      description: "`proxy` points the images of articles that are not archived at this server, so a client can keep them offline"
+      schema: { type: string, enum: [original, proxy] }
+  responses:
+    Unauthorized: { description: Missing or invalid credentials }
+    NotFound: { description: "Not found, or not visible to this user" }
+    Invalid: { description: "Invalid input: { error: invalid_input }" }
+    ReadOnly: { description: The token is read-only }
+  schemas:
+    Meta:
+      type: object
+      properties:
+        apiVersion: { type: integer }
+        serverVersion: { type: string }
+        features: { type: array, items: { type: string } }
+        limits: { type: object, properties: { maxMutationsPerRequest: { type: integer }, retentionDays: { type: integer } } }
+        minClientVersion: { type: [string, "null"] }
+    PairingCode:
+      type: object
+      properties:
+        code: { type: string }
+        expiresAt: { type: string, format: date-time }
+        pairingUrl: { type: string, description: "The content of the QR code" }
+    Device:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        platform: { type: [string, "null"] }
+        appVersion: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+        current: { type: boolean }
+    Subscription:
+      type: object
+      properties:
+        id: { type: integer }
+        url: { type: string }
+        title: { type: [string, "null"] }
+        siteUrl: { type: [string, "null"] }
+        label: { type: [string, "null"] }
+        folderId: { type: [integer, "null"] }
+        folderName: { type: [string, "null"] }
+        position: { type: integer }
+        pollIntervalMinutes: { type: integer }
+        fullTextMode: { type: string, enum: [auto, never] }
+        notify: { type: boolean }
+        badge: { type: boolean }
+        unreadCount: { type: integer }
+        lastPolledAt: { type: [string, "null"] }
+        lastSuccessAt: { type: [string, "null"] }
+        lastError: { type: [string, "null"] }
+        consecutiveErrors: { type: integer }
+    Folder:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        subscriptionCount: { type: integer }
+        unreadCount: { type: integer }
+    ItemState:
+      type: object
+      properties:
+        read: { type: boolean }
+        saved: { type: boolean }
+        savedAt: { type: [string, "null"] }
+        archivedAt: { type: [string, "null"] }
+        progress: { type: [number, "null"], minimum: 0, maximum: 1 }
+    Item:
+      type: object
+      properties:
+        id: { type: integer }
+        subscriptionId: { type: integer }
+        subscriptionTitle: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        url: { type: [string, "null"] }
+        publishedAt: { type: [string, "null"] }
+        addedAt: { type: string }
+        snippet: { type: [string, "null"] }
+        imageUrl: { type: [string, "null"] }
+        hasFullText: { type: boolean }
+        contentHtml: { type: [string, "null"], description: Only with content included }
+        fullTextHtml: { type: [string, "null"], description: Only with content included }
+        state: { $ref: "#/components/schemas/ItemState" }
+    SyncPage:
+      type: object
+      properties:
+        changes: { type: array, items: { $ref: "#/components/schemas/Change" } }
+        nextSeq: { type: integer, description: Pass as `since` next time }
+        hasMore: { type: boolean }
+    Change:
+      type: object
+      properties:
+        seq: { type: integer }
+        entity: { type: string, enum: [item_state, subscription, folder, muted_keyword] }
+        id: { type: integer }
+        op: { type: string, enum: [upsert, delete] }
+        data: { type: object, description: The current data of the object; absent for deletions }
+    Mutation:
+      type: object
+      required: [id, type, itemId, at]
+      properties:
+        id: { type: string, minLength: 8, maxLength: 64, description: Made by the client; makes retries harmless }
+        type: { type: string, enum: [item.read, item.save, item.progress] }
+        itemId: { type: integer }
+        value: { type: boolean, description: For item.read and item.save }
+        position: { type: number, minimum: 0, maximum: 1, description: "For item.progress; below 5 % or above 95 % clears it" }
+        at: { type: string, format: date-time, description: "When the user did it; at most 5 minutes ahead of the server, at most 30 days old" }
+    MutationResult:
+      type: object
+      properties:
+        id: { type: string }
+        outcome: { type: string, enum: [applied, duplicate, stale, rejected] }
+        error: { type: string, description: "invalid_mutation, invalid_time or item_not_found when rejected" }

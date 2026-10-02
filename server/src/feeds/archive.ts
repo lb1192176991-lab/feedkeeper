@@ -69,17 +69,17 @@ function rewriteImageSources(html: string, baseUrl: string | null, replacement: 
 }
 
 /** Point archived images in article HTML at their local copies under `origin`. */
-export function rewriteArchivedImages(html: string, baseUrl: string | null, images: Map<string, number>, origin: string): string {
+export function rewriteArchivedImages(html: string, baseUrl: string | null, images: Map<string, number>, origin: string, apiBase = "/api"): string {
   if (images.size === 0) return html;
   return rewriteImageSources(html, baseUrl, (url) => {
     const id = images.get(url);
-    return id ? archivedImageUrl(origin, id) : undefined;
+    return id ? archivedImageUrl(origin, id, apiBase) : undefined;
   });
 }
 
 /** Absolute, so the web app treats archived images like any other image URL. */
-export function archivedImageUrl(origin: string, imageId: number): string {
-  return `${origin.replace(/\/$/, "")}/api/archive/images/${imageId}`;
+export function archivedImageUrl(origin: string, imageId: number, apiBase = "/api"): string {
+  return `${origin.replace(/\/$/, "")}${apiBase}/archive/images/${imageId}`;
 }
 
 function hasBookmark(itemId: number): number | undefined {
@@ -209,7 +209,7 @@ export function findArchivedImage(userId: number, imageId: number): { path: stri
 }
 
 /** Swap image URLs of archived articles for their local copies before sending them to the browser. */
-export function withArchivedImages<T extends { id: number; link: string | null; image_url?: string | null; content_html?: string | null; full_content_html?: string | null }>(items: T[], origin: string): T[] {
+export function withArchivedImages<T extends { id: number; link: string | null; image_url?: string | null; content_html?: string | null; full_content_html?: string | null }>(items: T[], origin: string, apiBase = "/api"): T[] {
   const archived = archivedImagesFor(items.map((item) => item.id));
   return items.map((item) => {
     const images = archived.get(item.id);
@@ -217,9 +217,9 @@ export function withArchivedImages<T extends { id: number; link: string | null; 
     const hero = item.image_url ? resolveImageUrl(item.image_url, item.link) : null;
     return {
       ...item,
-      image_url: hero && images.has(hero) ? archivedImageUrl(origin, images.get(hero)!) : item.image_url,
-      content_html: item.content_html ? rewriteArchivedImages(item.content_html, item.link, images, origin) : item.content_html,
-      full_content_html: item.full_content_html ? rewriteArchivedImages(item.full_content_html, item.link, images, origin) : item.full_content_html,
+      image_url: hero && images.has(hero) ? archivedImageUrl(origin, images.get(hero)!, apiBase) : item.image_url,
+      content_html: item.content_html ? rewriteArchivedImages(item.content_html, item.link, images, origin, apiBase) : item.content_html,
+      full_content_html: item.full_content_html ? rewriteArchivedImages(item.full_content_html, item.link, images, origin, apiBase) : item.full_content_html,
     };
   });
 }
@@ -234,24 +234,24 @@ export function itemImageUrls(item: ImageSource): string[] {
   return [...new Set([...(hero ? [hero] : []), ...articleImageUrls(item.full_content_html ?? "", item.link), ...articleImageUrls(item.content_html ?? "", item.link)])];
 }
 
-function proxiedImageUrl(origin: string, itemId: number, imageUrl: string): string {
-  return `${origin.replace(/\/$/, "")}/api/items/${itemId}/image?src=${encodeURIComponent(imageUrl).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`;
+function proxiedImageUrl(origin: string, itemId: number, imageUrl: string, apiBase = "/api"): string {
+  return `${origin.replace(/\/$/, "")}${apiBase}/items/${itemId}/image?src=${encodeURIComponent(imageUrl).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`;
 }
 
 /**
  * For offline copies: point the first images of articles that are not archived at an endpoint
  * of this server, so the browser can store them without cross-origin requests.
  */
-export function withProxiedImages<T extends ImageSource & { id: number }>(items: T[], origin: string): T[] {
+export function withProxiedImages<T extends ImageSource & { id: number }>(items: T[], origin: string, apiBase = "/api"): T[] {
   const own = `${origin.replace(/\/$/, "")}/api/`;
   return items.map((item) => {
     const urls = new Set(itemImageUrls(item).filter((url) => !url.startsWith(own)).slice(0, MAX_OFFLINE_IMAGES_PER_ITEM));
     if (urls.size === 0) return item;
-    const replace = (url: string) => (urls.has(url) ? proxiedImageUrl(origin, item.id, url) : undefined);
+    const replace = (url: string) => (urls.has(url) ? proxiedImageUrl(origin, item.id, url, apiBase) : undefined);
     const hero = item.image_url ? resolveImageUrl(item.image_url, item.link) : null;
     return {
       ...item,
-      image_url: hero && urls.has(hero) ? proxiedImageUrl(origin, item.id, hero) : item.image_url,
+      image_url: hero && urls.has(hero) ? proxiedImageUrl(origin, item.id, hero, apiBase) : item.image_url,
       content_html: item.content_html ? rewriteImageSources(item.content_html, item.link, replace) : item.content_html,
       full_content_html: item.full_content_html ? rewriteImageSources(item.full_content_html, item.link, replace) : item.full_content_html,
     };
