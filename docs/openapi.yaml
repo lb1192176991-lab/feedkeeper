@@ -425,7 +425,19 @@ components:
         apiVersion: { type: integer }
         serverVersion: { type: string }
         features: { type: array, items: { type: string } }
-        limits: { type: object, properties: { maxMutationsPerRequest: { type: integer }, retentionDays: { type: integer } } }
+        limits:
+          type: object
+          properties:
+            maxMutationsPerRequest: { type: integer }
+            retentionDays: { type: integer, description: "Maximum age in days; same as retention.maxDays, kept for older clients" }
+            retention:
+              type: object
+              description: The server's cleanup rules. Deletions they cause are not announced through /sync, so clients apply the same rules locally. 0 switches a rule off; saved articles are never removed.
+              properties:
+                enabled: { type: boolean, description: Whether the daily cleanup runs at all }
+                readDays: { type: integer, description: "Read articles older than this many days are removed" }
+                maxDays: { type: integer, description: "All articles older than this many days are removed" }
+                maxItemsPerFeed: { type: integer, description: "Only the newest articles up to this number are kept per feed" }
         minClientVersion: { type: [string, "null"] }
     PairingCode:
       type: object

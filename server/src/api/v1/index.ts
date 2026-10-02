@@ -16,14 +16,27 @@ import { resourcesRouter } from "./resources.js";
 export const v1Router = Router();
 
 // Features grow with the implementation; clients look here instead of guessing from the version.
-const FEATURES = ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml"];
+const FEATURES = ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention"];
 
 v1Router.get("/meta", (_req, res) => {
+  const retention = getRetentionSettings();
   res.json({
     apiVersion: 1,
     serverVersion: APP_VERSION,
     features: FEATURES,
-    limits: { maxMutationsPerRequest: 200, retentionDays: getRetentionSettings().retentionMaxDays },
+    limits: {
+      maxMutationsPerRequest: 200,
+      // Kept for clients that only know the maximum age.
+      retentionDays: retention.retentionMaxDays,
+      // Deletions caused by retention are not announced through /sync, so clients apply the same rules
+      // to their local copy. A value of 0 switches that rule off; saved articles are never removed.
+      retention: {
+        enabled: retention.autoCleanupEnabled,
+        readDays: retention.retentionReadDays,
+        maxDays: retention.retentionMaxDays,
+        maxItemsPerFeed: retention.retentionMaxItemsPerFeed,
+      },
+    },
     minClientVersion: null,
   });
 });

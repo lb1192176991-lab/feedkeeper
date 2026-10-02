@@ -31,7 +31,7 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
   "apiVersion": 1,
   "serverVersion": "0.9.0",
   "features": ["sync", "archive", "annotations", "tags", "fulltext", "push.relay", "search.fts"],
-  "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "maxArchivedImageBytes": 5242880 },
+  "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000 }, "maxArchivedImageBytes": 5242880 },
   "minClientVersion": null
 }
 ```
@@ -69,7 +69,7 @@ Article content stays global (one row per article, shared by subscribers); every
 
 Two streams, because articles and personal state behave differently.
 
-**Content stream (articles).** An article is created once for all subscribers, so it must not fan out into per-user change rows. Clients page through `GET /items?after=<cursor>` in "added" order, the same cursor idea as the MCP `list_items`. Each item carries its state (`read`, `saved`, tags, progress). Deletions caused by retention are not announced: `/meta.limits.retentionDays` and the per-feed item cap are public, and the client applies the same retention locally. Saved articles are never purged, so they are never dropped by this rule.
+**Content stream (articles).** An article is created once for all subscribers, so it must not fan out into per-user change rows. Clients page through `GET /items?after=<cursor>` in "added" order, the same cursor idea as the MCP `list_items`. Each item carries its state (`read`, `saved`, tags, progress). Deletions caused by retention are not announced: the cleanup rules are public in `/meta.limits.retention` (whether cleanup runs, the age limits for read and for all articles, and the per-feed cap; 0 switches a rule off), and the client applies the same retention locally. Saved articles are never purged, so they are never dropped by this rule.
 
 **State stream (per user).** Everything personal and small goes through the change log:
 

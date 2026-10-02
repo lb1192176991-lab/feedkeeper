@@ -4,6 +4,9 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+- Native API: `GET /api/v1/meta` publishes all cleanup rules in `limits.retention` (whether cleanup runs, the age limits for read and for all articles, and the per-feed cap), so apps can apply the same retention to their offline copy. `limits.retentionDays` stays for older clients.
+
 ## [0.9.0] - 2026-10-02
 
 ### Added

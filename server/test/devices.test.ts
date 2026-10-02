@@ -44,6 +44,14 @@ test("a native app pairs with a one-time code and gets its own revocable token",
     assert.equal(meta.status, 200);
     assert.equal(meta.body.apiVersion, 1);
     assert.ok(meta.body.features.includes("pairing"));
+
+    // The cleanup rules are public, so apps can apply the same retention to their offline copy.
+    const { updateRetentionSettings } = await import("../src/feeds/cleanup.js");
+    updateRetentionSettings({ retentionReadDays: 14, retentionMaxDays: 60, retentionMaxItemsPerFeed: 500, autoCleanupEnabled: false });
+    const rules = await call("/meta");
+    assert.ok(rules.body.features.includes("retention"));
+    assert.deepEqual(rules.body.limits.retention, { enabled: false, readDays: 14, maxDays: 60, maxItemsPerFeed: 500 });
+    assert.equal(rules.body.limits.retentionDays, 60);
     assert.equal((await call("/me")).status, 401);
     assert.equal((await call("/pairing-codes", { method: "POST" })).status, 401);
 
