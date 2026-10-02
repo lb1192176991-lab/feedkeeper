@@ -4,6 +4,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-02
+
 ### Added
 - A service worker: the installed app starts without a connection and shows the articles, feeds and images you loaded last, with an offline notice. Cached account data is removed on logout.
 - An offline copy keeps your saved articles (up to 300) and the newest 100 unread ones on the device with their full text and images, so they can be read, searched and filtered without a connection. Images of articles that are not archived are fetched through the server, which only serves images an article itself shows. A setting turns the offline copy off.
@@ -19,6 +21,12 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 ### Changed
 - Built files are served with long-lived cache headers.
 - `compose.yaml` pulls the published image. Building from source moved to `compose.build.yaml`.
+
+### Fixed
+- The article reader shows the source once, in its header.
+
+### Security
+- Push delivery checks every connection it makes, so a registered notification address cannot lead into the server's own network.
 
 ## [0.7.0] - 2026-10-01
 
@@ -113,7 +121,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/visualfusion/feedkeeper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/visualfusion/feedkeeper/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/visualfusion/feedkeeper/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/visualfusion/feedkeeper/compare/v0.5.0...v0.6.0
