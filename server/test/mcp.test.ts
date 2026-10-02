@@ -39,8 +39,8 @@ test("MCP cursors isolate users and read-only tokens expose no write tools", asy
 
   const readToken = createPersonalAccessToken(ownerId, "reader", "read");
   const writeToken = createPersonalAccessToken(ownerId, "writer", "write");
-  assert.deepEqual(resolveToken(readToken.token), { userId: ownerId, scope: "read" });
-  assert.deepEqual(resolveToken(writeToken.token), { userId: ownerId, scope: "write" });
+  assert.deepEqual(resolveToken(readToken.token), { userId: ownerId, scope: "read", kind: "api", tokenId: readToken.id });
+  assert.deepEqual(resolveToken(writeToken.token), { userId: ownerId, scope: "write", kind: "api", tokenId: writeToken.id });
 
   for (const scope of ["read", "write"] as const) {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

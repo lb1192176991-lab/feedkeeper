@@ -265,6 +265,19 @@
     "notificationsIos": "Auf iPhone und iPad füge FeedKeeper zuerst zum Home-Bildschirm hinzu und öffne die App von dort, um Benachrichtigungen zu aktivieren.",
     "notificationsUnsupported": "Dieser Browser kann keine Benachrichtigungen von FeedKeeper anzeigen.",
     "notificationsTest": "Test senden",
-    "notificationsTestFailed": "Die Testbenachrichtigung konnte nicht zugestellt werden."
+    "notificationsTestFailed": "Die Testbenachrichtigung konnte nicht zugestellt werden.",
+    "sectionDevices": "Geräte",
+    "sectionDevicesHint": "Verbinde die FeedKeeper-App auf iPhone oder iPad.",
+    "devicesTitle": "Gekoppelte Geräte",
+    "devicesHint": "Jedes Gerät hat einen eigenen Zugang. Wenn du ein Gerät widerrufst, wird es sofort abgemeldet.",
+    "deviceAdd": "Gerät hinzufügen",
+    "noDevices": "Noch keine Geräte gekoppelt.",
+    "deviceQrAlt": "QR-Code zum Koppeln eines Geräts",
+    "devicePairHint": "Öffne die FeedKeeper-App, wähle „Server hinzufügen“ und scanne diesen Code. Oder gib den Code von Hand ein.",
+    "devicePairExpires": "Noch {{minutes}}:{{seconds}} Minuten gültig, einmal verwendbar.",
+    "devicePairExpired": "Dieser Code ist abgelaufen. Füge das Gerät erneut hinzu, um einen neuen zu erhalten.",
+    "devicePairDone": "Fertig",
+    "deviceRevoke": "Widerrufen",
+    "deviceRevokeConfirm": "„{{name}}“ widerrufen? Das Gerät wird abgemeldet."
   }
 }

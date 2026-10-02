@@ -6,6 +6,7 @@ import { AccountSettings } from "../components/settings/AccountSettings.tsx";
 import { GeneralSettings } from "../components/settings/GeneralSettings.tsx";
 import { FilterSettings } from "../components/settings/FilterSettings.tsx";
 import { McpSettings } from "../components/settings/McpSettings.tsx";
+import { DevicesSettings } from "../components/settings/DevicesSettings.tsx";
 import { DatabaseSettings, UsersSettings } from "../components/settings/AdminSettings.tsx";
 import { SectionHeader } from "../components/settings/ui.tsx";
 
@@ -31,6 +32,7 @@ export function SettingsPage() {
     { id: "account", label: t("settings.sectionAccount"), description: t("settings.sectionAccountHint"), icon: icon(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>), render: () => <AccountSettings /> },
     { id: "general", label: t("settings.sectionGeneral"), description: t("settings.sectionGeneralHint"), icon: icon(<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>), render: () => <GeneralSettings /> },
     { id: "filters", label: t("settings.sectionFilters"), description: t("settings.sectionFiltersHint"), icon: icon(<path d="M3 5h18l-7 8v6l-4 2v-8Z" />), render: () => <FilterSettings /> },
+    { id: "devices", label: t("settings.sectionDevices"), description: t("settings.sectionDevicesHint"), icon: icon(<><rect x="7" y="2" width="10" height="20" rx="2.5" /><path d="M11 18h2" /></>), render: () => <DevicesSettings /> },
     { id: "mcp", label: t("settings.sectionMcp"), description: t("settings.sectionMcpHint"), icon: icon(<><path d="M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0Z" /><path d="M12 17v4" /></>), render: () => <McpSettings /> },
     { id: "users", label: t("settings.sectionUsers"), description: t("settings.sectionUsersHint"), icon: icon(<><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6" /></>), admin: true, render: () => <UsersSettings /> },
     { id: "database", label: t("settings.sectionDatabase"), description: t("settings.sectionDatabaseHint"), icon: icon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></>), admin: true, render: () => <DatabaseSettings /> },

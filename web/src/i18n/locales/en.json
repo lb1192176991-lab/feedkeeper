@@ -265,6 +265,19 @@
     "notificationsIos": "On iPhone and iPad, add FeedKeeper to the home screen first, then open it from there to turn notifications on.",
     "notificationsUnsupported": "This browser cannot show notifications from FeedKeeper.",
     "notificationsTest": "Send test",
-    "notificationsTestFailed": "The test notification could not be delivered."
+    "notificationsTestFailed": "The test notification could not be delivered.",
+    "sectionDevices": "Devices",
+    "sectionDevicesHint": "Connect the FeedKeeper app on your iPhone or iPad.",
+    "devicesTitle": "Paired devices",
+    "devicesHint": "Each device has its own access. Revoking a device signs it out right away.",
+    "deviceAdd": "Add a device",
+    "noDevices": "No devices paired yet.",
+    "deviceQrAlt": "QR code for pairing a device",
+    "devicePairHint": "Open the FeedKeeper app, choose to add a server and scan this code. Or type the code in by hand.",
+    "devicePairExpires": "Valid for {{minutes}}:{{seconds}} more minutes, usable once.",
+    "devicePairExpired": "This code has expired. Add a device again for a new one.",
+    "devicePairDone": "Done",
+    "deviceRevoke": "Revoke",
+    "deviceRevokeConfirm": "Revoke \"{{name}}\"? The device will be signed out."
   }
 }

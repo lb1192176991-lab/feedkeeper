@@ -42,7 +42,7 @@ Clients read `features` instead of guessing from the version, so an app can supp
 
 Each app installation is a **device** with its own revocable token.
 
-1. In the web settings the user taps "Add a device". The server creates a single-use **pairing code** (valid 10 minutes, one active code per user; creating a new one replaces the old one, and five wrong attempts invalidate it) and shows it as a QR code containing `feedkeeper://pair?server=<url>&code=<code>`.
+1. In the web settings the user taps "Add a device". The server creates a single-use **pairing code** (valid 10 minutes, one active code per user; creating a new one replaces the old one). The code carries about 60 bits and the pairing endpoint is rate limited per address, so guessing is not practical and shows it as a QR code containing `feedkeeper://pair?server=<url>&code=<code>`.
 2. The app scans the code (or the user types server address and code) and calls `POST /api/v1/devices/pair` with the code, a device name and platform.
 3. The response contains the device token, shown to the app once. It is sent as `Authorization: Bearer fk_dev_…`.
 4. Tokens are stored hashed. The web settings list devices with name, platform, last seen and a revoke button. Revoking removes the token, the push registration and the device's queued state.

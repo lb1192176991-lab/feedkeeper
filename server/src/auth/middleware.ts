@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { resolveToken, type TokenScope } from "./tokens.js";
+import { resolveToken, type TokenKind, type TokenScope } from "./tokens.js";
 import { findUserById, toPublicUser, type PublicUser } from "./users.js";
 
 declare global {
@@ -8,6 +8,9 @@ declare global {
     interface Request {
       user?: PublicUser;
       tokenScope?: TokenScope;
+      /** Set when the request was authenticated with a token rather than a session. */
+      tokenId?: number;
+      tokenKind?: TokenKind;
     }
   }
 }
@@ -28,16 +31,36 @@ export function requireSession(req: Request, res: Response, next: NextFunction):
   next();
 }
 
-// MCP / API auth: Bearer personal access token, scopes the request to its owner.
-export function requireBearerToken(req: Request, res: Response, next: NextFunction): void {
+function bearerToken(req: Request): string | undefined {
   const header = req.headers.authorization;
-  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
+  return header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
+}
+
+// MCP auth: Bearer personal access token (not a paired device), scopes the request to its owner.
+export function requireBearerToken(req: Request, res: Response, next: NextFunction): void {
+  authenticateBearer(["api"])(req, res, next);
+}
+
+// Native app API: a paired device token or a hand-made token; the web UI may call it with its session.
+export function requireSessionOrDevice(req: Request, res: Response, next: NextFunction): void {
+  if (bearerToken(req)) authenticateBearer(["api", "device"])(req, res, next);
+  else requireSession(req, res, next);
+}
+
+export function authenticateBearer(kinds: TokenKind[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    bearerAuth(req, res, next, kinds);
+  };
+}
+
+function bearerAuth(req: Request, res: Response, next: NextFunction, kinds: TokenKind[]): void {
+  const token = bearerToken(req);
   if (!token) {
     res.status(401).json({ error: "missing_token" });
     return;
   }
   const resolved = resolveToken(token);
-  if (!resolved) {
+  if (!resolved || !kinds.includes(resolved.kind)) {
     res.status(401).json({ error: "invalid_token" });
     return;
   }
@@ -48,6 +71,8 @@ export function requireBearerToken(req: Request, res: Response, next: NextFuncti
   }
   req.user = toPublicUser(user);
   req.tokenScope = resolved.scope;
+  req.tokenId = resolved.tokenId;
+  req.tokenKind = resolved.kind;
   next();
 }
 

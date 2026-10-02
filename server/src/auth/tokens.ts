@@ -3,6 +3,8 @@ import { db } from "../db/index.js";
 
 const TOKEN_PREFIX = "fk_";
 export type TokenScope = "read" | "write";
+/** `api` tokens are created by hand (MCP, scripts); `device` tokens come from pairing a native app. */
+export type TokenKind = "api" | "device";
 
 export interface PersonalAccessToken {
   id: number;
@@ -11,6 +13,9 @@ export interface PersonalAccessToken {
   token_hash: string;
   token_prefix: string;
   scope: TokenScope;
+  kind: TokenKind;
+  platform: string | null;
+  app_version: string | null;
   created_at: string;
   last_used_at: string | null;
 }
@@ -20,23 +25,35 @@ function hashToken(token: string): string {
 }
 
 // Returns the plaintext token once; only the hash is persisted.
-export function createPersonalAccessToken(userId: number, name: string, scope: TokenScope): { id: number; token: string } {
+export function createPersonalAccessToken(
+  userId: number,
+  name: string,
+  scope: TokenScope,
+  device?: { platform: string; appVersion: string | null },
+): { id: number; token: string } {
   const secret = randomBytes(32).toString("base64url");
-  const token = `${TOKEN_PREFIX}${secret}`;
+  const token = `${TOKEN_PREFIX}${device ? "dev_" : ""}${secret}`;
   const tokenHash = hashToken(token);
   const tokenPrefix = token.slice(0, 10);
 
   const result = db
     .prepare(
-      `INSERT INTO personal_access_tokens (user_id, name, token_hash, token_prefix, scope)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO personal_access_tokens (user_id, name, token_hash, token_prefix, scope, kind, platform, app_version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(userId, name, tokenHash, tokenPrefix, scope);
+    .run(userId, name, tokenHash, tokenPrefix, scope, device ? "device" : "api", device?.platform ?? null, device?.appVersion ?? null);
 
   return { id: Number(result.lastInsertRowid), token };
 }
 
-export function resolveToken(token: string): { userId: number; scope: TokenScope } | null {
+export interface ResolvedToken {
+  userId: number;
+  scope: TokenScope;
+  kind: TokenKind;
+  tokenId: number;
+}
+
+export function resolveToken(token: string): ResolvedToken | null {
   if (!token.startsWith(TOKEN_PREFIX)) return null;
   const tokenHash = hashToken(token);
 
@@ -60,18 +77,31 @@ export function resolveToken(token: string): { userId: number; scope: TokenScope
     row.id,
   );
 
-  return { userId: row.user_id, scope: row.scope };
+  return { userId: row.user_id, scope: row.scope, kind: row.kind, tokenId: row.id };
 }
 
+/** Hand-made tokens only; paired devices are listed separately. */
 export function listTokensForUser(userId: number): Omit<PersonalAccessToken, "token_hash">[] {
   return db
     .prepare<[number], PersonalAccessToken>(
-      "SELECT * FROM personal_access_tokens WHERE user_id = ? ORDER BY created_at DESC",
+      "SELECT * FROM personal_access_tokens WHERE user_id = ? AND kind = 'api' ORDER BY created_at DESC",
     )
     .all(userId)
     .map(({ token_hash, ...rest }) => rest);
 }
 
 export function deleteToken(userId: number, tokenId: number): void {
-  db.prepare("DELETE FROM personal_access_tokens WHERE id = ? AND user_id = ?").run(tokenId, userId);
+  db.prepare("DELETE FROM personal_access_tokens WHERE id = ? AND user_id = ? AND kind = 'api'").run(tokenId, userId);
+}
+
+export function listDevicesForUser(userId: number): Omit<PersonalAccessToken, "token_hash">[] {
+  return db
+    .prepare<[number], PersonalAccessToken>("SELECT * FROM personal_access_tokens WHERE user_id = ? AND kind = 'device' ORDER BY created_at DESC")
+    .all(userId)
+    .map(({ token_hash, ...rest }) => rest);
+}
+
+/** Revokes a device; its token stops working immediately. Returns whether one was removed. */
+export function deleteDevice(userId: number, deviceId: number): boolean {
+  return db.prepare("DELETE FROM personal_access_tokens WHERE id = ? AND user_id = ? AND kind = 'device'").run(deviceId, userId).changes > 0;
 }

@@ -173,6 +173,23 @@ export interface MutedKeyword {
   created_at: string;
 }
 
+export interface Device {
+  id: number;
+  name: string;
+  platform: string | null;
+  appVersion: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  current: boolean;
+}
+
+export interface PairingCode {
+  code: string;
+  expiresAt: string;
+  /** What the QR code contains: the server address and the one-time code. */
+  pairingUrl: string;
+}
+
 export interface Token {
   id: number;
   name: string;
@@ -317,6 +334,9 @@ export const api = {
     request<MutedKeyword>("/filters/muted", { method: "POST", body: JSON.stringify({ keyword }) }),
   deleteMutedKeyword: (id: number) => request<void>(`/filters/muted/${id}`, { method: "DELETE" }),
 
+  listDevices: () => request<Device[]>("/v1/devices"),
+  createPairingCode: () => request<PairingCode>("/v1/pairing-codes", { method: "POST" }),
+  revokeDevice: (id: number) => request<void>(`/v1/devices/${id}`, { method: "DELETE" }),
   listTokens: () => request<Token[]>("/tokens"),
   createToken: (name: string, scope: "read" | "write") =>
     request<{ id: number; token: string }>("/tokens", { method: "POST", body: JSON.stringify({ name, scope }) }),

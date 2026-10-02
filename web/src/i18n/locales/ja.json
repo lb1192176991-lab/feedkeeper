@@ -265,6 +265,19 @@
     "notificationsIos": "iPhoneとiPadでは、先にFeedKeeperをホーム画面に追加し、そこから開いて通知をオンにしてください。",
     "notificationsUnsupported": "このブラウザではFeedKeeperの通知を表示できません。",
     "notificationsTest": "テスト送信",
-    "notificationsTestFailed": "テスト通知を配信できませんでした。"
+    "notificationsTestFailed": "テスト通知を配信できませんでした。",
+    "sectionDevices": "デバイス",
+    "sectionDevicesHint": "iPhoneやiPadのFeedKeeperアプリを接続します。",
+    "devicesTitle": "ペアリング済みデバイス",
+    "devicesHint": "各デバイスには個別のアクセス権があります。取り消すとすぐにサインアウトされます。",
+    "deviceAdd": "デバイスを追加",
+    "noDevices": "ペアリング済みのデバイスはありません。",
+    "deviceQrAlt": "デバイスをペアリングするQRコード",
+    "devicePairHint": "FeedKeeperアプリを開き、サーバーの追加を選んでこのコードをスキャンしてください。コードを手入力することもできます。",
+    "devicePairExpires": "あと{{minutes}}:{{seconds}}有効、1回のみ使用できます。",
+    "devicePairExpired": "このコードは期限切れです。もう一度デバイスを追加して新しいコードを取得してください。",
+    "devicePairDone": "完了",
+    "deviceRevoke": "取り消す",
+    "deviceRevokeConfirm": "「{{name}}」を取り消しますか？デバイスはサインアウトされます。"
   }
 }
