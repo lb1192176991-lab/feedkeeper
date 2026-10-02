@@ -328,26 +328,10 @@ export function ArticleReaderModal({
 
             {/* Meta information row */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[var(--c-text-muted)] pb-5 border-b border-[var(--c-border)] mb-6 font-medium">
-              <span className="inline-flex items-center gap-1.5 text-[var(--c-text)] font-semibold">
-                <Favicon
-                  feedId={item.feed_id}
-                  iconUrl={item.feed_icon_url}
-              siteUrl={item.feed_site_url}
-                  feedUrl={item.feed_url}
-                  articleUrl={item.link}
-                  className="w-3.5 h-3.5 rounded-xs shrink-0 object-contain"
-                />
-                <span>{item.feed_title}</span>
-              </span>
-              {extractedByline && (
-                <>
-                  <span>•</span>
-                  <span>{extractedByline}</span>
-                </>
-              )}
+              {extractedByline && <span>{extractedByline}</span>}
               {formattedDate && (
                 <>
-                  <span>•</span>
+                  {extractedByline && <span>•</span>}
                   <span className="inline-flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -366,7 +350,7 @@ export function ArticleReaderModal({
                   </span>
                 </>
               )}
-              <span>•</span>
+              {(extractedByline || formattedDate) && <span>•</span>}
               <span>{t("reader.readingTime", { count: readingTime })}</span>
             </div>
 
