@@ -235,7 +235,7 @@ export function itemImageUrls(item: ImageSource): string[] {
 }
 
 function proxiedImageUrl(origin: string, itemId: number, imageUrl: string): string {
-  return `${origin.replace(/\/$/, "")}/api/items/${itemId}/image?src=${encodeURIComponent(imageUrl)}`;
+  return `${origin.replace(/\/$/, "")}/api/items/${itemId}/image?src=${encodeURIComponent(imageUrl).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`;
 }
 
 /**

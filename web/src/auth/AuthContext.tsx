@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type User } from "../api/client.ts";
 import { resetItemsScrollY } from "../utils/scrollState.ts";
+import { disablePush } from "../utils/push.ts";
 import { clearOfflineData } from "../utils/serviceWorker.ts";
 
 interface AuthState {
@@ -60,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    // This device must not keep receiving the signed-out account's notifications.
+    await disablePush().catch(() => undefined);
     await api.logout();
     await clearOfflineData();
     resetItemsScrollY();

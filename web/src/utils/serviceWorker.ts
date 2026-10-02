@@ -1,5 +1,6 @@
 import { updateBadge } from "./badge.ts";
 import { clearQueue } from "./offlineQueue.ts";
+import { cancelSync } from "./offlineSync.ts";
 import { API_CACHE, deleteSnapshot } from "./offlineStore.ts";
 
 /** Register the service worker in production builds so the app starts without a connection. */
@@ -24,6 +25,7 @@ export function registerServiceWorker(): void {
 
 /** Forget cached articles, account data and unsent changes, e.g. on logout from a shared device. */
 export async function clearOfflineData(): Promise<void> {
+  cancelSync();
   clearQueue();
   updateBadge(0);
   if (!("caches" in window)) return;

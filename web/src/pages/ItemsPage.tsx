@@ -112,6 +112,8 @@ export function ItemsPage() {
   const initialBookmarkedOnly = (() => {
     // The home screen shortcut opens the saved articles.
     if (searchParams.get("saved") === "1") return true;
+    // A link to one article (from a notification) shows it in the normal list, not in a remembered saved view.
+    if (searchParams.get("article")) return false;
     try {
       const saved = localStorage.getItem(STORAGE_KEY_BOOKMARKED);
       if (saved !== null) return saved === "true";
@@ -383,13 +385,16 @@ export function ItemsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterScope, unreadOnly, bookmarkedOnly, search]);
 
+  const linkMarkedRead = useRef<number | null>(null);
+
   // Synchronize selectedArticle with URL ?article=ID parameter
   useEffect(() => {
     if (articleParam) {
       const found = items.find((i) => i.id === Number(articleParam));
       setSelectedArticle(found ?? null);
-      // Arriving from a notification: opening the article counts as reading it.
-      if (found && !found.read) {
+      // Arriving from a notification: opening the article counts as reading it, once.
+      if (found && !found.read && linkMarkedRead.current !== found.id) {
+        linkMarkedRead.current = found.id;
         api.markRead(found.id).then(announceItemsChanged).catch(() => {});
         setItems((prev) => prev.map((i) => (i.id === found.id ? { ...i, read: true } : i)));
       }

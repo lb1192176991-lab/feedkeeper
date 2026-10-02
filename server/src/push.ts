@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { db } from "./db/index.js";
+import { assertPublicHttpUrl, createPublicHttpsAgent } from "./feeds/ssrfGuard.js";
 
 const MAX_DEVICES_PER_USER = 10;
 const VAPID_SUBJECT = "https://github.com/visualfusion/feedkeeper";
@@ -21,6 +22,9 @@ export interface PushPayload {
 }
 
 type Sender = (target: PushTarget, payload: string) => Promise<void>;
+
+// Reused for every delivery; it checks the address each connection really uses.
+const pushAgent = createPublicHttpsAgent();
 
 let vapid: { publicKey: string; privateKey: string } | null = null;
 
@@ -47,8 +51,10 @@ export function vapidPublicKey(): string {
 }
 
 let sender: Sender = async (target, payload) => {
+  // The address came from a browser, so it must not lead into the server's own network.
+  await assertPublicHttpUrl(target.endpoint);
   const { publicKey, privateKey } = vapidKeys();
-  await webpush.sendNotification(target, payload, { TTL: 60 * 60, vapidDetails: { subject: VAPID_SUBJECT, publicKey, privateKey } });
+  await webpush.sendNotification(target, payload, { TTL: 60 * 60, timeout: 10_000, agent: pushAgent, vapidDetails: { subject: VAPID_SUBJECT, publicKey, privateKey } });
 };
 
 /** Replace the function that talks to the push service (tests). */

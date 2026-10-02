@@ -74,15 +74,16 @@ export function applyPending(items: Item[]): Item[] {
   });
 }
 
-/** Send queued changes in order; stops at the first one that cannot reach the server. */
-export async function flushQueue(send: (action: ItemAction, itemId: number, value: boolean) => Promise<unknown>, unreachable: (error: unknown) => boolean): Promise<number> {
+/** Send queued changes in order; stops at the first one that should be retried later. */
+export async function flushQueue(send: (action: ItemAction, itemId: number, value: boolean) => Promise<unknown>, transient: (error: unknown) => boolean): Promise<number> {
   let handled = 0;
   for (const { action, itemId, value } of pendingActions()) {
     try {
       await send(action, itemId, value);
     } catch (error) {
-      if (unreachable(error)) return handled;
-      // Anything else (for example an article that no longer exists) cannot succeed later either.
+      // Keep the change while the server is unreachable, busy or the session needs renewing;
+      // anything else (for example an article that no longer exists) cannot succeed later either.
+      if (transient(error)) return handled;
     }
     dequeue(action, itemId);
     handled++;

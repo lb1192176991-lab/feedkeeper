@@ -59,6 +59,11 @@ export function isUnreachable(error: unknown): boolean {
   return error instanceof ApiError && error.status === 0;
 }
 
+/** Failures that a later attempt can fix: no connection, a busy or restarting server, an expired session. */
+export function isTransient(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 0 || error.status === 401 || error.status === 408 || error.status === 429 || error.status >= 500);
+}
+
 export interface PublicConfig {
   showGithubLink: boolean;
   githubUrl: string;

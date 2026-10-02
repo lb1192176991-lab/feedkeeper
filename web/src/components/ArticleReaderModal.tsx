@@ -180,16 +180,6 @@ export function ArticleReaderModal({
     return new Intl.DateTimeFormat(i18n.resolvedLanguage, { timeStyle: "short" }).format(pubDate);
   }, [pubDate, i18n.resolvedLanguage]);
 
-  // Extract source domain
-  const sourceDomain = useMemo(() => {
-    if (!item?.link) return item?.feed_title ?? "";
-    try {
-      return new URL(item.link).hostname.replace(/^www\./, "");
-    } catch {
-      return item.feed_title ?? "";
-    }
-  }, [item?.link, item?.feed_title]);
-
   // Active content HTML (full text if toggled, otherwise feed HTML)
   const activeContentHtml = showFullText ? item?.full_content_html : item?.content_html;
   const heroImageUrl = useMemo(

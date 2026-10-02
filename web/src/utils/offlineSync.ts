@@ -1,15 +1,23 @@
-import { api, isUnreachable, sendItemAction, type Item } from "../api/client.ts";
+import { api, isTransient, sendItemAction, type Item } from "../api/client.ts";
 import { flushQueue } from "./offlineQueue.ts";
 import { API_CACHE, SYNCED_KEY, deleteSnapshot, offlineEnabled, writeSnapshot } from "./offlineStore.ts";
 
 const PAGE_SIZE = 100;
 const MAX_SAVED = 300;
+// Stays below the service worker's own limit for stored images, so syncing never pushes out earlier ones.
+const MAX_IMAGES = 1500;
 const RECENT_LIMIT = 100;
 const MIN_INTERVAL_MS = 5 * 60 * 1000;
 // Archived images and images fetched through the server, whatever host the server believed it had.
 const OWN_IMAGE_URL = /https?:\/\/[^"'\s<>)]+(\/api\/(?:archive\/images\/\d+|items\/\d+\/image\?src=[^"'\s<>)]+))/g;
 
 let running: Promise<number | null> | null = null;
+// Bumped on logout, so a sync that is still running does not write the previous account's data afterwards.
+let generation = 0;
+
+export function cancelSync(): void {
+  generation++;
+}
 
 function lastSync(): number {
   try {
@@ -37,14 +45,14 @@ function localizeItem(item: Item, found: Set<string>): Item {
   };
 }
 
-async function downloadImages(cache: Cache, urls: string[]): Promise<void> {
-  const queue = [...urls];
+async function downloadImages(cache: Cache, urls: string[], cancelled: () => boolean): Promise<void> {
+  const queue = urls.slice(0, MAX_IMAGES);
   const worker = async () => {
-    for (let url = queue.shift(); url; url = queue.shift()) {
+    for (let url = queue.shift(); url && !cancelled(); url = queue.shift()) {
       if (await cache.match(url, { ignoreVary: true })) continue;
       try {
         const response = await fetch(url, { credentials: "include" });
-        if (response.ok && !(await cache.match(url, { ignoreVary: true }))) await cache.put(url, response);
+        if (response.ok && !cancelled() && !(await cache.match(url, { ignoreVary: true }))) await cache.put(url, response);
       } catch {
         // The image stays online-only; the next sync tries again.
       }
@@ -61,7 +69,7 @@ async function dropCachedImages(cache: Cache, keep: Set<string>): Promise<void> 
 
 /** Send changes made offline. Returns how many were handled. */
 export async function flushPending(): Promise<number> {
-  return navigator.onLine ? flushQueue(sendItemAction, isUnreachable) : 0;
+  return navigator.onLine ? flushQueue(sendItemAction, isTransient) : 0;
 }
 
 /** Send pending changes and bring the offline copy up to date; a new copy is made right away when changes were sent. */
@@ -76,9 +84,12 @@ export async function syncNow(): Promise<void> {
  */
 export function syncOfflineCopy(options: { force?: boolean } = {}): Promise<number | null> {
   if (!("caches" in window) || !offlineEnabled() || !navigator.onLine) return Promise.resolve(null);
-  if (running) return running;
+  // A change that arrives while a sync runs gets its own run afterwards.
+  if (running) return options.force ? running.then(() => syncOfflineCopy(options)) : running;
   if (!options.force && Date.now() - lastSync() < MIN_INTERVAL_MS) return Promise.resolve(null);
 
+  const started = generation;
+  const cancelled = () => started !== generation;
   running = (async () => {
     try {
       const found = new Set<string>();
@@ -94,9 +105,11 @@ export function syncOfflineCopy(options: { force?: boolean } = {}): Promise<numb
       const saved = savedRaw.slice(0, MAX_SAVED).map((item) => localizeItem(item, found));
       const recent = recentRaw.map((item) => localizeItem(item, found));
       const cache = await caches.open(API_CACHE);
-      await downloadImages(cache, [...found]);
+      await downloadImages(cache, [...found], cancelled);
+      if (cancelled()) return null;
       await dropCachedImages(cache, found);
 
+      if (cancelled()) return null;
       await writeSnapshot({ savedAt: new Date().toISOString(), saved, recent, feedFolders: Object.fromEntries(feeds.map((feed) => [feed.id, feed.folder_id])) });
       localStorage.setItem(SYNCED_KEY, String(Date.now()));
       return new Set([...saved, ...recent].map((item) => item.id)).size;

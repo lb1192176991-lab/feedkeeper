@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSession } from "../auth/middleware.js";
+import { assertPublicHttpUrl } from "../feeds/ssrfGuard.js";
 import { hasDevice, removeDevice, saveDevice, sendToUser, vapidPublicKey } from "../push.js";
 
 export const pushRouter = Router();
@@ -15,9 +16,15 @@ pushRouter.get("/key", (_req, res) => {
   res.json({ publicKey: vapidPublicKey() });
 });
 
-pushRouter.post("/devices", (req, res) => {
+pushRouter.post("/devices", async (req, res) => {
   const parsed = subscriptionSchema.safeParse(req.body);
   if (!parsed.success) {
+    res.status(400).json({ error: "invalid_input" });
+    return;
+  }
+  try {
+    await assertPublicHttpUrl(parsed.data.endpoint);
+  } catch {
     res.status(400).json({ error: "invalid_input" });
     return;
   }

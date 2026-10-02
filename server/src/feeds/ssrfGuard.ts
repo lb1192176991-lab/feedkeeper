@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { Agent as HttpsAgent } from "node:https";
 import type { LookupFunction } from "node:net";
 import ipaddr from "ipaddr.js";
 import { Agent } from "undici";
@@ -73,20 +74,26 @@ export async function assertPublicHttpUrl(rawUrl: string): Promise<URL> {
 
 // Validate the address actually used by the socket. A DNS answer can change
 // between URL validation and connection, so the preflight check alone is insufficient.
+const guardedLookup: LookupFunction = (hostname, options, callback) => {
+  lookup(hostname, { ...options, all: true })
+    .then((addresses) => {
+      try {
+        assertPublicAddresses(addresses, hostname);
+        if (options.all) callback(null, addresses);
+        else callback(null, addresses[0].address, addresses[0].family);
+      } catch (error) {
+        callback(error as NodeJS.ErrnoException, "");
+      }
+    })
+    .catch((error: NodeJS.ErrnoException) => callback(error, ""));
+};
+
 export function createPublicDispatcher(): Agent {
   if (privateFeedsAllowed()) return new Agent();
-  const guardedLookup: LookupFunction = (hostname, options, callback) => {
-    lookup(hostname, { ...options, all: true })
-      .then((addresses) => {
-        try {
-          assertPublicAddresses(addresses, hostname);
-          if (options.all) callback(null, addresses);
-          else callback(null, addresses[0].address, addresses[0].family);
-        } catch (error) {
-          callback(error as NodeJS.ErrnoException, "");
-        }
-      })
-      .catch((error: NodeJS.ErrnoException) => callback(error, ""));
-  };
   return new Agent({ connect: { lookup: guardedLookup } });
+}
+
+/** The same guard for libraries that use Node's https module, such as web-push. */
+export function createPublicHttpsAgent(): HttpsAgent {
+  return privateFeedsAllowed() ? new HttpsAgent() : new HttpsAgent({ lookup: guardedLookup });
 }

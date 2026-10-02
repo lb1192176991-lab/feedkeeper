@@ -43,6 +43,14 @@ test("a change sent successfully leaves the queue; an unreachable server stops t
   assert.equal(queue.pendingCount(), 1);
 });
 
+test("changes survive a busy server or an expired session", async () => {
+  storage.clear();
+  queue.enqueue("read", 1, true);
+  const handled = await queue.flushQueue(async () => { throw Object.assign(new Error("busy"), { status: 429 }); }, (error) => error.status === 429);
+  assert.equal(handled, 0);
+  assert.equal(queue.pendingCount(), 1);
+});
+
 test("a change the server rejects is dropped instead of blocking the queue", async () => {
   storage.clear();
   queue.enqueue("bookmark", 9, true);

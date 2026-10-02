@@ -52,6 +52,10 @@ test("offline copies point at article images served through this server", async 
     assert.equal(await archive.fetchItemImage(otherId, item.id, `${base}/inline.png`), "forbidden");
     assert.equal(await archive.fetchItemImage(ownerId, item.id, `${base}/notes.txt`), "unsupported");
 
+    // Characters that URLs may keep unescaped are escaped anyway, so the web app can find the address in the text.
+    const odd = { ...stored, image_url: null, content_html: `<img src="${base}/img(1)'a.png">`, full_content_html: null };
+    assert.doesNotMatch(archive.withProxiedImages([odd], origin)[0].content_html ?? "", /src="[^"]*[()']/);
+
     // Images already served from the archive are left alone.
     const archived = { ...stored, content_html: `<img src="${origin}/api/archive/images/7">`, image_url: null };
     assert.equal(archive.withProxiedImages([archived], origin)[0].content_html, archived.content_html);

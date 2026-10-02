@@ -9,7 +9,7 @@ const PRECACHE = ["/theme-init.js", "/manifest.webmanifest", "/logo.svg", "/favi
 const MATCH = { ignoreVary: true };
 const NETWORK_TIMEOUT_MS = 4000;
 const MAX_CACHED_ITEM_LISTS = 30;
-const MAX_CACHED_IMAGES = 2000;
+const MAX_CACHED_IMAGES = 3000;
 
 // Read-only API responses worth showing when the network is gone. Everything else
 // (tokens, users, settings, mutations) always goes to the server.
@@ -160,6 +160,8 @@ self.addEventListener("push", (event) => {
         body: data.body || "",
         icon: "/app-icon-192.png",
         tag: data.tag,
+        // Without this a second message for the same feed would replace the first silently.
+        renotify: Boolean(data.tag),
         data: { url: data.url },
       });
     })(),
