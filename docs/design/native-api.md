@@ -164,6 +164,12 @@ All of these require a device token unless noted. Lists are cursor-paged.
   - Dismissed/deleted via `DELETE /edition`.
   - Sync change log delivers `edition` entity with `itemIds`, `revision`, `expiresAt`.
 
+- **SQLite FTS5 Full-Text Search (`search.fts`)**:
+  - Migration `0020_fts.sql` adds virtual table `items_fts` (`title`, `content_snippet`, `content_html`, `full_content_html`) with `unicode61 remove_diacritics 2` tokenization, backed by database triggers on `items` for insert, update, delete.
+  - Endpoint `GET /api/v1/search?q=...` searches titles, snippets, cached full content and personal notes (`item_notes`).
+  - Supports filters (`subscriptionId`, `folderId`, `unread`, `saved`, `limit`, `offset`), ranking by BM25 relevance (`sort=relevance`) or publication date (`sort=date`), image proxying, and content hydration (`include=content`).
+
+
 ## Push notifications for the iOS app
 
 Web Push (used by the PWA) does not reach native apps, and the APNs signing key belongs to the app's publisher, so a self-hosted server cannot talk to Apple directly. A **push relay**, operated by the app's publisher, sits between the server and APNs. Its source is not part of this repository; the protocol between server and relay is.

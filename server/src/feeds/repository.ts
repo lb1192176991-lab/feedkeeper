@@ -356,8 +356,10 @@ export function listItemsForUser(
   if (opts.search) {
     // Saved articles are searched in their archived full text too.
     const fields = ["i.title", "i.content_snippet", ...(opts.bookmarkedOnly ? ["i.full_content_html", "i.content_html"] : [])];
-    conditions.push(`(${fields.map((field) => `INSTR(LOWER(COALESCE(${field}, '')), LOWER(?)) > 0`).join(" OR ")})`);
-    params.push(...fields.map(() => opts.search));
+    conditions.push(
+      `(${fields.map((field) => `INSTR(LOWER(COALESCE(${field}, '')), LOWER(?)) > 0`).join(" OR ")} OR i.id IN (SELECT item_id FROM item_notes WHERE user_id = ? AND INSTR(LOWER(content), LOWER(?)) > 0))`,
+    );
+    params.push(...fields.map(() => opts.search), userId, opts.search);
   }
   if (opts.since) {
     conditions.push("i.created_at > ?");
@@ -850,3 +852,154 @@ export function publishEdition(userId: number, itemIds: number[], expiresAt?: st
 export function deleteEdition(userId: number): boolean {
   return db.prepare("DELETE FROM editions WHERE user_id = ?").run(userId).changes > 0;
 }
+
+export function formatFtsQuery(raw: string): string {
+  const tokens = raw.match(/"[^"]*"|[^\s"]+/g) || [];
+  const sanitized = tokens
+    .map((token) => {
+      if (token.startsWith('"') && token.endsWith('"') && token.length > 2) {
+        const inner = token.slice(1, -1).replace(/"/g, '""').trim();
+        return inner ? `"${inner}"` : null;
+      }
+      const clean = token.replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, "");
+      if (!clean) return null;
+      return `"${clean}"*`;
+    })
+    .filter(Boolean);
+
+  if (sanitized.length === 0) return "";
+  return sanitized.join(" ");
+}
+
+export interface SearchOptions {
+  query: string;
+  feedId?: number;
+  folderId?: number;
+  unreadOnly?: boolean;
+  bookmarkedOnly?: boolean;
+  sort?: "relevance" | "date";
+  limit?: number;
+  offset?: number;
+}
+
+export function searchItemsForUser(
+  userId: number,
+  opts: SearchOptions,
+): {
+  items: (Item & {
+    read: boolean;
+    bookmarked: boolean;
+    feed_title: string | null;
+    feed_site_url: string | null;
+    feed_url: string;
+    feed_full_text_mode: FullTextMode;
+    feed_icon_url: string | null;
+    bookmarked_at: string | null;
+  })[];
+  total: number;
+} {
+  const fts = formatFtsQuery(opts.query);
+  const conditions: string[] = ["(s.id IS NOT NULL OR b.item_id IS NOT NULL OR n.user_id IS NOT NULL)"];
+  const params: unknown[] = [];
+
+  if (opts.feedId) {
+    conditions.push("i.feed_id = ?");
+    params.push(opts.feedId);
+  }
+  if (opts.folderId) {
+    conditions.push("s.folder_id = ?");
+    params.push(opts.folderId);
+  }
+  if (opts.unreadOnly) {
+    conditions.push("r.item_id IS NULL");
+  }
+  if (opts.bookmarkedOnly) {
+    conditions.push("b.item_id IS NOT NULL");
+  }
+
+  // Search filter (FTS on items + user notes)
+  if (fts) {
+    conditions.push(`(
+      i.id IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)
+      OR i.id IN (SELECT item_id FROM item_notes WHERE user_id = ? AND INSTR(LOWER(content), LOWER(?)) > 0)
+    )`);
+    params.push(fts, userId, opts.query);
+  } else {
+    conditions.push(`(
+      INSTR(LOWER(COALESCE(i.title, '')), LOWER(?)) > 0
+      OR INSTR(LOWER(COALESCE(i.content_snippet, '')), LOWER(?)) > 0
+      OR INSTR(LOWER(COALESCE(i.content_html, '')), LOWER(?)) > 0
+      OR INSTR(LOWER(COALESCE(i.full_content_html, '')), LOWER(?)) > 0
+      OR i.id IN (SELECT item_id FROM item_notes WHERE user_id = ? AND INSTR(LOWER(content), LOWER(?)) > 0)
+    )`);
+    params.push(opts.query, opts.query, opts.query, opts.query, userId, opts.query);
+  }
+
+  // Count total matches
+  const totalRow = db.prepare<unknown[], { count: number }>(`
+    SELECT COUNT(DISTINCT i.id) AS count
+    FROM items i
+    JOIN feeds f ON f.id = i.feed_id
+    LEFT JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+    LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = ?
+    LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = ?
+    LEFT JOIN item_notes n ON n.item_id = i.id AND n.user_id = ?
+    WHERE ${conditions.join(" AND ")}
+  `).get(userId, userId, userId, userId, ...params);
+  const total = totalRow?.count ?? 0;
+
+  const limit = Math.min(opts.limit ?? 30, 100);
+  const offset = Math.max(opts.offset ?? 0, 0);
+
+  let orderBy = "i.published_at DESC, i.created_at DESC, i.id DESC";
+  if (opts.sort !== "date" && fts) {
+    orderBy = "COALESCE(fts.rank, 0) ASC, i.published_at DESC";
+  }
+
+  const querySql = `
+    SELECT DISTINCT i.*,
+           COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
+           f.site_url AS feed_site_url,
+           f.url AS feed_url,
+           s.full_text_mode AS feed_full_text_mode,
+           f.icon_url AS feed_icon_url,
+           (r.item_id IS NOT NULL) AS read,
+           (b.item_id IS NOT NULL) AS bookmarked,
+           b.created_at AS bookmarked_at
+    FROM items i
+    JOIN feeds f ON f.id = i.feed_id
+    LEFT JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
+    LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = ?
+    LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = ?
+    LEFT JOIN item_notes n ON n.item_id = i.id AND n.user_id = ?
+    ${opts.sort !== "date" && fts ? "LEFT JOIN items_fts fts ON fts.rowid = i.id AND items_fts MATCH ?" : ""}
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY ${orderBy}
+    LIMIT ? OFFSET ?
+  `;
+
+  const queryParams = [
+    userId,
+    userId,
+    userId,
+    userId,
+    ...(opts.sort !== "date" && fts ? [fts] : []),
+    ...params,
+    limit,
+    offset,
+  ];
+
+  const items = db.prepare(querySql).all(...queryParams) as (Item & {
+    read: boolean;
+    bookmarked: boolean;
+    feed_title: string | null;
+    feed_site_url: string | null;
+    feed_url: string;
+    feed_full_text_mode: FullTextMode;
+    feed_icon_url: string | null;
+    bookmarked_at: string | null;
+  })[];
+
+  return { items, total };
+}
+

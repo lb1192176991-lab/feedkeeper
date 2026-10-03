@@ -329,6 +329,34 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses:
         "204": { description: Done }
+  /search:
+    get:
+      tags: [Articles]
+      summary: Search articles using full-text search
+      description: Searches titles, snippets, content and user notes using SQLite FTS5 with BM25 relevance ranking.
+      parameters:
+        - { name: q, in: query, required: true, description: "Search query string", schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { name: subscriptionId, in: query, schema: { type: integer } }
+        - { name: folderId, in: query, schema: { type: integer } }
+        - { name: unread, in: query, schema: { type: boolean } }
+        - { name: saved, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [relevance, date], default: relevance } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: include, in: query, schema: { type: string, enum: [content] } }
+        - { $ref: "#/components/parameters/Images" }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query: { type: string }
+                  total: { type: integer }
+                  items: { type: array, items: { $ref: "#/components/schemas/Item" } }
+        "400": { $ref: "#/components/responses/Invalid" }
   /items:
     get:
       tags: [Articles]

@@ -327,6 +327,57 @@ test("native extensions: feed icons, folder icons, notes, editions, and retentio
     assert.equal(deleteEditionRes.status, 204);
     const getDeletedEditionRes = await call("/edition", token1);
     assert.equal(getDeletedEditionRes.status, 404);
+
+    // 7. Full-text search (GET /api/v1/search)
+    // Insert an item with unique full content
+    const searchableItemId = Number(
+      db
+        .prepare(
+          "INSERT INTO items (feed_id, guid, title, link, content_snippet, full_content_html, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(
+          feedId,
+          "fts-item-1",
+          "Quantum Computing Innovations",
+          "https://example.com/quantum",
+          "Snippet about qubits",
+          "<p>Detailed breakthrough in superconductivity physics</p>",
+          new Date().toISOString(),
+          new Date().toISOString(),
+        ).lastInsertRowid,
+    );
+
+    // Search by title keyword
+    const searchTitleRes = await call("/search?q=Quantum", token1);
+    assert.equal(searchTitleRes.status, 200);
+    const searchTitleBody = searchTitleRes.body as { items: { id: number }[]; total: number };
+    assert.equal(searchTitleBody.total >= 1, true);
+    assert.ok(searchTitleBody.items.some((i) => i.id === searchableItemId));
+
+    // Search by full content keyword
+    const searchContentRes = await call("/search?q=superconductivity", token1);
+    assert.equal(searchContentRes.status, 200);
+    const searchContentBody = searchContentRes.body as { items: { id: number }[]; total: number };
+    assert.equal(searchContentBody.total >= 1, true);
+    assert.ok(searchContentBody.items.some((i) => i.id === searchableItemId));
+
+    // Search by note content
+    // Note content is "Offline note synchronized"
+    const searchNoteRes = await call("/search?q=synchronized", token1);
+    assert.equal(searchNoteRes.status, 200);
+    const searchNoteBody = searchNoteRes.body as { items: { id: number }[]; total: number };
+    assert.equal(searchNoteBody.total >= 1, true);
+    assert.ok(searchNoteBody.items.some((i) => i.id === itemId));
+
+    // User 2 cannot find User 1's note
+    const user2NoteSearch = await call("/search?q=synchronized", token2);
+    assert.equal(user2NoteSearch.status, 200);
+    assert.equal((user2NoteSearch.body as { total: number }).total, 0);
+
+    // Non-existent search query returns 0 items
+    const searchNoneRes = await call("/search?q=nonexistentxyz123", token1);
+    assert.equal(searchNoneRes.status, 200);
+    assert.equal((searchNoneRes.body as { total: number }).total, 0);
   } finally {
     server.close();
   }

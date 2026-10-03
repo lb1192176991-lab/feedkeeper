@@ -30,6 +30,7 @@ import {
   markAllRead,
   removeMutedKeyword,
   reorderSubscriptions,
+  searchItemsForUser,
   setItemNote,
   updateFolder,
 } from "../../feeds/repository.js";
@@ -335,6 +336,47 @@ function prepare(rows: Row[], req: Request, images: "original" | "proxy"): Row[]
   const archived = withArchivedImages(rows, origin(req), API_BASE);
   return images === "proxy" ? withProxiedImages(archived, origin(req), API_BASE) : archived;
 }
+
+const searchQuery = z.object({
+  q: z.string().trim().min(1).max(200),
+  subscriptionId: z.coerce.number().int().positive().optional(),
+  folderId: z.coerce.number().int().positive().optional(),
+  unread: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  saved: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
+  include: z.enum(["content"]).optional(),
+  images: z.enum(["original", "proxy"]).default("proxy"),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  offset: z.coerce.number().int().min(0).default(0),
+  sort: z.enum(["relevance", "date"]).default("relevance"),
+});
+
+resourcesRouter.get("/search", (req, res) => {
+  const parsed = searchQuery.safeParse(req.query);
+  if (!parsed.success) return invalid(res, parsed.error.flatten());
+  const query = parsed.data;
+  const withContent = query.include === "content";
+  const limit = withContent ? Math.min(query.limit, 50) : query.limit;
+
+  const { items: rows, total } = searchItemsForUser(req.user!.id, {
+    query: query.q,
+    feedId: query.subscriptionId,
+    folderId: query.folderId,
+    unreadOnly: query.unread,
+    bookmarkedOnly: query.saved,
+    sort: query.sort,
+    limit,
+    offset: query.offset,
+  });
+
+  const progress = readingPositions(req.user!.id, rows.map((row) => row.id));
+  const hasNotes = itemsWithNotes(req.user!.id, rows.map((row) => row.id));
+
+  res.json({
+    query: query.q,
+    total,
+    items: prepare(rows, req, query.images).map((row) => serializeItem(row, progress, withContent, hasNotes.has(row.id))),
+  });
+});
 
 resourcesRouter.get("/items", (req, res) => {
   const parsed = itemsQuery.safeParse(req.query);

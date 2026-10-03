@@ -32,6 +32,7 @@ const FEATURES = [
   "folder-icons",
   "notes",
   "edition",
+  "search.fts",
 ];
 
 v1Router.get("/meta", (_req, res) => {
