@@ -32,6 +32,9 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Smart feed discovery** — paste a direct feed link or a website address (like `example.com/blog`); FeedKeeper finds RSS and Atom feeds, including ones listed on a site's feed overview page, and checks each one before subscribing.
 - **Automatic character encoding** — parses standard UTF-8 as well as legacy ISO-8859-1/Windows-1252 feeds without garbled umlauts or broken symbols.
 - **Saved articles as a lasting archive** — star an article to save it: FeedKeeper keeps its full text and stores its images next to the database, so it stays readable even if the source changes. Saved articles survive cleanups and unsubscribing, ignore the word filter, and their full text is searchable.
+- **Full-text search** — indexed with SQLite FTS5 across titles, snippets, cached full text, and personal notes. Ranked by BM25 relevance with diacritic-insensitive matching and phrase support.
+- **Article notes and lasting knowledge** — attach personal Markdown notes to any article. Notes sync across devices, export to standalone Markdown files, and protect articles permanently from retention cleanups.
+- **Authoritative feed icons** — icons are cached on the server with SHA-256 hashes and conditional ETags, so devices load them fast without third-party requests.
 - **Keyword mute filters** — cut through information overload by filtering out articles matching specific keywords before they reach your stream.
 - **Health monitoring** — clear status indicators show polling health, consecutive fetch errors, and timestamps so you instantly spot dead feeds.
 - **Automated database housekeeping** — sensible defaults prune read articles, enforce maximum item retention, and run SQLite `VACUUM` on schedule to keep storage lean.
@@ -194,6 +197,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `remove_muted_keyword` | Remove a muted keyword rule |
 | `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
+| `publish_edition` | Publish an ordered list of 1 to 24 article IDs as the curated daily edition |
 | `cleanup_database` | *(Admin only)* Purge old items and reclaim disk space after deletions |
 
 Besides tools, the server offers prompts (`daily_briefing`, `catch_up_on_topic`, `saved_reading_list`, `triage_unread`) and resources (`feedkeeper://feeds`, `opml`, `saved`, `digest` and `feedkeeper://items/{id}`) that clients can show as ready-made actions.
@@ -202,7 +206,7 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 
 ## Native apps
 
-A native **iOS app** for FeedKeeper is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline and queue changes made without a connection. The design, including how push notifications for native apps will work without exposing your articles, is in [docs/design/native-api.md](docs/design/native-api.md). Third-party clients are welcome to build on the same API.
+A native **iOS app** for FeedKeeper is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides full-text search with FTS5, synchronized article notes, SF Symbols for ressorts/categories, curated editions, and end-to-end encrypted push notifications via an external zero-knowledge relay (see [docs/design/native-api.md](docs/design/native-api.md)). Third-party clients are welcome to build on the same API.
 
 ## Security
 

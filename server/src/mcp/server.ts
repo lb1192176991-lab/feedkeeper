@@ -536,7 +536,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     "publish_edition",
     {
       title: "Publish curated edition",
-      description: "Publishes an ordered list of 1 to 24 article IDs as the curated daily edition ('Deine Zeitung') for the current user.",
+      description: "Publishes an ordered list of 1 to 24 article IDs as the curated daily edition for the current user.",
       inputSchema: {
         itemIds: z.array(z.number().int().positive()).min(1).max(24).describe("Ordered list of 1 to 24 article IDs"),
         expiresAt: z.string().datetime({ offset: true }).optional().describe("Optional ISO date-time when the edition expires"),

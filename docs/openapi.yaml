@@ -496,7 +496,7 @@ paths:
   /edition:
     get:
       tags: [Edition]
-      summary: Central curated edition ("Deine Zeitung")
+      summary: Central curated edition
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Edition" } } } }
         "404": { description: No active edition available }
