@@ -66,6 +66,15 @@ export interface ItemNote {
   updated_at: string;
 }
 
+export interface NoteConflictState {
+  itemId: number;
+  content: string | null;
+  revision: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+  deleted: boolean;
+}
+
 export interface CuratedEdition {
   revision: number;
   createdAt: string;
@@ -713,18 +722,34 @@ export function findItemNote(userId: number, itemId: number): ItemNote | undefin
     .get(userId, itemId);
 }
 
+export function noteConflictState(userId: number, itemId: number): NoteConflictState {
+  const note = findItemNote(userId, itemId);
+  if (note) return {
+    itemId, content: note.content, revision: note.revision,
+    createdAt: note.created_at, updatedAt: note.updated_at, deleted: false,
+  };
+  const previous = db.prepare<[number, number], { revision: number; updated_at: string }>(
+    "SELECT revision, updated_at FROM item_note_revisions WHERE user_id = ? AND item_id = ?",
+  ).get(userId, itemId);
+  return {
+    itemId, content: null, revision: previous?.revision ?? 0,
+    createdAt: null, updatedAt: previous?.updated_at ?? null, deleted: true,
+  };
+}
+
 export function setItemNote(
   userId: number,
   itemId: number,
   content: string,
   expectedRevision?: number,
-): { note: ItemNote } | { conflict: ItemNote } {
+): { note: ItemNote } | { conflict: NoteConflictState } {
   return db.transaction(() => {
     const existing = findItemNote(userId, itemId);
+    const current = noteConflictState(userId, itemId);
+    if (expectedRevision !== undefined && current.revision !== expectedRevision) {
+      return { conflict: current };
+    }
     if (existing) {
-      if (expectedRevision !== undefined && existing.revision !== expectedRevision) {
-        return { conflict: existing };
-      }
       const nextRev = existing.revision + 1;
       const now = new Date().toISOString();
       db.prepare(
@@ -732,29 +757,24 @@ export function setItemNote(
       ).run(content, nextRev, now, userId, itemId);
       return { note: findItemNote(userId, itemId)! };
     } else {
-      if (expectedRevision !== undefined && expectedRevision !== 0) {
-        return {
-          conflict: {
-            user_id: userId,
-            item_id: itemId,
-            content: "",
-            revision: 0,
-            created_at: "",
-            updated_at: "",
-          },
-        };
-      }
       const now = new Date().toISOString();
       db.prepare(
-        "INSERT INTO item_notes (user_id, item_id, content, revision, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
-      ).run(userId, itemId, content, now, now);
+        "INSERT INTO item_notes (user_id, item_id, content, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(userId, itemId, content, current.revision + 1, now, now);
       return { note: findItemNote(userId, itemId)! };
     }
   })();
 }
 
-export function deleteItemNote(userId: number, itemId: number): boolean {
-  return db.prepare("DELETE FROM item_notes WHERE user_id = ? AND item_id = ?").run(userId, itemId).changes > 0;
+export function deleteItemNote(
+  userId: number, itemId: number, expectedRevision?: number,
+): { deleted: boolean } | { conflict: NoteConflictState } {
+  return db.transaction(() => {
+    const current = noteConflictState(userId, itemId);
+    if (expectedRevision !== undefined && expectedRevision !== current.revision) return { conflict: current };
+    const deleted = db.prepare("DELETE FROM item_notes WHERE user_id = ? AND item_id = ?").run(userId, itemId).changes > 0;
+    return { deleted };
+  })();
 }
 
 export function listNotesForUser(
@@ -1002,4 +1022,3 @@ export function searchItemsForUser(
 
   return { items, total };
 }
-

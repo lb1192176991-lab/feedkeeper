@@ -8,6 +8,7 @@ import {
   markItemRead,
   markItemUnread,
   setItemNote,
+  type NoteConflictState,
   unbookmarkItem,
 } from "../feeds/repository.js";
 
@@ -36,6 +37,7 @@ export const mutationSchema = z.discriminatedUnion("type", [
   z.object({
     ...base,
     type: z.literal("item.note.delete"),
+    expectedRevision: z.number().int().nonnegative().optional(),
   }),
 ]);
 
@@ -45,13 +47,7 @@ export interface MutationResult {
   id: string;
   outcome: MutationOutcome;
   error?: string;
-  current?: {
-    itemId: number;
-    content: string;
-    revision: number;
-    createdAt: string;
-    updatedAt: string;
-  };
+  current?: NoteConflictState;
 }
 
 type Field = "read_at" | "saved_at" | "progress_at";
@@ -147,20 +143,14 @@ export function applyMutations(userId: number, raw: unknown[]): MutationResult[]
       if (mutation.type === "item.note.set") {
         const result = setItemNote(userId, mutation.itemId, mutation.content, mutation.expectedRevision);
         if ("conflict" in result) {
-          const c = result.conflict;
-          return finish("conflict", "revision_conflict", {
-            itemId: c.item_id,
-            content: c.content,
-            revision: c.revision,
-            createdAt: c.created_at,
-            updatedAt: c.updated_at,
-          });
+          return finish("conflict", "revision_conflict", result.conflict);
         }
         return finish("applied");
       }
 
       if (mutation.type === "item.note.delete") {
-        deleteItemNote(userId, mutation.itemId);
+        const result = deleteItemNote(userId, mutation.itemId, mutation.expectedRevision);
+        if ("conflict" in result) return finish("conflict", "revision_conflict", result.conflict);
         return finish("applied");
       }
 

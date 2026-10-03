@@ -19,6 +19,7 @@ import {
   findFolderById,
   findItemForUser,
   findItemNote,
+  noteConflictState,
   getEdition,
   isUserSubscribed,
   itemsWithNotes,
@@ -464,7 +465,7 @@ resourcesRouter.get("/items/:id/note", (req, res) => {
   const id = Number(req.params.id);
   if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
   const note = findItemNote(req.user!.id, id);
-  if (!note) return void res.status(404).json({ error: "note_not_found" });
+  if (!note) return void res.status(404).json({ error: "note_not_found", current: noteConflictState(req.user!.id, id) });
   res.json({
     itemId: note.item_id,
     content: note.content,
@@ -481,17 +482,7 @@ resourcesRouter.put("/items/:id/note", (req, res) => {
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   const result = setItemNote(req.user!.id, id, parsed.data.content, parsed.data.expectedRevision);
   if ("conflict" in result) {
-    const c = result.conflict;
-    return void res.status(409).json({
-      error: "revision_conflict",
-      current: {
-        itemId: c.item_id,
-        content: c.content,
-        revision: c.revision,
-        createdAt: c.created_at,
-        updatedAt: c.updated_at,
-      },
-    });
+    return void res.status(409).json({ error: "revision_conflict", current: result.conflict });
   }
   const n = result.note;
   res.json({
@@ -506,7 +497,10 @@ resourcesRouter.put("/items/:id/note", (req, res) => {
 resourcesRouter.delete("/items/:id/note", (req, res) => {
   const id = Number(req.params.id);
   if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
-  deleteItemNote(req.user!.id, id);
+  const parsed = z.object({ expectedRevision: z.number().int().nonnegative().optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error.flatten());
+  const result = deleteItemNote(req.user!.id, id, parsed.data.expectedRevision);
+  if ("conflict" in result) return void res.status(409).json({ error: "revision_conflict", current: result.conflict });
   res.status(204).end();
 });
 

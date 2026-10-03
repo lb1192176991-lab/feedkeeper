@@ -135,6 +135,12 @@ export function listChanges(userId: number, since: number, limit = 200): { chang
 
   const changes = slice.map((row): Change => {
     const change: Change = { seq: row.seq, entity: row.entity, id: row.entity_id, op: row.op };
+    if (row.entity === "note" && row.op === "delete") {
+      const version = db.prepare<[number, number], { revision: number }>(
+        "SELECT revision FROM item_note_revisions WHERE user_id = ? AND item_id = ?",
+      ).get(userId, row.entity_id);
+      return version ? { ...change, data: { revision: version.revision } } : change;
+    }
     if (row.op === "delete") return change;
     let data: Record<string, unknown> | null | undefined;
     if (row.entity === "item_state") data = itemState(userId, row.entity_id);

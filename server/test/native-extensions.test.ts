@@ -134,6 +134,17 @@ test("native extensions: feed icons, folder icons, notes, editions, and retentio
     assert.equal(subData.iconHash, storedIcon.hash);
     assert.equal(subData.iconUrl, `/api/v1/subscriptions/${feedId}/icon?v=${storedIcon.hash}`);
 
+    // An unchanged icon does not create another sync event; SVG is rasterized for native clients.
+    const previousIconSeq = subChanges[subChanges.length - 1].seq;
+    storeFeedIcon(feedId, fakePng, "image/png");
+    assert.equal(listChanges(user1, 0).changes.filter((c) => c.entity === "subscription" && c.id === feedId).at(-1)?.seq, previousIconSeq);
+    const svgIcon = storeFeedIcon(feedId, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="red"/></svg>'), "image/svg+xml");
+    assert.equal(svgIcon.mime, "image/png");
+    assert.equal(svgIcon.buffer.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+    const rasterRes = await call(`/subscriptions/${feedId}/icon?v=${svgIcon.hash}`, token1);
+    assert.equal(rasterRes.headers.get("content-type"), "image/png");
+    assert.equal((listChanges(user1, 0).changes.filter((c) => c.entity === "subscription" && c.id === feedId).at(-1)?.data as { iconHash: string }).iconHash, svgIcon.hash);
+
     // 4. Articles and Article Notes
     const itemId = Number(
       db
@@ -239,6 +250,48 @@ test("native extensions: feed icons, folder icons, notes, editions, and retentio
     ]);
     assert.equal(appliedMutation[0].outcome, "applied");
     assert.equal(findItemNote(user1, itemId)?.content, "Offline note synchronized");
+
+    // A stale device cannot delete a newer note or overwrite a note recreated after deletion.
+    const staleDelete = await call(`/items/${itemId}/note`, token1, { method: "DELETE", body: { expectedRevision: 2 } });
+    assert.equal(staleDelete.status, 409);
+    assert.equal((staleDelete.body as { current: { revision: number } }).current.revision, 3);
+    const deletedNote = await call(`/items/${itemId}/note`, token1, { method: "DELETE", body: { expectedRevision: 3 } });
+    assert.equal(deletedNote.status, 204);
+    const missingNote = await call(`/items/${itemId}/note`, token1);
+    assert.equal(missingNote.status, 404);
+    assert.deepEqual((missingNote.body as { current: { revision: number; deleted: boolean; content: null } }).current.revision, 4);
+    assert.equal((missingNote.body as { current: { deleted: boolean } }).current.deleted, true);
+    const deletedChange = listChanges(user1, 0).changes.filter((c) => c.entity === "note" && c.id === itemId).at(-1);
+    assert.equal(deletedChange?.op, "delete");
+    assert.equal((deletedChange?.data as { revision: number }).revision, 4);
+
+    const staleRecreate = await call(`/items/${itemId}/note`, token1, {
+      method: "PUT", body: { content: "Old offline edit", expectedRevision: 3 },
+    });
+    assert.equal(staleRecreate.status, 409);
+    assert.equal((staleRecreate.body as { current: { revision: number; deleted: boolean } }).current.revision, 4);
+    assert.equal((staleRecreate.body as { current: { deleted: boolean } }).current.deleted, true);
+    const recreatedNote = await call(`/items/${itemId}/note`, token1, {
+      method: "PUT", body: { content: "Recreated note", expectedRevision: 4 },
+    });
+    assert.equal(recreatedNote.status, 200);
+    assert.equal((recreatedNote.body as { revision: number }).revision, 5);
+    const staleOfflineDelete = applyMutations(user1, [{
+      id: "mut-note-stale-delete", at: new Date().toISOString(), type: "item.note.delete", itemId, expectedRevision: 3,
+    }]);
+    assert.equal(staleOfflineDelete[0].outcome, "conflict");
+    assert.equal(staleOfflineDelete[0].current?.revision, 5);
+    const offlineDelete = {
+      id: "mut-note-valid-delete", at: new Date().toISOString(), type: "item.note.delete", itemId, expectedRevision: 5,
+    };
+    assert.equal(applyMutations(user1, [offlineDelete])[0].outcome, "applied");
+    assert.equal(applyMutations(user1, [offlineDelete])[0].outcome, "duplicate");
+    assert.equal((listChanges(user1, 0).changes.filter((c) => c.entity === "note" && c.id === itemId).at(-1)?.data as { revision: number }).revision, 6);
+    const finalNote = await call(`/items/${itemId}/note`, token1, {
+      method: "PUT", body: { content: "Recreated note", expectedRevision: 6 },
+    });
+    assert.equal(finalNote.status, 200);
+    assert.equal((finalNote.body as { revision: number }).revision, 7);
 
     // 5. Retention protection for items with notes
     // Mark item as read and make it old
@@ -361,15 +414,15 @@ test("native extensions: feed icons, folder icons, notes, editions, and retentio
     assert.ok(searchContentBody.items.some((i) => i.id === searchableItemId));
 
     // Search by note content
-    // Note content is "Offline note synchronized"
-    const searchNoteRes = await call("/search?q=synchronized", token1);
+    // Note content is "Recreated note"
+    const searchNoteRes = await call("/search?q=Recreated", token1);
     assert.equal(searchNoteRes.status, 200);
     const searchNoteBody = searchNoteRes.body as { items: { id: number }[]; total: number };
     assert.equal(searchNoteBody.total >= 1, true);
     assert.ok(searchNoteBody.items.some((i) => i.id === itemId));
 
     // User 2 cannot find User 1's note
-    const user2NoteSearch = await call("/search?q=synchronized", token2);
+    const user2NoteSearch = await call("/search?q=Recreated", token2);
     assert.equal(user2NoteSearch.status, 200);
     assert.equal((user2NoteSearch.body as { total: number }).total, 0);
 

@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import cron from "node-cron";
 import { fetchFeed } from "./fetcher.js";
 import { discoverIconUrl, iconCheckDue } from "./icon.js";
+import { refreshFeedIcon } from "./feedIcon.js";
 import { decodeEntities } from "./text.js";
 import { notifyNewItems } from "../push.js";
 import { listFeedsDueForPoll, updateFeedAfterPoll, updateFeedIcon, upsertItems, type Feed } from "./repository.js";
@@ -94,12 +95,19 @@ function extractImageUrl(item: CustomItem): string | null {
 
 export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: string | null }> {
   try {
+    const refreshIconIfDue = async (siteUrl: string | null) => {
+      if (!iconCheckDue(feed.icon_checked_at)) return;
+      const iconUrl = siteUrl ? (await discoverIconUrl(siteUrl)) ?? feed.icon_url : feed.icon_url;
+      updateFeedIcon(feed.id, iconUrl);
+      await refreshFeedIcon(feed.id, siteUrl);
+    };
     const fetched = await fetchFeed(feed.url, {
       etag: feed.etag ?? undefined,
       lastModified: feed.last_modified ?? undefined,
     });
 
     if (fetched.notModified) {
+      await refreshIconIfDue(feed.site_url);
       updateFeedAfterPoll(feed.id, { error: null });
       return { newItems: 0, error: null };
     }
@@ -121,10 +129,7 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
     if (newItems > 0 && feed.last_success_at) void notifyNewItems(feed, newItems).catch(() => undefined);
 
     // Refresh the site's declared icon about once a week; failures keep the previous icon.
-    const siteUrl = parsed.link || feed.site_url;
-    if (siteUrl && iconCheckDue(feed.icon_checked_at)) {
-      updateFeedIcon(feed.id, (await discoverIconUrl(siteUrl)) ?? feed.icon_url);
-    }
+    await refreshIconIfDue(parsed.link || feed.site_url);
 
     updateFeedAfterPoll(feed.id, {
       title: decodeEntities(parsed.title) ?? undefined,

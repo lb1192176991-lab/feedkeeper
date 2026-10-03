@@ -231,12 +231,14 @@ paths:
   /subscriptions/{id}/icon:
     get:
       tags: [Images]
-      summary: The feed's icon, delivered by this server
+      summary: The feed's raster icon, delivered by this server
+      description: SVG and ICO sources are converted to PNG. Icons are rechecked during weekly feed polls, including when the feed returns 304. A changed image produces a new iconHash and a subscription upsert in /sync.
       parameters:
         - { $ref: "#/components/parameters/Id" }
         - { name: v, in: query, schema: { type: string }, description: "Optional content hash for immutable caching" }
       responses:
-        "200": { description: An image, content: { "image/*": { schema: { type: string, format: binary } } } }
+        "200": { description: "PNG, JPEG or another supported raster image. ETag is the iconHash; matching v enables private immutable caching.", content: { "image/*": { schema: { type: string, format: binary } } } }
+        "304": { description: If-None-Match matched the current iconHash }
         "404": { $ref: "#/components/responses/NotFound" }
   /discover:
     post:
@@ -455,7 +457,7 @@ paths:
       summary: Note for an article
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemNote" } } } }
-        "404": { $ref: "#/components/responses/NotFound" }
+        "404": { description: "item_not_found, or note_not_found with current deleted state and revision", content: { application/json: { schema: { $ref: "#/components/schemas/NoteNotFound" } } } }
     put:
       tags: [Notes]
       summary: Create or update note for an article
@@ -468,17 +470,26 @@ paths:
               required: [content]
               properties:
                 content: { type: string, maxLength: 100000 }
-                expectedRevision: { type: integer, minimum: 0 }
+                expectedRevision: { type: integer, minimum: 0, description: "Last seen revision, including a deleted note's tombstone revision. Omit only for unconditional writes." }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemNote" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { description: revision_conflict }
+        "409": { description: revision_conflict, content: { application/json: { schema: { $ref: "#/components/schemas/NoteConflict" } } } }
     delete:
       tags: [Notes]
       summary: Delete note for an article
+      requestBody:
+        description: "Use expectedRevision to avoid deleting an edit from another device. Omit only for unconditional deletion."
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expectedRevision: { type: integer, minimum: 0 }
       responses:
         "204": { description: Done }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: revision_conflict, content: { application/json: { schema: { $ref: "#/components/schemas/NoteConflict" } } } }
   /items/{id}/note.md:
     get:
       tags: [Notes]
@@ -621,6 +632,27 @@ components:
         revision: { type: integer }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    NoteConflictState:
+      type: object
+      required: [itemId, content, revision, createdAt, updatedAt, deleted]
+      properties:
+        itemId: { type: integer }
+        content: { type: [string, "null"], description: "Null after deletion" }
+        revision: { type: integer, minimum: 0, description: "Increases on every edit, deletion and recreation" }
+        createdAt: { type: [string, "null"], format: date-time }
+        updatedAt: { type: [string, "null"], format: date-time }
+        deleted: { type: boolean }
+    NoteConflict:
+      type: object
+      required: [error, current]
+      properties:
+        error: { type: string, const: revision_conflict }
+        current: { $ref: "#/components/schemas/NoteConflictState" }
+    NoteNotFound:
+      type: object
+      properties:
+        error: { type: string, enum: [item_not_found, note_not_found] }
+        current: { $ref: "#/components/schemas/NoteConflictState", description: "Present for note_not_found" }
     Edition:
       type: object
       required: [revision, createdAt, updatedAt, itemIds, items]
@@ -644,7 +676,7 @@ components:
         entity: { type: string, enum: [item_state, subscription, folder, muted_keyword, note, edition] }
         id: { type: integer }
         op: { type: string, enum: [upsert, delete] }
-        data: { type: object, description: The current data of the object; absent for deletions }
+        data: { type: object, description: "Current data for upserts. Note deletions carry {revision}; other deletions omit data." }
     Mutation:
       type: object
       required: [id, type, itemId, at]
@@ -655,7 +687,7 @@ components:
         value: { type: boolean, description: For item.read and item.save }
         position: { type: number, minimum: 0, maximum: 1, description: "For item.progress; below 5 % or above 95 % clears it" }
         content: { type: string, description: For item.note.set }
-        expectedRevision: { type: integer, minimum: 0, description: For item.note.set optimistic concurrency }
+        expectedRevision: { type: integer, minimum: 0, description: "For item.note.set and item.note.delete; omit only for unconditional changes" }
         at: { type: string, format: date-time, description: "When the user did it; at most 5 minutes ahead of the server, at most 30 days old" }
     MutationResult:
       type: object
@@ -663,4 +695,4 @@ components:
         id: { type: string }
         outcome: { type: string, enum: [applied, duplicate, stale, rejected, conflict] }
         error: { type: string, description: "invalid_mutation, invalid_time, item_not_found, or revision_conflict" }
-        current: { $ref: "#/components/schemas/ItemNote" }
+        current: { $ref: "#/components/schemas/NoteConflictState" }

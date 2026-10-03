@@ -4,6 +4,16 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-03
+
+### Changed
+- Feed icons from SVG and ICO sources are stored as PNG, so native and web clients can use the same cached image. Existing icons are converted when first requested.
+- The native API design and OpenAPI specification now describe the implemented routes and the note conflict contract.
+
+### Fixed
+- Deleting a note with `expectedRevision` now detects edits from another device. Revisions continue across deletion and recreation, and a deleted note's revision is available through `/sync` and `GET /items/{id}/note`.
+- Feed icons are checked again about once a week, even when the feed returns 304. A changed icon updates its hash and sync entry; an unchanged icon does not create a new sync entry.
+
 ## [0.10.0] - 2026-10-03
 
 ### Added

@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import { Resvg } from "@resvg/resvg-js";
+import { extractLargestImageAsPng } from "@humanwhocodes/ico-to-png";
 import { db } from "../db/index.js";
 import { fetchImage } from "./fetcher.js";
 import { detectImageType } from "./archive.js";
@@ -54,18 +56,53 @@ function candidates(feed: { icon_url: string | null; site_url: string | null; ur
   return [...urls];
 }
 
-/** Store or update feed icon in database. */
+/** Keep the same raster icon in every client, including clients without SVG or ICO support. */
+function rasterIcon(buffer: Buffer, mime: string): { buffer: Buffer; mime: string } {
+  if (mime === "image/svg+xml") {
+    const svg = new Resvg(buffer, { fitTo: { mode: "width", value: 128 }, font: { loadSystemFonts: false } });
+    if (svg.width > 4096 || svg.height > 4096 || svg.width < 1 || svg.height < 1 ||
+        svg.width / svg.height > 8 || svg.height / svg.width > 8) throw new Error("Invalid SVG icon size");
+    return { buffer: svg.render().asPng(), mime: "image/png" };
+  }
+  if (mime === "image/x-icon") {
+    const image = extractLargestImageAsPng(buffer);
+    if (!image) throw new Error("Invalid ICO icon");
+    return { buffer: Buffer.from(image.data), mime: "image/png" };
+  }
+  return { buffer, mime };
+}
+
+/** Store or update feed icon in database, only notifying subscribers when its content changes. */
 export function storeFeedIcon(feedId: number, buffer: Buffer, mime: string): FeedIcon {
+  ({ buffer, mime } = rasterIcon(buffer, mime));
   const hash = hashIconBuffer(buffer);
   db.prepare(
     `INSERT INTO feed_icons (feed_id, data, mime, hash, updated_at)
      VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-     ON CONFLICT (feed_id) DO UPDATE SET data = excluded.data, mime = excluded.mime, hash = excluded.hash, updated_at = excluded.updated_at`,
+     ON CONFLICT (feed_id) DO UPDATE SET data = excluded.data, mime = excluded.mime, hash = excluded.hash, updated_at = excluded.updated_at
+     WHERE feed_icons.hash != excluded.hash OR feed_icons.mime != excluded.mime`,
   ).run(feedId, buffer, mime, hash);
 
   const icon: FeedIcon = { buffer, mime, hash };
   cache.set(feedId, { icon, fetchedAt: Date.now() });
   return icon;
+}
+
+/** Re-check remote candidates during the weekly feed poll, even if a stored icon exists. */
+export async function refreshFeedIcon(feedId: number, siteUrl?: string | null): Promise<FeedIcon | null> {
+  const feed = db.prepare<[number], { icon_url: string | null; site_url: string | null; url: string }>(
+    "SELECT icon_url, site_url, url FROM feeds WHERE id = ?",
+  ).get(feedId);
+  for (const url of feed ? candidates({ ...feed, site_url: siteUrl ?? feed.site_url }) : []) {
+    try {
+      const { buffer } = await fetchImage(url, MAX_ICON_BYTES);
+      const mime = detectIconType(buffer);
+      if (mime) return storeFeedIcon(feedId, buffer, mime);
+    } catch {
+      // Keep the last good icon and try the next candidate.
+    }
+  }
+  return null;
 }
 
 /** Retrieve icon hash from database without reading full blob. */
@@ -87,27 +124,19 @@ export async function loadFeedIcon(feedId: number): Promise<FeedIcon | null> {
     "SELECT data, mime, hash FROM feed_icons WHERE feed_id = ?",
   ).get(feedId);
   if (row) {
-    const icon: FeedIcon = { buffer: row.data, mime: row.mime, hash: row.hash };
+    // Icons stored by older versions may still be SVG or ICO.
+    let icon: FeedIcon;
+    try {
+      icon = row.mime === "image/svg+xml" || row.mime === "image/x-icon"
+        ? storeFeedIcon(feedId, row.data, row.mime)
+        : { buffer: row.data, mime: row.mime, hash: row.hash };
+    } catch {
+      return refreshFeedIcon(feedId);
+    }
     cache.set(feedId, { icon, fetchedAt: Date.now() });
     return icon;
   }
-
-  const feed = db.prepare<[number], { icon_url: string | null; site_url: string | null; url: string }>(
-    "SELECT icon_url, site_url, url FROM feeds WHERE id = ?",
-  ).get(feedId);
-  let icon: FeedIcon | null = null;
-  for (const url of feed ? candidates(feed) : []) {
-    try {
-      const { buffer } = await fetchImage(url, MAX_ICON_BYTES);
-      const mime = detectIconType(buffer);
-      if (mime) {
-        icon = storeFeedIcon(feedId, buffer, mime);
-        break;
-      }
-    } catch {
-      // Try the next candidate.
-    }
-  }
+  const icon = await refreshFeedIcon(feedId);
   if (!icon) {
     if (cache.size >= MAX_CACHED) cache.delete(cache.keys().next().value!);
     cache.set(feedId, { icon: null, fetchedAt: Date.now() });

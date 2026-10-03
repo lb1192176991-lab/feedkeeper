@@ -1,12 +1,12 @@
-# Native client API (design draft)
+# Native client API
 
-Status: draft, nothing here is implemented yet. This document fixes the decisions behind `/api/v1`, the API for native apps, so the server, the iOS app and later third-party clients can be built against one contract.
+Status: the core `/api/v1` contract, including sync, notes, icons, editions and search, is implemented. Later ideas are marked as planned below. The implemented routes and schemas are specified in `docs/openapi.yaml`.
 
 ## Goals
 
 - A stable, versioned API for native apps that does not depend on cookies or on what the web UI happens to need.
 - Offline-first clients: complete sync of subscriptions, articles and state, with changes queued on the device and replayed safely.
-- Everything FeedKeeper offers beyond classic readers is a first-class part of the API: the permanent archive of saved articles, per-feed notification and badge settings, highlights and notes, tags, reading position.
+- FeedKeeper features such as the permanent archive of saved articles, per-feed notification and badge settings, article notes and reading position are first-class parts of the API. Highlights and tags remain planned.
 - Push notifications for the iOS app without exposing article content to anyone but the user's own server and device.
 - Third-party apps can use the same API. A Google Reader compatible layer for existing apps is a separate, later adapter on top of the same services.
 
@@ -16,11 +16,10 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 
 - Base path `/api/v1`, JSON over HTTPS, UTF-8. Timestamps are ISO 8601 in UTC. IDs are integers and never reused.
 - Errors: `{ "error": "<code>", "message": "<human readable>", "details": … }` with a matching HTTP status. Codes are stable strings.
-- Pagination uses opaque cursors (`nextCursor`), never offsets.
-- `Idempotency-Key` header on every unsafe request that is not part of `/mutations`. Replaying a request with the same key returns the stored result.
-- Responses are gzip-compressed and carry `ETag` where cheap, so clients can revalidate lists.
-- Rate limits are per token and returned in `RateLimit-*` headers; sync endpoints have higher limits than the web API.
-- The contract is an OpenAPI 3.1 file, `docs/openapi.yaml`, kept next to the code; a test fails when it and the implemented routes drift apart. The Swift client is generated from it and a conformance test suite runs against a real server.
+- Article lists use opaque cursors (`nextCursor`); full-text search uses `limit` and `offset`.
+- Offline mutations use client-generated IDs for idempotent retries. Other writes do not currently support an `Idempotency-Key` header.
+- Feed icons have `ETag` and `If-None-Match`; matching versioned icon URLs can be cached immutably.
+- The implemented contract is described in the OpenAPI 3.1 file `docs/openapi.yaml`, kept next to the code.
 
 ## Meta and compatibility
 
@@ -29,9 +28,9 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 ```json
 {
   "apiVersion": 1,
-  "serverVersion": "0.9.0",
-  "features": ["sync", "archive", "annotations", "tags", "fulltext", "push.relay", "search.fts", "feed-icons", "folder-icons", "notes", "edition"],
-  "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000 }, "maxArchivedImageBytes": 5242880 },
+  "serverVersion": "0.10.1",
+  "features": ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention", "feed-icons", "folder-icons", "notes", "edition", "search.fts"],
+  "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000 } },
   "minClientVersion": null
 }
 ```
@@ -57,11 +56,12 @@ New tables (migrations are additive and keep existing data):
 |---|---|
 | `changes` | Per-user change log for state, compacted: one row per `user_id`, `entity`, `entity_id` (unique), holding `op` (`upsert` or `delete`) and a `seq` that is reassigned on every change. |
 | `applied_mutations` | `user_id`, `mutation_id`, `applied_at`, result; makes `/mutations` idempotent. Pruned after 30 days. |
-| `annotations` | Highlights and notes: `id`, `user_id`, `item_id`, `quote`, `prefix`, `suffix`, `content_hash`, `note`, `color`, `revision`, `created_at`, `updated_at`, `deleted_at`. |
-| `tags` | `id`, `user_id`, `name` (unique per user), `color`. |
-| `item_tags` | `user_id`, `item_id`, `tag_id`. |
+| `item_notes` | Personal article notes with content, revision and timestamps. |
+| `item_note_revisions` | Last revision after a note is deleted, so old edits and deletions cannot overwrite a recreated note. |
+| `feed_icons` | Server-cached raster icons and content hashes for subscriptions. |
+| `editions` | A user's current curated issue, its order, revision and expiry. |
 | `item_progress` | Reading position per user and article, for every article: `position` 0..1, `updated_at`. Removed together with the article. |
-| `devices` metadata | Columns on the token table: `kind`, `platform`, `app_version`, `last_seen_at`, `push_relay_token`, `push_key`. |
+| `devices` metadata | Columns on the token table: `kind`, `platform`, `app_version`, `last_seen_at`. Native push registration remains planned. |
 
 Article content stays global (one row per article, shared by subscribers); everything personal is a per-user row, as today.
 
@@ -80,14 +80,14 @@ Two streams, because articles and personal state behave differently.
   "changes": [
     { "seq": 4121, "entity": "item_state", "id": 107255, "op": "upsert", "data": { "read": true, "saved": true, "savedAt": "…", "progress": 0.4 } },
     { "seq": 4122, "entity": "subscription", "id": 12, "op": "upsert", "data": { "…": "…" } },
-    { "seq": 4123, "entity": "annotation", "id": 9, "op": "delete" }
+    { "seq": 4123, "entity": "note", "id": 9, "op": "delete", "data": { "revision": 4 } }
   ],
   "nextSeq": 4123,
   "hasMore": false
 }
 ```
 
-Entities: `item_state` (read, saved, saved time, reading position), `subscription`, `folder`, `muted_keyword`, and later `annotation`, `tag` and `item_tag`. The log is filled by database triggers, so every code path (web app, MCP, native API) is covered. A "mark all read" produces one `item_state` entry per article it touches; compaction keeps that bounded. Feed-level data that changes on every poll (title, icon, health, unread counts) is deliberately not part of the log; clients refresh it with `GET /subscriptions` and compute unread counts from their own copy.
+Entities: `item_state` (read, saved, saved time, reading position), `subscription`, `folder`, `muted_keyword`, `note` and `edition`. The log is filled by database triggers, so every code path (web app, MCP, native API) is covered. A "mark all read" produces one `item_state` entry per article it touches; compaction keeps that bounded. Changed feed icons produce a `subscription` upsert with a new `iconHash` and versioned `iconUrl`. Note deletions carry their new revision in `data`; other deletions have no data. Feed health and unread counts are refreshed separately with `GET /subscriptions`.
 
 The log is **compacted**: each object has exactly one row whose `seq` moves forward when the object changes, so toggling an article read and unread three times leaves one entry and the log grows with the number of objects, not the number of changes. Only deletions (tombstones) are remembered for 90 days. A client that is new, or whose `since` is older than the oldest remembered tombstone, gets `410 resync_required` and starts over: it drops its copy of this state and syncs from `since=0`. Because the log holds one entry per object, `since=0` *is* the complete state, so there is no separate snapshot endpoint. Users whose data predates the log are added to it on their first sync.
 
@@ -99,15 +99,15 @@ The log is **compacted**: each object has exactly one row whose `seq` moves forw
 { "mutations": [
   { "id": "6f1c…", "type": "item.read", "itemId": 107255, "value": true, "at": "2026-10-02T08:01:00Z" },
   { "id": "9a02…", "type": "item.save", "itemId": 107255, "value": true, "at": "…" },
-  { "id": "c7d3…", "type": "annotation.create", "itemId": 107255, "quote": "…", "prefix": "…", "suffix": "…", "note": "…" }
+  { "id": "c7d3…", "type": "item.note.delete", "itemId": 107255, "expectedRevision": 3, "at": "…" }
 ] }
 ```
 
-The server applies them in order and answers per mutation (`applied`, `duplicate`, `stale`, `rejected` with a code). Replays are harmless thanks to `applied_mutations`. Conflict rules: read, saved and reading position are last-writer-wins **per field** by `at`. The log records when each field last changed, whether through a device or the web app, and an older change is answered `stale` and not applied. `at` may be at most 5 minutes ahead of the server clock (it is clamped) and at most 30 days old (older is `rejected`). Reading positions below 5 % or above 95 % clear the stored position; annotations carry a `revision` and an edit based on an old revision is rejected with `409 revision_conflict`, returning the current version for the client to merge. A rejected mutation never blocks the rest of the batch.
+The server applies them in order and answers per mutation (`applied`, `duplicate`, `stale`, `rejected` or `conflict`). Replays are harmless thanks to `applied_mutations`. Conflict rules: read, saved and reading position are last-writer-wins **per field** by `at`. The log records when each field last changed, whether through a device or the web app, and an older change is answered `stale` and not applied. `at` may be at most 5 minutes ahead of the server clock (it is clamped) and at most 30 days old (older is `rejected`). Reading positions below 5 % or above 95 % clear the stored position. Notes use `expectedRevision` on both set and delete; a mismatch returns `revision_conflict` with the current state, including the tombstone revision after deletion. A rejected mutation never blocks the rest of the batch.
 
 ## Resources
 
-All of these require a device token unless noted. Lists are cursor-paged.
+Implemented routes accept device tokens or personal access tokens unless noted. The OpenAPI file gives the exact parameters and response shapes.
 
 **Account and settings**
 - `GET /me`, `GET /devices`, `DELETE /devices/{id}`, `POST /devices/pair` (no auth, needs a code), `POST /pairing-codes` (web session).
@@ -119,18 +119,20 @@ All of these require a device token unless noted. Lists are cursor-paged.
 - `GET/POST/PATCH/DELETE /folders`.
 
 **Articles**
-- `GET /items` (filters: feed, folder, unread, saved, tag, date range, `after` cursor), `GET /items/{id}`.
-- Item fields: `id`, `subscriptionId`, `title`, `url`, `author`, `publishedAt`, `addedAt`, `snippet`, `imageUrl`, `contentHtml`, `fullTextHtml`, `state` (`read`, `saved`, `savedAt`, `archivedAt`, `progress`, `tags`), `contentHash` of the archived full text.
+- `GET /items` (filters include subscription, folder, unread, saved and an `after` cursor), `GET /items/{id}`.
+- Item fields include `id`, `subscriptionId`, `title`, `url`, `publishedAt`, `addedAt`, `snippet`, `imageUrl`, `contentHtml`, `fullTextHtml` and `state` (`read`, `saved`, `savedAt`, `archivedAt`, `progress`, `hasNote`).
 - `POST /items/{id}/full-text` fetches and caches the full article.
 - `GET /items/bundle?ids=…` returns articles with all content and a map of image URLs, so a client can store an offline copy with one request. `GET /items/{id}/image?src=…` serves an article's images and `GET /archive/images/{id}` the stored copies of saved articles. Both the web app and the native API call the route `image`, so there is one name for it.
-- `GET /search?q=…` searches titles, summaries, archived full text, notes and tags (SQLite FTS5, planned alongside).
+- `GET /search?q=…` searches titles, summaries, cached full text and personal article notes with SQLite FTS5.
 
-**Saved articles, tags, annotations, progress**
-- Saving is state (`item.save`). It triggers the archive on the server; `archivedAt` appears once full text and images are stored. Saving is what makes highlights and tags possible.
-- `GET/POST /tags`, tagging via mutation `item.tag`. Tags exist only on saved articles; unsaving removes the tags.
-- `GET /items/{id}/annotations`, plus mutations `annotation.create|update|delete`. Annotations are allowed on saved articles only, because their archived full text no longer changes. An annotation anchors with a text quote selector (exact text, a few characters of prefix and suffix) plus the `contentHash` it was made against; clients re-anchor by quote and fall back to showing it unanchored if the text is gone.
+**Saved articles, notes and progress**
+- Saving is state (`item.save`). It triggers the archive on the server; `archivedAt` appears once full text and images are stored. Personal notes can be attached to any accessible article.
+- `GET/PUT/DELETE /items/{id}/note` and `item.note.set|delete` mutations synchronize personal Markdown notes. With `expectedRevision`, edits and deletions use optimistic concurrency. A deletion advances the revision, and a recreation advances it again. `GET` returns `404 note_not_found` with `current` tombstone state when no active note exists.
 - `item.progress` stores the reading position of **any** article so another device can continue where you stopped. Clients send it batched: when leaving the article or at most every 10 seconds. The server ignores positions below 5 % and above 95 %, since "not started" and "finished" are covered by the read state.
-- `GET /items/{id}/annotations.md` and `GET /annotations/export` return highlights and notes as Markdown (quote, note, article title and link), so notes are never locked in and can be fed into tools such as Obsidian.
+- `GET /items/{id}/note.md` and `GET /notes/export` return Markdown with article title and link.
+
+**Planned: highlights and tags**
+- Tags on saved articles and anchored highlights are design ideas; their routes and mutations are not part of the current `/api/v1` contract.
 
 **Keywords**
 - `GET/POST/DELETE /muted-keywords`.
@@ -138,9 +140,9 @@ All of these require a device token unless noted. Lists are cursor-paged.
 **Native Extensions**
 
 - **Authoritative Feed Icons (`feed-icons`)**:
-  - The server persists icons in `feed_icons` with SHA-256 hashes (`icon_hash`).
+  - The server persists icons in `feed_icons` with SHA-256 content hashes (`iconHash` in API responses). SVG and ICO sources are converted to PNG so all clients can display the same raster image.
   - `/api/v1/subscriptions/{id}/icon` supports `ETag`, `If-None-Match` (304), and immutable caching (`Cache-Control: private, max-age=31536000, immutable`) when requested with matching `?v=<iconHash>`.
-  - Icon updates automatically log a `subscription` upsert to the sync change log with updated `iconHash` and versioned `iconUrl`.
+  - Feed polls recheck icons roughly once a week, including on a 304 feed response. A changed image logs a `subscription` upsert with updated `iconHash` and versioned `iconUrl`; unchanged images do not advance the sync log. Icons stored as SVG or ICO before 0.10.1 are converted when first requested.
 
 - **Ressort / Folder SF Symbols (`folder-icons`)**:
   - Folders in the backend and API map to *Categories* (*Kategorien*) in the Web UI and *Ressorts* in the native app.
@@ -152,8 +154,8 @@ All of these require a device token unless noted. Lists are cursor-paged.
 
 - **Synchronized Article Notes (`notes`)**:
   - `item_notes` stores personal Markdown notes per article (`userId`, `itemId`, `content`, `revision`, `createdAt`, `updatedAt`).
-  - Optimistic concurrency control via `expectedRevision` on `PUT /items/{id}/note` (HTTP 409 Conflict with `revision_conflict` and `current` state) and mutation `item.note.set` (`outcome: "conflict"`).
-  - Deletions via `DELETE /items/{id}/note` and mutation `item.note.delete`.
+  - `item_note_revisions` preserves the last revision after deletion. `PUT` and `DELETE /items/{id}/note` and both note mutations accept `expectedRevision`; conflicts include `current` with `deleted`, nullable content and the latest revision. Omitting `expectedRevision` keeps unconditional writes for older clients.
+  - A missing note returns `404 note_not_found` with its current tombstone state. A note deletion in `/sync` includes `{ "revision": <number> }` in `data`, so a client can recreate it with the right revision.
   - Markdown exports: `GET /items/{id}/note.md` (single note with title and link) and `GET /notes/export` (all user notes in single Markdown document).
   - Retention protection: articles with notes are permanently excluded from database retention cleanup (`runCleanup`), even after feed unsubscription or age limit expiration.
   - Item listing endpoints (`/items`, `/items/{id}`, `/items/bundle`, `/edition`) include `state.hasNote: boolean`.
@@ -194,11 +196,11 @@ Offline copy of saved and recent articles with images, instant state sync across
 
 ## Phases
 
-Status: steps 1 and 2 are implemented (pairing, `/meta`, change log, `/sync`, `/mutations`, subscriptions, folders, keywords, articles, images, OPML, `docs/openapi.yaml`). Annotations, tags, FTS5 search and the push relay are still to do. Route names follow the OpenAPI file, for example `/muted-keywords`, `/items/{id}/image` and `/items/read-all`.
+Status: pairing, `/meta`, change log, `/sync`, `/mutations`, subscriptions, folders, keywords, articles, images, OPML, notes, editions, FTS5 search and `docs/openapi.yaml` are implemented. Highlights, tags and the native push relay remain planned. Route names follow the OpenAPI file, for example `/muted-keywords`, `/items/{id}/image` and `/items/read-all`.
 
 1. Contract: OpenAPI file, error catalogue, review of this draft.
 2. Server foundations: device tokens and pairing, `/meta`, change log and `/sync`, `/mutations`, subscriptions and articles on `/api/v1` with tests.
-3. Saved-article features: tags, annotations, reading position, FTS5 search, `bundle` and the image routes.
+3. Saved-article features: reading position, FTS5 search, notes, `bundle` and the image routes are implemented; tags and highlights are planned.
 4. Push: relay protocol on the server side, device registration, the relay service and the app's extension.
 5. Google Reader compatible adapter for third-party apps, built on the same services.
 
