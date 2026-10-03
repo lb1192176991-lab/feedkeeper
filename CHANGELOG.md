@@ -4,13 +4,15 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-03
+
 ### Added
-- Native API: Authoritative feed icons (`feed-icons`) with SHA-256 caching headers, ETag validation, and sync change log support.
-- Native API: Folder / Ressort SF Symbols (`folder-icons`) on `POST /folders` and `PATCH /folders/{id}` (mapped to categories in the web frontend and ressorts in the native app).
-- Native API: Synchronized article notes (`notes`) with optimistic concurrency (`expectedRevision`), Markdown export (`GET /items/{id}/note.md`, `GET /notes/export`), offline mutation support (`item.note.set`, `item.note.delete`), and retention protection.
-- Native API: Curated edition "Deine Zeitung" (`edition`) via `GET /edition`, `DELETE /edition`, and MCP write tool `publish_edition`.
-- Native API: Full-text search (`search.fts`) via SQLite FTS5 (`GET /api/v1/search`), with BM25 relevance ranking, note matching, and diacritic-insensitive tokenization.
-- Native API: `GET /api/v1/meta` publishes all cleanup rules in `limits.retention` (whether cleanup runs, the age limits for read and for all articles, and the per-feed cap), so apps can apply the same retention to their offline copy. `limits.retentionDays` stays for older clients.
+- Full-text search with SQLite FTS5: `GET /api/v1/search` searches titles, snippets, cached full text, and personal article notes with BM25 relevance ranking, diacritic-insensitive matching, and phrase support. The index stays in step through database triggers on article changes.
+- Article notes: attach personal Markdown notes to any article with `GET /api/v1/items/{id}/note` and `PUT /api/v1/items/{id}/note`, with conflict detection using expected revisions and offline mutation support (`item.note.set`, `item.note.delete`). Export individual notes as Markdown files or download all your notes in a single file from `GET /api/v1/notes/export`. Articles with notes are permanently excluded from database retention cleanups.
+- Curated daily edition: `GET /api/v1/edition` serves an ordered list of up to 24 hand-picked articles with an expiry date, and MCP clients can assemble it with the new `publish_edition` tool.
+- Feed icons served by the server: `/api/v1/subscriptions/{id}/icon` delivers icons directly with SHA-256 hashes and conditional ETags, and notifies clients of icon changes through `/sync`. The web app uses the server-served icons directly.
+- SF Symbols for folders: `POST /folders` and `PATCH /folders/{id}` accept an optional `iconSymbol` (such as `newspaper.fill`), which syncs across devices for native apps that display folders as sections or ressorts.
+- Retention rules in the meta endpoint: `GET /api/v1/meta` publishes `limits.retention` with the exact cleanup rules (whether cleanup runs, age limits for read and unread articles, and per-feed item caps) so offline clients can mirror the server's housekeeping.
 
 ## [0.9.0] - 2026-10-02
 
@@ -140,7 +142,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/visualfusion/feedkeeper/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/visualfusion/feedkeeper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/visualfusion/feedkeeper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/visualfusion/feedkeeper/compare/v0.6.1...v0.7.0
