@@ -143,6 +143,7 @@ All of these require a device token unless noted. Lists are cursor-paged.
   - Icon updates automatically log a `subscription` upsert to the sync change log with updated `iconHash` and versioned `iconUrl`.
 
 - **Ressort / Folder SF Symbols (`folder-icons`)**:
+  - Folders in the backend and API map to *Categories* (*Kategorien*) in the Web UI and *Ressorts* in the native app.
   - `folders.icon_symbol` stores an SF Symbol identifier (e.g. `newspaper.fill`, `cpu`).
   - Validated with `/^[a-z0-9]+(?:[\.\-][a-z0-9]+)*$/i`.
   - Supported on `POST /folders` and `PATCH /folders/{id}`. Renaming preserves existing `iconSymbol`.

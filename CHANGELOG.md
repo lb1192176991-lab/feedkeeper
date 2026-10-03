@@ -6,7 +6,7 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ### Added
 - Native API: Authoritative feed icons (`feed-icons`) with SHA-256 caching headers, ETag validation, and sync change log support.
-- Native API: Folder SF Symbols (`folder-icons`) on `POST /folders` and `PATCH /folders/{id}`.
+- Native API: Folder / Ressort SF Symbols (`folder-icons`) on `POST /folders` and `PATCH /folders/{id}` (mapped to categories in the web frontend and ressorts in the native app).
 - Native API: Synchronized article notes (`notes`) with optimistic concurrency (`expectedRevision`), Markdown export (`GET /items/{id}/note.md`, `GET /notes/export`), offline mutation support (`item.note.set`, `item.note.delete`), and retention protection.
 - Native API: Curated edition "Deine Zeitung" (`edition`) via `GET /edition`, `DELETE /edition`, and MCP write tool `publish_edition`.
 - Native API: Full-text search (`search.fts`) via SQLite FTS5 (`GET /api/v1/search`), with BM25 relevance ranking, note matching, and diacritic-insensitive tokenization.
