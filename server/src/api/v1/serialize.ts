@@ -25,7 +25,7 @@ export function readingPositions(userId: number, itemIds: number[]): Map<number,
   return new Map(rows.map((row) => [row.item_id, row.position]));
 }
 
-export function serializeItem(row: ItemRow, progress: Map<number, number>, withContent: boolean) {
+export function serializeItem(row: ItemRow, progress: Map<number, number>, withContent: boolean, hasNote = false) {
   return {
     id: row.id,
     subscriptionId: row.feed_id,
@@ -44,6 +44,7 @@ export function serializeItem(row: ItemRow, progress: Map<number, number>, withC
       savedAt: row.bookmarked_at ?? null,
       archivedAt: row.archived_at ?? null,
       progress: progress.get(row.id) ?? null,
+      hasNote,
     },
   };
 }

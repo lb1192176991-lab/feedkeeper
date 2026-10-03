@@ -10,19 +10,27 @@ import { pollFeed } from "../../feeds/poller.js";
 import { canAccessFeed, loadFeedIcon } from "../../feeds/feedIcon.js";
 import {
   addMutedKeyword,
+  canAccessItem,
   createFolder,
+  deleteEdition,
   deleteFolder,
+  deleteItemNote,
   findFeedById,
   findFolderById,
   findItemForUser,
+  findItemNote,
+  getEdition,
   isUserSubscribed,
+  itemsWithNotes,
   listFoldersForUser,
   listItemsForUser,
   listMutedKeywords,
+  listNotesForUser,
   listSubscriptionsForUser,
   markAllRead,
   removeMutedKeyword,
   reorderSubscriptions,
+  setItemNote,
   updateFolder,
 } from "../../feeds/repository.js";
 import { changeFeedUrl, FeedError, MultipleFeedsFoundError, subscribeToFeed, unsubscribeFromFeed, updateFeedSettings } from "../../feeds/service.js";
@@ -157,7 +165,22 @@ resourcesRouter.get("/subscriptions/:id/icon", imageLimiter, async (req, res) =>
   const id = Number(req.params.id);
   const icon = canAccessFeed(req.user!.id, id) ? await loadFeedIcon(id) : null;
   if (!icon) return void res.status(404).json({ error: "not_found" });
-  res.setHeader("Cache-Control", "private, max-age=86400");
+
+  if (icon.hash) {
+    res.setHeader("ETag", `"${icon.hash}"`);
+    const ifNoneMatch = req.headers["if-none-match"];
+    if (ifNoneMatch === `"${icon.hash}"` || ifNoneMatch === icon.hash) {
+      return void res.status(304).end();
+    }
+  }
+
+  const v = typeof req.query.v === "string" ? req.query.v : "";
+  if (v && v === icon.hash) {
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  } else {
+    res.setHeader("Cache-Control", "private, max-age=86400");
+  }
+
   // SVG icons must never run scripts, even when opened directly.
   res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
   res.type(icon.mime).send(icon.buffer);
@@ -195,22 +218,51 @@ resourcesRouter.post("/opml", async (req, res) => {
 const serializeFolder = (folder: ReturnType<typeof listFoldersForUser>[number]) => ({
   id: folder.id,
   name: folder.name,
+  iconSymbol: folder.icon_symbol ?? null,
   subscriptionCount: folder.feed_count,
   unreadCount: folder.unread_count,
 });
 
-const nameSchema = z.object({ name: z.string().trim().min(1).max(100) });
+export const SF_SYMBOL_REGEX = /^[a-z0-9]+(?:[\.\-][a-z0-9]+)*$/i;
+
+const sfSymbolSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .regex(SF_SYMBOL_REGEX, "Invalid SF Symbol name")
+  .transform((val) => val.toLowerCase());
+
+const createFolderSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  iconSymbol: sfSymbolSchema.nullable().optional(),
+});
+
+const patchFolderSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    iconSymbol: sfSymbolSchema.nullable().optional(),
+  })
+  .refine((data) => data.name !== undefined || data.iconSymbol !== undefined, {
+    message: "Must provide name or iconSymbol",
+  });
 
 resourcesRouter.get("/folders", (req, res) => {
   res.json(listFoldersForUser(req.user!.id).map(serializeFolder));
 });
 
 resourcesRouter.post("/folders", (req, res) => {
-  const parsed = nameSchema.safeParse(req.body);
+  const parsed = createFolderSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   try {
-    const folder = createFolder(req.user!.id, parsed.data.name);
-    res.status(201).json({ id: folder.id, name: folder.name, subscriptionCount: 0, unreadCount: 0 });
+    const folder = createFolder(req.user!.id, parsed.data.name, parsed.data.iconSymbol);
+    res.status(201).json({
+      id: folder.id,
+      name: folder.name,
+      iconSymbol: folder.icon_symbol ?? null,
+      subscriptionCount: 0,
+      unreadCount: 0,
+    });
   } catch {
     res.status(409).json({ error: "folder_name_taken" });
   }
@@ -218,15 +270,17 @@ resourcesRouter.post("/folders", (req, res) => {
 
 resourcesRouter.patch("/folders/:id", (req, res) => {
   const id = Number(req.params.id);
-  const parsed = nameSchema.safeParse(req.body);
+  const parsed = patchFolderSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   if (!findFolderById(req.user!.id, id)) return void res.status(404).json({ error: "folder_not_found" });
   try {
-    updateFolder(req.user!.id, id, parsed.data.name);
+    updateFolder(req.user!.id, id, parsed.data);
   } catch {
     return void res.status(409).json({ error: "folder_name_taken" });
   }
-  res.json(serializeFolder(listFoldersForUser(req.user!.id).find((folder) => folder.id === id)!));
+  const folder = listFoldersForUser(req.user!.id).find((item) => item.id === id);
+  if (!folder) return void res.status(404).json({ error: "folder_not_found" });
+  res.json(serializeFolder(folder));
 });
 
 resourcesRouter.delete("/folders/:id", (req, res) => {
@@ -309,8 +363,9 @@ resourcesRouter.get("/items", (req, res) => {
   const hasMore = rows.length > limit;
   const page = rows.slice(0, limit);
   const progress = readingPositions(req.user!.id, page.map((row) => row.id));
+  const hasNotes = itemsWithNotes(req.user!.id, page.map((row) => row.id));
   res.json({
-    items: prepare(page, req, query.images).map((row) => serializeItem(row, progress, withContent)),
+    items: prepare(page, req, query.images).map((row) => serializeItem(row, progress, withContent, hasNotes.has(row.id))),
     newestCursor: page[0] ? encodeCursor(page[0]) : null,
     nextCursor: hasMore && page.length ? encodeCursor(page[page.length - 1]) : null,
   });
@@ -323,7 +378,8 @@ resourcesRouter.get("/items/bundle", (req, res) => {
   const ids = [...new Set(parsed.data.ids.split(",").map(Number))];
   const rows = ids.map((id) => findItemForUser(req.user!.id, id)).filter((row): row is NonNullable<typeof row> => Boolean(row));
   const progress = readingPositions(req.user!.id, rows.map((row) => row.id));
-  res.json({ items: prepare(rows, req, parsed.data.images).map((row) => serializeItem(row, progress, true)) });
+  const hasNotes = itemsWithNotes(req.user!.id, rows.map((row) => row.id));
+  res.json({ items: prepare(rows, req, parsed.data.images).map((row) => serializeItem(row, progress, true, hasNotes.has(row.id))) });
 });
 
 resourcesRouter.get("/items/:id", (req, res) => {
@@ -332,7 +388,8 @@ resourcesRouter.get("/items/:id", (req, res) => {
   if (!parsed.success) return invalid(res);
   if (!row) return void res.status(404).json({ error: "item_not_found" });
   const progress = readingPositions(req.user!.id, [row.id]);
-  res.json(serializeItem(prepare([row], req, parsed.data.images)[0], progress, true));
+  const hasNotes = itemsWithNotes(req.user!.id, [row.id]);
+  res.json(serializeItem(prepare([row], req, parsed.data.images)[0], progress, true, hasNotes.has(row.id)));
 });
 
 resourcesRouter.post("/items/:id/full-text", async (req, res) => {
@@ -342,7 +399,8 @@ resourcesRouter.post("/items/:id/full-text", async (req, res) => {
     return void res.status(FULL_TEXT_STATUS[result.error]).json({ error: result.error, ...(result.message ? { message: result.message } : {}) });
   }
   const row = findItemForUser(req.user!.id, id)!;
-  res.json(serializeItem(prepare([row], req, "original")[0], readingPositions(req.user!.id, [id]), true));
+  const hasNotes = itemsWithNotes(req.user!.id, [id]);
+  res.json(serializeItem(prepare([row], req, "original")[0], readingPositions(req.user!.id, [id]), true, hasNotes.has(id)));
 });
 
 const readAllSchema = z.object({ subscriptionId: z.number().int().positive().optional(), folderId: z.number().int().positive().optional() });
@@ -351,6 +409,120 @@ resourcesRouter.post("/items/read-all", (req, res) => {
   const parsed = readAllSchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   res.json({ marked: markAllRead(req.user!.id, { feedId: parsed.data.subscriptionId, folderId: parsed.data.folderId }) });
+});
+
+// ---- Article Notes --------------------------------------------------------
+
+const noteSchema = z.object({
+  content: z.string().max(100_000),
+  expectedRevision: z.number().int().nonnegative().optional(),
+});
+
+resourcesRouter.get("/items/:id/note", (req, res) => {
+  const id = Number(req.params.id);
+  if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
+  const note = findItemNote(req.user!.id, id);
+  if (!note) return void res.status(404).json({ error: "note_not_found" });
+  res.json({
+    itemId: note.item_id,
+    content: note.content,
+    revision: note.revision,
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+  });
+});
+
+resourcesRouter.put("/items/:id/note", (req, res) => {
+  const id = Number(req.params.id);
+  if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
+  const parsed = noteSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed.error.flatten());
+  const result = setItemNote(req.user!.id, id, parsed.data.content, parsed.data.expectedRevision);
+  if ("conflict" in result) {
+    const c = result.conflict;
+    return void res.status(409).json({
+      error: "revision_conflict",
+      current: {
+        itemId: c.item_id,
+        content: c.content,
+        revision: c.revision,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+      },
+    });
+  }
+  const n = result.note;
+  res.json({
+    itemId: n.item_id,
+    content: n.content,
+    revision: n.revision,
+    createdAt: n.created_at,
+    updatedAt: n.updated_at,
+  });
+});
+
+resourcesRouter.delete("/items/:id/note", (req, res) => {
+  const id = Number(req.params.id);
+  if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
+  deleteItemNote(req.user!.id, id);
+  res.status(204).end();
+});
+
+resourcesRouter.get("/items/:id/note.md", (req, res) => {
+  const id = Number(req.params.id);
+  if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
+  const note = findItemNote(req.user!.id, id);
+  if (!note) return void res.status(404).json({ error: "note_not_found" });
+  const item = findItemForUser(req.user!.id, id);
+  const title = item?.title ?? `Article #${id}`;
+  const url = item?.link ? `Source: ${item.link}\n\n` : "";
+  const md = `# ${title}\n\n${url}${note.content}\n`;
+  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+  res.setHeader("Content-Disposition", `inline; filename="note-${id}.md"`);
+  res.send(md);
+});
+
+resourcesRouter.get("/notes/export", (req, res) => {
+  const notes = listNotesForUser(req.user!.id);
+  const sections = notes.map((note) => {
+    const title = note.item_title ?? `Article #${note.item_id}`;
+    const link = note.item_link ? `- Link: ${note.item_link}\n` : "";
+    const feed = note.feed_title ? `- Feed: ${note.feed_title}\n` : "";
+    const updated = `- Updated: ${note.updated_at}\n`;
+    return `## ${title}\n${link}${feed}${updated}\n${note.content}`;
+  });
+  const md = `# FeedKeeper Notes\n\nExported: ${new Date().toISOString()}\nTotal notes: ${notes.length}\n\n---\n\n${sections.join("\n\n---\n\n")}\n`;
+  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="feedkeeper-notes.md"');
+  res.send(md);
+});
+
+// ---- Curated Edition ("Deine Zeitung") ------------------------------------
+
+resourcesRouter.get("/edition", (req, res) => {
+  const edition = getEdition(req.user!.id);
+  if (!edition) {
+    return void res.status(404).json({ error: "no_edition", message: "No active edition available" });
+  }
+  const rows = edition.itemIds
+    .map((id) => findItemForUser(req.user!.id, id))
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+  const progress = readingPositions(req.user!.id, rows.map((r) => r.id));
+  const hasNotes = itemsWithNotes(req.user!.id, rows.map((r) => r.id));
+  const prepared = prepare(rows, req, "original");
+  res.json({
+    revision: edition.revision,
+    createdAt: edition.createdAt,
+    updatedAt: edition.updatedAt,
+    expiresAt: edition.expiresAt,
+    itemIds: edition.itemIds,
+    items: prepared.map((row) => serializeItem(row, progress, false, hasNotes.has(row.id))),
+  });
+});
+
+resourcesRouter.delete("/edition", (req, res) => {
+  deleteEdition(req.user!.id);
+  res.status(204).end();
 });
 
 // ---- Images --------------------------------------------------------------

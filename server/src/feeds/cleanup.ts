@@ -117,7 +117,7 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
   let deletedOldItems = 0;
   let deletedPerFeedExcess = 0;
 
-  // 1. Delete read items older than retentionReadDays (excluding bookmarked items)
+  // 1. Delete read items older than retentionReadDays (excluding bookmarked items and items with notes)
   if (settings.retentionReadDays > 0) {
     const res = db.prepare(
       `DELETE FROM items
@@ -125,6 +125,7 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
          SELECT i.id
          FROM items i
          WHERE i.id NOT IN (SELECT item_id FROM item_bookmarks)
+           AND i.id NOT IN (SELECT item_id FROM item_notes)
            AND i.id IN (SELECT item_id FROM item_reads)
            AND NOT EXISTS (
              SELECT 1 FROM subscriptions s
@@ -137,21 +138,23 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
     deletedReadItems = res.changes;
   }
 
-  // 2. Delete all items older than retentionMaxDays (excluding bookmarked items)
+  // 2. Delete all items older than retentionMaxDays (excluding bookmarked items and items with notes)
   if (settings.retentionMaxDays > 0) {
     const res = db.prepare(
       `DELETE FROM items
        WHERE id NOT IN (SELECT item_id FROM item_bookmarks)
+         AND id NOT IN (SELECT item_id FROM item_notes)
          AND COALESCE(published_at, created_at) <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' days')`,
     ).run(settings.retentionMaxDays);
     deletedOldItems = res.changes;
   }
 
-  // 3. Delete items exceeding retentionMaxItemsPerFeed (excluding bookmarked items)
+  // 3. Delete items exceeding retentionMaxItemsPerFeed (excluding bookmarked items and items with notes)
   if (settings.retentionMaxItemsPerFeed > 0) {
     const res = db.prepare(
       `DELETE FROM items
        WHERE id NOT IN (SELECT item_id FROM item_bookmarks)
+         AND id NOT IN (SELECT item_id FROM item_notes)
          AND id IN (
            SELECT id FROM (
              SELECT id, ROW_NUMBER() OVER (

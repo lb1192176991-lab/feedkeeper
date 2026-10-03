@@ -36,8 +36,16 @@ export function Favicon({ feedId, iconUrl, siteUrl, feedUrl, articleUrl, classNa
     setLoaded(null);
 
     async function findFavicon() {
+      // When feedId is present, the server is the authoritative source for the feed icon.
+      if (feedId) {
+        const serverIconUrl = `/api/feeds/${feedId}/icon`;
+        if (await loadFavicon(serverIconUrl)) {
+          if (!cancelled) setLoaded({ key: sourceKey, url: serverIconUrl });
+        }
+        return;
+      }
+
       const candidates = new Set<string>();
-      if (feedId) candidates.add(`/api/feeds/${feedId}/icon`);
       if (iconUrl && /^https?:\/\//i.test(iconUrl)) candidates.add(iconUrl);
       for (const source of [siteUrl, feedUrl, articleUrl]) {
         if (!source) continue;

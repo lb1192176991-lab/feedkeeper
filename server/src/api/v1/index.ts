@@ -16,7 +16,23 @@ import { resourcesRouter } from "./resources.js";
 export const v1Router = Router();
 
 // Features grow with the implementation; clients look here instead of guessing from the version.
-const FEATURES = ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention"];
+const FEATURES = [
+  "pairing",
+  "sync",
+  "mutations",
+  "subscriptions",
+  "folders",
+  "items",
+  "fulltext",
+  "images",
+  "muted-keywords",
+  "opml",
+  "retention",
+  "feed-icons",
+  "folder-icons",
+  "notes",
+  "edition",
+];
 
 v1Router.get("/meta", (_req, res) => {
   const retention = getRetentionSettings();

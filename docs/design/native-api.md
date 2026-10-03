@@ -30,7 +30,7 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 {
   "apiVersion": 1,
   "serverVersion": "0.9.0",
-  "features": ["sync", "archive", "annotations", "tags", "fulltext", "push.relay", "search.fts"],
+  "features": ["sync", "archive", "annotations", "tags", "fulltext", "push.relay", "search.fts", "feed-icons", "folder-icons", "notes", "edition"],
   "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000 }, "maxArchivedImageBytes": 5242880 },
   "minClientVersion": null
 }
@@ -134,6 +134,35 @@ All of these require a device token unless noted. Lists are cursor-paged.
 
 **Keywords**
 - `GET/POST/DELETE /muted-keywords`.
+
+**Native Extensions**
+
+- **Authoritative Feed Icons (`feed-icons`)**:
+  - The server persists icons in `feed_icons` with SHA-256 hashes (`icon_hash`).
+  - `/api/v1/subscriptions/{id}/icon` supports `ETag`, `If-None-Match` (304), and immutable caching (`Cache-Control: private, max-age=31536000, immutable`) when requested with matching `?v=<iconHash>`.
+  - Icon updates automatically log a `subscription` upsert to the sync change log with updated `iconHash` and versioned `iconUrl`.
+
+- **Ressort / Folder SF Symbols (`folder-icons`)**:
+  - `folders.icon_symbol` stores an SF Symbol identifier (e.g. `newspaper.fill`, `cpu`).
+  - Validated with `/^[a-z0-9]+(?:[\.\-][a-z0-9]+)*$/i`.
+  - Supported on `POST /folders` and `PATCH /folders/{id}`. Renaming preserves existing `iconSymbol`.
+  - Sync log delivers `folder` upserts with `iconSymbol`.
+  - Migration strategy for native clients: on first launch, native clients query `GET /folders` and assign SF Symbols to existing unassigned folders via `PATCH /folders/{id}`.
+
+- **Synchronized Article Notes (`notes`)**:
+  - `item_notes` stores personal Markdown notes per article (`userId`, `itemId`, `content`, `revision`, `createdAt`, `updatedAt`).
+  - Optimistic concurrency control via `expectedRevision` on `PUT /items/{id}/note` (HTTP 409 Conflict with `revision_conflict` and `current` state) and mutation `item.note.set` (`outcome: "conflict"`).
+  - Deletions via `DELETE /items/{id}/note` and mutation `item.note.delete`.
+  - Markdown exports: `GET /items/{id}/note.md` (single note with title and link) and `GET /notes/export` (all user notes in single Markdown document).
+  - Retention protection: articles with notes are permanently excluded from database retention cleanup (`runCleanup`), even after feed unsubscription or age limit expiration.
+  - Item listing endpoints (`/items`, `/items/{id}`, `/items/bundle`, `/edition`) include `state.hasNote: boolean`.
+
+- **Curated Edition „Deine Zeitung“ (`edition`)**:
+  - Curated collection of 1 to 24 articles for the user with an expiration timestamp (`expiresAt`).
+  - Published via MCP tool `publish_edition(itemIds, durationHours)` (validates item uniqueness, accessibility, and computes expiry).
+  - Retrieved via `GET /edition` (returns populated article objects in preserved order). Returns 404 when expired or absent.
+  - Dismissed/deleted via `DELETE /edition`.
+  - Sync change log delivers `edition` entity with `itemIds`, `revision`, `expiresAt`.
 
 ## Push notifications for the iOS app
 

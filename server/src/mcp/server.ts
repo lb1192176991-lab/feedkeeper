@@ -20,6 +20,8 @@ import {
   deleteFolder,
   updateSubscriptionFolder,
   applyToItems,
+  canAccessItem,
+  publishEdition,
 } from "../feeds/repository.js";
 import type { TokenScope } from "../auth/tokens.js";
 import { getItemForMcp, listItemsPage } from "./items.js";
@@ -527,6 +529,39 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
       } catch (error) {
         return errorResult(error instanceof Error ? error.message : String(error));
       }
+    },
+  );
+
+  if (scope === "write") server.registerTool(
+    "publish_edition",
+    {
+      title: "Publish curated edition",
+      description: "Publishes an ordered list of 1 to 24 article IDs as the curated daily edition ('Deine Zeitung') for the current user.",
+      inputSchema: {
+        itemIds: z.array(z.number().int().positive()).min(1).max(24).describe("Ordered list of 1 to 24 article IDs"),
+        expiresAt: z.string().datetime({ offset: true }).optional().describe("Optional ISO date-time when the edition expires"),
+        durationHours: z.number().positive().max(168).optional().describe("Alternative to expiresAt: duration in hours from now until expiry (e.g. 24)"),
+      },
+    },
+    async ({ itemIds, expiresAt, durationHours }) => {
+      const seen = new Set<number>();
+      const duplicates = itemIds.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
+      if (duplicates.length > 0) {
+        return errorResult(`itemIds must not contain duplicates (duplicate IDs: ${duplicates.join(", ")})`);
+      }
+
+      const inaccessible = itemIds.filter((id) => !canAccessItem(userId, id));
+      if (inaccessible.length > 0) {
+        return errorResult(`Invalid or inaccessible article IDs: ${inaccessible.join(", ")}`);
+      }
+
+      let expiry = expiresAt ?? null;
+      if (!expiry && durationHours) {
+        expiry = new Date(Date.now() + durationHours * 3600_000).toISOString();
+      }
+
+      const edition = publishEdition(userId, itemIds, expiry);
+      return textResult(edition);
     },
   );
 

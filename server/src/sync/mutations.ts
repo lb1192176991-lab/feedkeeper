@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { pruneArchive, scheduleArchive } from "../feeds/archive.js";
-import { bookmarkItem, canAccessItem, markItemRead, markItemUnread, unbookmarkItem } from "../feeds/repository.js";
+import {
+  bookmarkItem,
+  canAccessItem,
+  deleteItemNote,
+  markItemRead,
+  markItemUnread,
+  setItemNote,
+  unbookmarkItem,
+} from "../feeds/repository.js";
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const MAX_AGE_MS = 30 * 86_400_000;
@@ -19,18 +27,39 @@ export const mutationSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("item.read"), value: z.boolean() }),
   z.object({ ...base, type: z.literal("item.save"), value: z.boolean() }),
   z.object({ ...base, type: z.literal("item.progress"), position: z.number().min(0).max(1) }),
+  z.object({
+    ...base,
+    type: z.literal("item.note.set"),
+    content: z.string().max(100_000),
+    expectedRevision: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    ...base,
+    type: z.literal("item.note.delete"),
+  }),
 ]);
 
 export type Mutation = z.infer<typeof mutationSchema>;
-export type MutationOutcome = "applied" | "duplicate" | "stale" | "rejected";
+export type MutationOutcome = "applied" | "duplicate" | "stale" | "rejected" | "conflict";
 export interface MutationResult {
   id: string;
   outcome: MutationOutcome;
   error?: string;
+  current?: {
+    itemId: number;
+    content: string;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+  };
 }
 
 type Field = "read_at" | "saved_at" | "progress_at";
-const FIELD: Record<Mutation["type"], Field> = { "item.read": "read_at", "item.save": "saved_at", "item.progress": "progress_at" };
+const FIELD: Partial<Record<Mutation["type"], Field>> = {
+  "item.read": "read_at",
+  "item.save": "saved_at",
+  "item.progress": "progress_at",
+};
 
 /** The time of the change, kept inside a sane window around the server's own clock. */
 function effectiveTime(at: string): string | null {
@@ -79,6 +108,9 @@ function apply(userId: number, mutation: Mutation, at: string): void {
         ).run(userId, mutation.itemId, mutation.position, at);
       }
       break;
+    case "item.note.set":
+    case "item.note.delete":
+      break;
   }
 }
 
@@ -98,9 +130,13 @@ export function applyMutations(userId: number, raw: unknown[]): MutationResult[]
       .get(userId, mutation.id);
     if (known) return { id: mutation.id, outcome: "duplicate" };
 
-    const finish = (outcome: MutationOutcome, error?: string): MutationResult => {
+    const finish = (
+      outcome: MutationOutcome,
+      error?: string,
+      current?: MutationResult["current"],
+    ): MutationResult => {
       db.prepare("INSERT INTO applied_mutations (user_id, mutation_id, outcome, error) VALUES (?, ?, ?, ?)").run(userId, mutation.id, outcome, error ?? null);
-      return { id: mutation.id, outcome, ...(error ? { error } : {}) };
+      return { id: mutation.id, outcome, ...(error ? { error } : {}), ...(current ? { current } : {}) };
     };
 
     return db.transaction((): MutationResult => {
@@ -108,7 +144,27 @@ export function applyMutations(userId: number, raw: unknown[]): MutationResult[]
       if (!at) return finish("rejected", "invalid_time");
       if (!canAccessItem(userId, mutation.itemId)) return finish("rejected", "item_not_found");
 
-      const field = FIELD[mutation.type];
+      if (mutation.type === "item.note.set") {
+        const result = setItemNote(userId, mutation.itemId, mutation.content, mutation.expectedRevision);
+        if ("conflict" in result) {
+          const c = result.conflict;
+          return finish("conflict", "revision_conflict", {
+            itemId: c.item_id,
+            content: c.content,
+            revision: c.revision,
+            createdAt: c.created_at,
+            updatedAt: c.updated_at,
+          });
+        }
+        return finish("applied");
+      }
+
+      if (mutation.type === "item.note.delete") {
+        deleteItemNote(userId, mutation.itemId);
+        return finish("applied");
+      }
+
+      const field = FIELD[mutation.type]!;
       const last = lastChange(userId, mutation.itemId, field);
       if (last && last > at) return finish("stale");
 

@@ -40,6 +40,7 @@ export interface Folder {
   id: number;
   user_id: number;
   name: string;
+  icon_symbol: string | null;
   created_at: string;
 }
 
@@ -53,6 +54,24 @@ export interface SubscribedFeed extends Feed {
   full_text_mode: FullTextMode;
   notify: number;
   badge: number;
+  icon_hash?: string | null;
+}
+
+export interface ItemNote {
+  user_id: number;
+  item_id: number;
+  content: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CuratedEdition {
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+  itemIds: number[];
 }
 
 export interface MutedKeyword {
@@ -114,27 +133,33 @@ export function unsubscribe(userId: number, feedId: number): void {
  */
 export function removeFeedIfUnused(feedId: number): void {
   if (countFeedSubscribers(feedId) > 0) return;
-  db.prepare("DELETE FROM items WHERE feed_id = ? AND id NOT IN (SELECT item_id FROM item_bookmarks)").run(feedId);
+  db.prepare(
+    "DELETE FROM items WHERE feed_id = ? AND id NOT IN (SELECT item_id FROM item_bookmarks) AND id NOT IN (SELECT item_id FROM item_notes)",
+  ).run(feedId);
   db.prepare("DELETE FROM feeds WHERE id = ? AND NOT EXISTS (SELECT 1 FROM items WHERE feed_id = ?)").run(feedId, feedId);
 }
 
-/** Feeds kept only for saved articles whose last bookmark is gone. */
+/** Feeds kept only for saved articles or annotated articles whose last bookmark and note are gone. */
 export function removeUnusedFeeds(): number {
   return db.prepare(
     `DELETE FROM feeds
      WHERE NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
-       AND NOT EXISTS (SELECT 1 FROM items i JOIN item_bookmarks b ON b.item_id = i.id WHERE i.feed_id = feeds.id)`,
+       AND NOT EXISTS (SELECT 1 FROM items i JOIN item_bookmarks b ON b.item_id = i.id WHERE i.feed_id = feeds.id)
+       AND NOT EXISTS (SELECT 1 FROM items i JOIN item_notes n ON n.item_id = i.id WHERE i.feed_id = feeds.id)`,
   ).run().changes;
 }
 
-/** Subscribers can open every item of their feeds; anyone can open what they saved. */
+/** Subscribers can open every item of their feeds; anyone can open what they saved or added a note to. */
 export function canAccessItem(userId: number, itemId: number): boolean {
-  return Boolean(db.prepare(
-    `SELECT 1 FROM items i
-     WHERE i.id = ?
-       AND (EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = i.feed_id AND s.user_id = ?)
-         OR EXISTS (SELECT 1 FROM item_bookmarks b WHERE b.item_id = i.id AND b.user_id = ?))`,
-  ).get(itemId, userId, userId));
+  return Boolean(
+    db.prepare(
+      `SELECT 1 FROM items i
+       WHERE i.id = ?
+         AND (EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = i.feed_id AND s.user_id = ?)
+           OR EXISTS (SELECT 1 FROM item_bookmarks b WHERE b.item_id = i.id AND b.user_id = ?)
+           OR EXISTS (SELECT 1 FROM item_notes n WHERE n.item_id = i.id AND n.user_id = ?))`,
+    ).get(itemId, userId, userId, userId),
+  );
 }
 
 export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
@@ -142,6 +167,7 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
     .prepare<[number, number], SubscribedFeed>(
       `SELECT
          f.*,
+         fi.hash AS icon_hash,
          s.id AS subscription_id,
          NULLIF(TRIM(s.label), '') AS label,
          s.folder_id AS folder_id,
@@ -159,6 +185,7 @@ export function listSubscriptionsForUser(userId: number): SubscribedFeed[] {
          ) AS unread_count
        FROM subscriptions s
        JOIN feeds f ON f.id = s.feed_id
+       LEFT JOIN feed_icons fi ON fi.feed_id = f.id
        LEFT JOIN folders fo ON fo.id = s.folder_id
        WHERE s.user_id = ?
        ORDER BY s.position ASC, s.created_at ASC`,
@@ -391,7 +418,7 @@ export function listItemsForUser(
 }
 
 export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
-  return db.prepare<[number, number, number, number], ReturnType<typeof listItemsForUser>[number]>(
+  return db.prepare<[number, number, number, number, number], ReturnType<typeof listItemsForUser>[number]>(
     `SELECT i.*, COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
             f.site_url AS feed_site_url, f.url AS feed_url, s.full_text_mode AS feed_full_text_mode, f.icon_url AS feed_icon_url,
             (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked, b.created_at AS bookmarked_at
@@ -400,8 +427,9 @@ export function findItemForUser(userId: number, itemId: number): ReturnType<type
      LEFT JOIN subscriptions s ON s.feed_id = i.feed_id AND s.user_id = ?
      LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = ?
      LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = ?
-     WHERE i.id = ? AND (s.id IS NOT NULL OR b.item_id IS NOT NULL)`,
-  ).get(userId, userId, userId, itemId);
+     LEFT JOIN item_notes n ON n.item_id = i.id AND n.user_id = ?
+     WHERE i.id = ? AND (s.id IS NOT NULL OR b.item_id IS NOT NULL OR n.item_id IS NOT NULL)`,
+  ).get(userId, userId, userId, userId, itemId);
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {
@@ -453,18 +481,23 @@ export function findFolderById(userId: number, id: number): Folder | undefined {
     .get(userId, id);
 }
 
-export function createFolder(userId: number, name: string): Folder {
+export function createFolder(userId: number, name: string, iconSymbol?: string | null): Folder {
   const trimmed = name.trim();
-  db.prepare("INSERT INTO folders (user_id, name) VALUES (?, ?) ON CONFLICT (user_id, name) DO NOTHING").run(
+  db.prepare("INSERT INTO folders (user_id, name, icon_symbol) VALUES (?, ?, ?) ON CONFLICT (user_id, name) DO NOTHING").run(
     userId,
     trimmed,
+    iconSymbol ?? null,
   );
   return findFolderByName(userId, trimmed)!;
 }
 
-export function updateFolder(userId: number, id: number, name: string): Folder {
-  const trimmed = name.trim();
-  db.prepare("UPDATE folders SET name = ? WHERE id = ? AND user_id = ?").run(trimmed, id, userId);
+export function updateFolder(userId: number, id: number, updates: { name?: string; iconSymbol?: string | null } | string): Folder {
+  const data = typeof updates === "string" ? { name: updates } : updates;
+  const current = findFolderById(userId, id);
+  if (!current) throw new Error("Folder not found");
+  const name = data.name !== undefined ? data.name.trim() : current.name;
+  const iconSymbol = data.iconSymbol !== undefined ? data.iconSymbol : current.icon_symbol;
+  db.prepare("UPDATE folders SET name = ?, icon_symbol = ? WHERE id = ? AND user_id = ?").run(name, iconSymbol, id, userId);
   return findFolderById(userId, id)!;
 }
 
@@ -666,4 +699,154 @@ export function repairEncodedText(): number {
     }
   })();
   return fixed;
+}
+
+// ---------------------------------------------------------------------------
+// Article notes
+// ---------------------------------------------------------------------------
+
+export function findItemNote(userId: number, itemId: number): ItemNote | undefined {
+  return db
+    .prepare<[number, number], ItemNote>("SELECT * FROM item_notes WHERE user_id = ? AND item_id = ?")
+    .get(userId, itemId);
+}
+
+export function setItemNote(
+  userId: number,
+  itemId: number,
+  content: string,
+  expectedRevision?: number,
+): { note: ItemNote } | { conflict: ItemNote } {
+  return db.transaction(() => {
+    const existing = findItemNote(userId, itemId);
+    if (existing) {
+      if (expectedRevision !== undefined && existing.revision !== expectedRevision) {
+        return { conflict: existing };
+      }
+      const nextRev = existing.revision + 1;
+      const now = new Date().toISOString();
+      db.prepare(
+        "UPDATE item_notes SET content = ?, revision = ?, updated_at = ? WHERE user_id = ? AND item_id = ?",
+      ).run(content, nextRev, now, userId, itemId);
+      return { note: findItemNote(userId, itemId)! };
+    } else {
+      if (expectedRevision !== undefined && expectedRevision !== 0) {
+        return {
+          conflict: {
+            user_id: userId,
+            item_id: itemId,
+            content: "",
+            revision: 0,
+            created_at: "",
+            updated_at: "",
+          },
+        };
+      }
+      const now = new Date().toISOString();
+      db.prepare(
+        "INSERT INTO item_notes (user_id, item_id, content, revision, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
+      ).run(userId, itemId, content, now, now);
+      return { note: findItemNote(userId, itemId)! };
+    }
+  })();
+}
+
+export function deleteItemNote(userId: number, itemId: number): boolean {
+  return db.prepare("DELETE FROM item_notes WHERE user_id = ? AND item_id = ?").run(userId, itemId).changes > 0;
+}
+
+export function listNotesForUser(
+  userId: number,
+): (ItemNote & { item_title: string | null; item_link: string | null; feed_title: string | null })[] {
+  return db
+    .prepare<[number], ItemNote & { item_title: string | null; item_link: string | null; feed_title: string | null }>(
+      `SELECT n.*, i.title AS item_title, i.link AS item_link, f.title AS feed_title
+       FROM item_notes n
+       JOIN items i ON i.id = n.item_id
+       LEFT JOIN feeds f ON f.id = i.feed_id
+       WHERE n.user_id = ?
+       ORDER BY n.updated_at DESC`,
+    )
+    .all(userId);
+}
+
+export function itemsWithNotes(userId: number, itemIds: number[]): Set<number> {
+  if (itemIds.length === 0) return new Set();
+  const placeholders = itemIds.map(() => "?").join(",");
+  const rows = db
+    .prepare<unknown[], { item_id: number }>(
+      `SELECT item_id FROM item_notes WHERE user_id = ? AND item_id IN (${placeholders})`,
+    )
+    .all(userId, ...itemIds);
+  return new Set(rows.map((row) => row.item_id));
+}
+
+// ---------------------------------------------------------------------------
+// Curated editions ("Deine Zeitung")
+// ---------------------------------------------------------------------------
+
+interface EditionRow {
+  user_id: number;
+  item_ids: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+}
+
+export function getEdition(userId: number): CuratedEdition | null {
+  const row = db.prepare<[number], EditionRow>("SELECT * FROM editions WHERE user_id = ?").get(userId);
+  if (!row) return null;
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+    return null;
+  }
+  let itemIds: number[] = [];
+  try {
+    itemIds = JSON.parse(row.item_ids);
+  } catch {
+    itemIds = [];
+  }
+  return {
+    revision: row.revision,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    expiresAt: row.expires_at,
+    itemIds,
+  };
+}
+
+export function publishEdition(userId: number, itemIds: number[], expiresAt?: string | null): CuratedEdition {
+  return db.transaction(() => {
+    const existing = db.prepare<[number], EditionRow>("SELECT * FROM editions WHERE user_id = ?").get(userId);
+    const now = new Date().toISOString();
+    const idsJson = JSON.stringify(itemIds);
+    if (existing) {
+      const nextRev = existing.revision + 1;
+      db.prepare(
+        "UPDATE editions SET item_ids = ?, revision = ?, updated_at = ?, expires_at = ? WHERE user_id = ?",
+      ).run(idsJson, nextRev, now, expiresAt ?? null, userId);
+      return {
+        revision: nextRev,
+        createdAt: existing.created_at,
+        updatedAt: now,
+        expiresAt: expiresAt ?? null,
+        itemIds,
+      };
+    } else {
+      db.prepare(
+        "INSERT INTO editions (user_id, item_ids, revision, created_at, updated_at, expires_at) VALUES (?, ?, 1, ?, ?, ?)",
+      ).run(userId, idsJson, now, now, expiresAt ?? null);
+      return {
+        revision: 1,
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: expiresAt ?? null,
+        itemIds,
+      };
+    }
+  })();
+}
+
+export function deleteEdition(userId: number): boolean {
+  return db.prepare("DELETE FROM editions WHERE user_id = ?").run(userId).changes > 0;
 }

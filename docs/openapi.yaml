@@ -21,6 +21,8 @@ tags:
   - { name: Folders }
   - { name: Keywords }
   - { name: Articles }
+  - { name: Notes }
+  - { name: Edition }
   - { name: Images }
 paths:
   /meta:
@@ -230,7 +232,9 @@ paths:
     get:
       tags: [Images]
       summary: The feed's icon, delivered by this server
-      parameters: [{ $ref: "#/components/parameters/Id" }]
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { name: v, in: query, schema: { type: string }, description: "Optional content hash for immutable caching" }
       responses:
         "200": { description: An image, content: { "image/*": { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -269,17 +273,30 @@ paths:
       description: Creating a folder that already exists returns it, so a retried request is harmless.
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 100 } } } } }
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 100 }
+                iconSymbol: { type: [string, "null"], maxLength: 100 }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Folder" } } } }
   /folders/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     patch:
       tags: [Folders]
-      summary: Rename a folder
+      summary: Rename or re-icon a folder
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 100 } } } } }
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                iconSymbol: { type: [string, "null"], maxLength: 100 }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Folder" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -403,6 +420,63 @@ paths:
       responses:
         "200": { description: The stored image, content: { "image/*": { schema: { type: string, format: binary } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /items/{id}/note:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Notes]
+      summary: Note for an article
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemNote" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Notes]
+      summary: Create or update note for an article
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, maxLength: 100000 }
+                expectedRevision: { type: integer, minimum: 0 }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemNote" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: revision_conflict }
+    delete:
+      tags: [Notes]
+      summary: Delete note for an article
+      responses:
+        "204": { description: Done }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /items/{id}/note.md:
+    get:
+      tags: [Notes]
+      summary: Single article note as Markdown
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Note in Markdown format, content: { "text/markdown": { schema: { type: string } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /notes/export:
+    get:
+      tags: [Notes]
+      summary: Export all article notes as Markdown
+      responses:
+        "200": { description: All notes in Markdown format, content: { "text/markdown": { schema: { type: string } } } }
+  /edition:
+    get:
+      tags: [Edition]
+      summary: Central curated edition ("Deine Zeitung")
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Edition" } } } }
+        "404": { description: No active edition available }
+    delete:
+      tags: [Edition]
+      summary: Dismiss or delete active curated edition
+      responses:
+        "204": { description: Done }
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer }
@@ -470,6 +544,8 @@ components:
         fullTextMode: { type: string, enum: [auto, never] }
         notify: { type: boolean }
         badge: { type: boolean }
+        iconHash: { type: [string, "null"] }
+        iconUrl: { type: string }
         unreadCount: { type: integer }
         lastPolledAt: { type: [string, "null"] }
         lastSuccessAt: { type: [string, "null"] }
@@ -480,6 +556,7 @@ components:
       properties:
         id: { type: integer }
         name: { type: string }
+        iconSymbol: { type: [string, "null"] }
         subscriptionCount: { type: integer }
         unreadCount: { type: integer }
     ItemState:
@@ -490,6 +567,7 @@ components:
         savedAt: { type: [string, "null"] }
         archivedAt: { type: [string, "null"] }
         progress: { type: [number, "null"], minimum: 0, maximum: 1 }
+        hasNote: { type: boolean }
     Item:
       type: object
       properties:
@@ -506,6 +584,25 @@ components:
         contentHtml: { type: [string, "null"], description: Only with content included }
         fullTextHtml: { type: [string, "null"], description: Only with content included }
         state: { $ref: "#/components/schemas/ItemState" }
+    ItemNote:
+      type: object
+      required: [itemId, content, revision, createdAt, updatedAt]
+      properties:
+        itemId: { type: integer }
+        content: { type: string }
+        revision: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Edition:
+      type: object
+      required: [revision, createdAt, updatedAt, itemIds, items]
+      properties:
+        revision: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        itemIds: { type: array, items: { type: integer } }
+        items: { type: array, items: { $ref: "#/components/schemas/Item" } }
     SyncPage:
       type: object
       properties:
@@ -516,7 +613,7 @@ components:
       type: object
       properties:
         seq: { type: integer }
-        entity: { type: string, enum: [item_state, subscription, folder, muted_keyword] }
+        entity: { type: string, enum: [item_state, subscription, folder, muted_keyword, note, edition] }
         id: { type: integer }
         op: { type: string, enum: [upsert, delete] }
         data: { type: object, description: The current data of the object; absent for deletions }
@@ -525,14 +622,17 @@ components:
       required: [id, type, itemId, at]
       properties:
         id: { type: string, minLength: 8, maxLength: 64, description: Made by the client; makes retries harmless }
-        type: { type: string, enum: [item.read, item.save, item.progress] }
+        type: { type: string, enum: [item.read, item.save, item.progress, item.note.set, item.note.delete] }
         itemId: { type: integer }
         value: { type: boolean, description: For item.read and item.save }
         position: { type: number, minimum: 0, maximum: 1, description: "For item.progress; below 5 % or above 95 % clears it" }
+        content: { type: string, description: For item.note.set }
+        expectedRevision: { type: integer, minimum: 0, description: For item.note.set optimistic concurrency }
         at: { type: string, format: date-time, description: "When the user did it; at most 5 minutes ahead of the server, at most 30 days old" }
     MutationResult:
       type: object
       properties:
         id: { type: string }
-        outcome: { type: string, enum: [applied, duplicate, stale, rejected] }
-        error: { type: string, description: "invalid_mutation, invalid_time or item_not_found when rejected" }
+        outcome: { type: string, enum: [applied, duplicate, stale, rejected, conflict] }
+        error: { type: string, description: "invalid_mutation, invalid_time, item_not_found, or revision_conflict" }
+        current: { $ref: "#/components/schemas/ItemNote" }

@@ -1,10 +1,17 @@
 import { db } from "../db/index.js";
-import { listFoldersForUser, listMutedKeywords, listSubscriptionsForUser, type SubscribedFeed } from "../feeds/repository.js";
+import {
+  findItemNote,
+  getEdition,
+  listFoldersForUser,
+  listMutedKeywords,
+  listSubscriptionsForUser,
+  type SubscribedFeed,
+} from "../feeds/repository.js";
 
 const TOMBSTONE_DAYS = 90;
 const MAX_PAGE = 500;
 
-export type ChangeEntity = "item_state" | "subscription" | "folder" | "muted_keyword";
+export type ChangeEntity = "item_state" | "subscription" | "folder" | "muted_keyword" | "note" | "edition";
 
 export interface Change {
   seq: number;
@@ -27,6 +34,10 @@ export function serializeSubscription(subscription: SubscribedFeed) {
     fullTextMode: subscription.full_text_mode,
     notify: Boolean(subscription.notify),
     badge: Boolean(subscription.badge),
+    iconHash: subscription.icon_hash ?? null,
+    iconUrl: subscription.icon_hash
+      ? `/api/v1/subscriptions/${subscription.id}/icon?v=${subscription.icon_hash}`
+      : `/api/v1/subscriptions/${subscription.id}/icon`,
   };
 }
 
@@ -46,7 +57,12 @@ function itemState(userId: number, itemId: number): Record<string, unknown> | nu
               (SELECT position FROM item_progress WHERE user_id = ? AND item_id = ?) AS progress`,
     )
     .get(userId, itemId, userId, itemId, userId, itemId) as ItemStateRow;
-  return { read: Boolean(row.read), saved: row.saved_at !== null, savedAt: row.saved_at, progress: row.progress };
+  return {
+    read: Boolean(row.read),
+    saved: row.saved_at !== null,
+    savedAt: row.saved_at,
+    progress: row.progress,
+  };
 }
 
 /**
@@ -74,6 +90,14 @@ export function ensureChangeLog(userId: number): void {
       .all(userId, userId, userId)
       .map((row) => row.item_id);
     addAll("item_state", itemIds);
+    const noteIds = db
+      .prepare<[number], { item_id: number }>("SELECT item_id FROM item_notes WHERE user_id = ?")
+      .all(userId)
+      .map((row) => row.item_id);
+    addAll("note", noteIds);
+    if (db.prepare<[number], { user_id: number }>("SELECT user_id FROM editions WHERE user_id = ?").get(userId)) {
+      addAll("edition", [1]);
+    }
   })();
 }
 
@@ -119,10 +143,28 @@ export function listChanges(userId: number, since: number, limit = 200): { chang
       data = subscription && serializeSubscription(subscription);
     } else if (row.entity === "folder") {
       const folder = folders.get(row.entity_id);
-      data = folder && { name: folder.name };
-    } else {
+      data = folder && { name: folder.name, iconSymbol: folder.icon_symbol ?? null };
+    } else if (row.entity === "muted_keyword") {
       const keyword = keywords.get(row.entity_id);
       data = keyword && { keyword: keyword.keyword };
+    } else if (row.entity === "note") {
+      const note = findItemNote(userId, row.entity_id);
+      data = note && {
+        itemId: note.item_id,
+        content: note.content,
+        revision: note.revision,
+        createdAt: note.created_at,
+        updatedAt: note.updated_at,
+      };
+    } else if (row.entity === "edition") {
+      const edition = getEdition(userId);
+      data = edition && {
+        revision: edition.revision,
+        createdAt: edition.createdAt,
+        updatedAt: edition.updatedAt,
+        expiresAt: edition.expiresAt,
+        itemIds: edition.itemIds,
+      };
     }
     // The object disappeared after it was logged (for example an article removed by retention).
     return data ? { ...change, data } : { ...change, op: "delete" };
@@ -141,7 +183,8 @@ export function pruneChangeLog(): number {
     ).run(cutoff);
     const old = db.prepare("DELETE FROM changes WHERE op = 'delete' AND changed_at < ?").run(cutoff).changes;
     const gone = db.prepare("DELETE FROM changes WHERE entity = 'item_state' AND entity_id NOT IN (SELECT id FROM items)").run().changes;
+    const goneNotes = db.prepare("DELETE FROM changes WHERE entity = 'note' AND entity_id NOT IN (SELECT id FROM items)").run().changes;
     db.prepare("DELETE FROM applied_mutations WHERE applied_at < ?").run(new Date(Date.now() - 30 * 86_400_000).toISOString());
-    return old + gone;
+    return old + gone + goneNotes;
   })();
 }
