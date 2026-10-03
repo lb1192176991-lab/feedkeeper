@@ -2,20 +2,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AddressInfo } from "node:net";
 import express from "express";
-import { db } from "../src/db/index.js";
-import { storeFeedIcon } from "../src/feeds/feedIcon.js";
-import { runCleanup } from "../src/feeds/cleanup.js";
-import { findItemNote, publishEdition } from "../src/feeds/repository.js";
-import { listChanges } from "../src/sync/changeLog.js";
-import { applyMutations } from "../src/sync/mutations.js";
-import { v1Router } from "../src/api/v1/index.js";
-import { createPersonalAccessToken } from "../src/auth/tokens.js";
+
+process.env.DATABASE_PATH = ":memory:";
+process.env.SESSION_SECRET = "test-session-secret-at-least-32-characters";
 
 test("native extensions: feed icons, folder icons, notes, editions, and retention", async () => {
-  process.env.DATABASE_PATH = ":memory:";
-  process.env.SESSION_SECRET = "test-session-secret-at-least-32-characters";
-
   const { db, runMigrations } = await import("../src/db/index.js");
+  const { storeFeedIcon } = await import("../src/feeds/feedIcon.js");
+  const { runCleanup } = await import("../src/feeds/cleanup.js");
+  const { findItemNote, publishEdition } = await import("../src/feeds/repository.js");
+  const { listChanges } = await import("../src/sync/changeLog.js");
+  const { applyMutations } = await import("../src/sync/mutations.js");
+  const { v1Router } = await import("../src/api/v1/index.js");
+  const { createPersonalAccessToken } = await import("../src/auth/tokens.js");
   runMigrations();
 
   const unique = Date.now();
