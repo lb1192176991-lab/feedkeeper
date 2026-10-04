@@ -76,6 +76,11 @@ paths:
     get:
       tags: [Devices]
       summary: The signed-in user
+      description: |
+        Uncached account profile. Technical support from /meta, account capabilities and
+        token scope are independent. Missing capabilities on an older server mean legacy
+        compatibility; missing keys in an existing feature map deny access.
+        See docs/design/native-api.md for operation mappings and downgrade behavior.
       responses:
         "200":
           description: OK
@@ -83,6 +88,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [id, email, displayName, role, scope, deviceId, capabilities]
                 properties:
                   id: { type: integer }
                   email: { type: string }
@@ -90,14 +96,7 @@ paths:
                   role: { type: string, enum: [admin, user] }
                   scope: { type: string, enum: [read, write] }
                   deviceId: { type: [integer, "null"] }
-                  capabilities:
-                    type: object
-                    properties:
-                      type: { type: string, example: "selfhosted" }
-                      features:
-                        type: object
-                        additionalProperties: { type: boolean }
-                      manageUrl: { type: [string, "null"] }
+                  capabilities: { $ref: "#/components/schemas/AccountCapabilities" }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /devices:
     get:
@@ -124,6 +123,7 @@ paths:
         - { name: since, in: query, schema: { type: integer, minimum: 0, default: 0 } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SyncPage" } } } }
         "410": { description: resync_required }
   /mutations:
@@ -293,6 +293,7 @@ paths:
                 name: { type: string, maxLength: 100 }
                 iconSymbol: { type: [string, "null"], maxLength: 100 }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Folder" } } } }
   /folders/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -309,6 +310,7 @@ paths:
                 name: { type: string, maxLength: 100 }
                 iconSymbol: { type: [string, "null"], maxLength: 100 }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Folder" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: folder_name_taken }
@@ -357,6 +359,7 @@ paths:
         - { name: include, in: query, schema: { type: string, enum: [content] } }
         - { $ref: "#/components/parameters/Images" }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200":
           description: Search results
           content:
@@ -418,6 +421,7 @@ paths:
       requestBody:
         content: { application/json: { schema: { type: object, properties: { subscriptionId: { type: integer }, folderId: { type: integer } } } } }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: The number of articles marked }
   /items/{id}:
     get:
@@ -437,6 +441,7 @@ paths:
         - { $ref: "#/components/parameters/Id" }
         - { name: force, in: query, schema: { type: boolean } }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: The article with `fullTextHtml`, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
         "409": { description: full_text_disabled for this subscription }
         "422": { description: consent_wall or could_not_extract_content }
@@ -481,6 +486,7 @@ paths:
                 content: { type: string, maxLength: 100000 }
                 expectedRevision: { type: integer, minimum: 0, description: "Last seen revision, including a deleted note's tombstone revision. Omit only for unconditional writes." }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemNote" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: revision_conflict, content: { application/json: { schema: { $ref: "#/components/schemas/NoteConflict" } } } }
@@ -558,6 +564,7 @@ paths:
       parameters:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200":
           description: OK
           content:
@@ -593,6 +600,7 @@ paths:
                 expectedRevision: { type: integer, minimum: 0 }
                 force: { type: boolean, default: false, description: Requires expectedRevision when true }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: Active issue, content: { application/json: { schema: { $ref: "#/components/schemas/Edition" } } } }
         "400": { $ref: "#/components/responses/Invalid" }
         "404": { description: "no_edition, with current EditionState", content: { application/json: { schema: { $ref: "#/components/schemas/EditionError" } } } }
@@ -621,6 +629,7 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/NativePreferencesPatch" }
       responses:
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: Updated or unchanged, content: { application/json: { schema: { $ref: "#/components/schemas/NativePreferences" } } } }
         "400": { $ref: "#/components/responses/Invalid" }
         "404": { description: folder_not_found }
@@ -640,7 +649,35 @@ components:
     NotFound: { description: "Not found, or not visible to this user" }
     Invalid: { description: "Invalid input: { error: invalid_input }" }
     ReadOnly: { description: The token is read-only }
+    CapabilityDenied:
+      description: "The account lacks the capability or the token is read-only; stored content is retained"
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - { $ref: "#/components/schemas/CapabilityDenial" }
+              - type: object
+                required: [error]
+                properties:
+                  error: { type: string, const: read_only_token }
   schemas:
+    AccountCapabilities:
+      type: object
+      required: [type, features, manageUrl]
+      properties:
+        type: { type: string, example: selfhosted, description: "Opaque display identifier; never overrides feature permissions" }
+        features:
+          type: object
+          description: "Known keys: mcp, sync, notes, editions, fulltext, search.fts. Explicit false and missing keys deny access. Self-hosted instances enable all known keys."
+          additionalProperties: { type: boolean }
+        manageUrl: { type: [string, "null"], description: "Optional HTTPS account-management URL; does not grant an app license" }
+    CapabilityDenial:
+      type: object
+      required: [error, capability, manageUrl]
+      properties:
+        error: { type: string, const: capability_not_available }
+        capability: { type: string }
+        manageUrl: { type: [string, "null"] }
     Meta:
       type: object
       properties:
@@ -877,9 +914,13 @@ components:
         expectedRevision: { type: integer, minimum: 0, description: "For item.note.set and item.note.delete; omit only for unconditional changes" }
         at: { type: string, format: date-time, description: "When the user did it; at most 5 minutes ahead of the server, at most 30 days old" }
     MutationResult:
+      description: "A capability denial is retryable and does not consume the mutation UUID. Other entries in the batch still apply."
       type: object
       properties:
         id: { type: string }
         outcome: { type: string, enum: [applied, duplicate, stale, rejected, conflict] }
-        error: { type: string, description: "invalid_mutation, invalid_time, item_not_found, or revision_conflict" }
+        error: { type: string, description: "invalid_mutation, invalid_time, item_not_found, revision_conflict, or capability_not_available" }
+        capability: { type: string, description: "Required account capability when access was denied" }
+        manageUrl: { type: [string, "null"] }
+        retryable: { type: boolean, description: "True for capability denials; retain the mutation for a later retry" }
         current: { $ref: "#/components/schemas/NoteConflictState" }

@@ -10,7 +10,7 @@ import { getRetentionSettings } from "../../feeds/cleanup.js";
 import { APP_VERSION } from "../../version.js";
 import { ResyncRequired, currentSeq, listChanges } from "../../sync/changeLog.js";
 import { applyMutations } from "../../sync/mutations.js";
-import { getUserCapabilities } from "../../auth/capabilities.js";
+import { getUserCapabilities, requireCapability } from "../../auth/capabilities.js";
 import { resourcesRouter } from "./resources.js";
 
 /** The API for native apps. See docs/design/native-api.md for the contract and what is still to come. */
@@ -37,6 +37,8 @@ const FEATURES = [
   "edition.revisions",
   "native-preferences",
   "search.fts",
+  "account-capabilities",
+  "mcp",
 ];
 
 v1Router.get("/meta", (_req, res) => {
@@ -109,6 +111,7 @@ v1Router.use((req, res, next) => {
 });
 
 v1Router.get("/me", (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
   const { id, email, display_name, role } = req.user!;
   res.json({
     id,
@@ -150,7 +153,7 @@ const syncQuery = z.object({
 
 // Changes to the user's own data (articles' state, subscriptions, folders, keywords) since `since`.
 // since=0 delivers the complete state, as the log holds one entry per object.
-v1Router.get("/sync", (req, res) => {
+v1Router.get("/sync", requireCapability("sync"), (req, res) => {
   const parsed = syncQuery.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "invalid_input" });

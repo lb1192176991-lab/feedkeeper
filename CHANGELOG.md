@@ -4,11 +4,20 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-04
+
 ### Added
 - Account capabilities negotiation: user endpoints (`GET /api/v1/me` and `GET /api/auth/me`) now expose an `AccountCapabilities` object (`type: "selfhosted"`, `features`, `manageUrl`), allowing clients to discover active capabilities dynamically.
 - Pluggable `CapabilitiesProvider` and `requireCapability` middleware: allows downstream or hosted distributions to customize capability discovery and access control cleanly without patching core logic.
+- Independent account capability for server full-text search (`search.fts`), separate from fetching reader text (`fulltext`). Native metadata advertises account capability discovery (`account-capabilities`).
 - Claude Desktop and Cowork configuration snippet in web settings: allows one-click copying of the complete MCP server configuration block including personal access tokens.
 - Capability checks on the Streamable HTTP `/mcp` route ensuring active MCP support.
+
+### Changed
+- Account capability discovery and enforcement use the same feature map. Explicit denials apply to every account type, and omitted flags do not grant access.
+- Native sync, reading-state writes, note updates, app preferences, folder icon edits, full-text fetches and edition generation enforce the advertised account capabilities. MCP tools and automatic edition scheduling respect the same permissions.
+- Existing notes and editions remain readable after a capability is disabled. Notes can still be exported or deleted; disabled features never delete stored content.
+- Mixed mutation batches report capability denials per action, without consuming their mutation IDs, so queued changes can be retried after access is restored.
 
 ## [0.11.0] - 2026-10-04
 
@@ -175,7 +184,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/visualfusion/feedkeeper/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/visualfusion/feedkeeper/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/visualfusion/feedkeeper/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/visualfusion/feedkeeper/compare/v0.9.0...v0.10.0

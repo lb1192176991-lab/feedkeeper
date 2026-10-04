@@ -41,6 +41,7 @@ import { readingPositions, serializeItem, serializeSubscriptionDetail } from "./
 import { dismissEdition, editionCandidates, generateEdition, generateEditionSchema, getEdition, getEditionState, type ServerEdition } from "../../native/editions.js";
 import { getNativePreferences, patchNativePreferences } from "../../native/preferences.js";
 import { NativeError } from "../../native/requests.js";
+import { capabilityDenial, hasUserCapability, requireCapability } from "../../auth/capabilities.js";
 
 export const resourcesRouter = Router();
 
@@ -257,6 +258,9 @@ resourcesRouter.get("/folders", (req, res) => {
 resourcesRouter.post("/folders", (req, res) => {
   const parsed = createFolderSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error.flatten());
+  if (parsed.data.iconSymbol !== undefined && !hasUserCapability(req.user!.id, "sync")) {
+    return void res.status(403).json(capabilityDenial(req.user!.id, "sync"));
+  }
   try {
     const folder = createFolder(req.user!.id, parsed.data.name, parsed.data.iconSymbol);
     res.status(201).json({
@@ -275,6 +279,9 @@ resourcesRouter.patch("/folders/:id", (req, res) => {
   const id = Number(req.params.id);
   const parsed = patchFolderSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error.flatten());
+  if (parsed.data.iconSymbol !== undefined && !hasUserCapability(req.user!.id, "sync")) {
+    return void res.status(403).json(capabilityDenial(req.user!.id, "sync"));
+  }
   if (!findFolderById(req.user!.id, id)) return void res.status(404).json({ error: "folder_not_found" });
   try {
     updateFolder(req.user!.id, id, parsed.data);
@@ -352,7 +359,7 @@ const searchQuery = z.object({
   sort: z.enum(["relevance", "date"]).default("relevance"),
 });
 
-resourcesRouter.get("/search", (req, res) => {
+resourcesRouter.get("/search", requireCapability("search.fts"), (req, res) => {
   const parsed = searchQuery.safeParse(req.query);
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   const query = parsed.data;
@@ -436,7 +443,7 @@ resourcesRouter.get("/items/:id", (req, res) => {
   res.json(serializeItem(prepare([row], req, parsed.data.images)[0], progress, true, hasNotes.has(row.id)));
 });
 
-resourcesRouter.post("/items/:id/full-text", async (req, res) => {
+resourcesRouter.post("/items/:id/full-text", requireCapability("fulltext"), async (req, res) => {
   const id = Number(req.params.id);
   const result = await loadFullText(req.user!.id, id, { force: req.query.force === "true" });
   if (!result.ok) {
@@ -449,7 +456,7 @@ resourcesRouter.post("/items/:id/full-text", async (req, res) => {
 
 const readAllSchema = z.object({ subscriptionId: z.number().int().positive().optional(), folderId: z.number().int().positive().optional() });
 
-resourcesRouter.post("/items/read-all", (req, res) => {
+resourcesRouter.post("/items/read-all", requireCapability("sync"), (req, res) => {
   const parsed = readAllSchema.safeParse(req.body ?? {});
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   res.json({ marked: markAllRead(req.user!.id, { feedId: parsed.data.subscriptionId, folderId: parsed.data.folderId }) });
@@ -476,7 +483,7 @@ resourcesRouter.get("/items/:id/note", (req, res) => {
   });
 });
 
-resourcesRouter.put("/items/:id/note", (req, res) => {
+resourcesRouter.put("/items/:id/note", requireCapability("notes"), (req, res) => {
   const id = Number(req.params.id);
   if (!canAccessItem(req.user!.id, id)) return void res.status(404).json({ error: "item_not_found" });
   const parsed = noteSchema.safeParse(req.body);
@@ -562,7 +569,7 @@ resourcesRouter.get("/native-preferences", (req, res) => {
   res.json(getNativePreferences(req.user!.id));
 });
 
-resourcesRouter.patch("/native-preferences", (req, res) => {
+resourcesRouter.patch("/native-preferences", requireCapability("sync"), (req, res) => {
   nativeAction(res, () => res.json(patchNativePreferences(req.user!.id, req.body)));
 });
 
@@ -579,14 +586,14 @@ resourcesRouter.get("/edition/state", (req, res) => {
   res.json(getEditionState(req.user!.id));
 });
 
-resourcesRouter.get("/edition/candidates", (req, res) => {
+resourcesRouter.get("/edition/candidates", requireCapability("editions"), (req, res) => {
   const parsed = z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) }).safeParse(req.query);
   if (!parsed.success) return invalid(res);
   res.setHeader("Cache-Control", "private, no-store");
   res.json({ preferences: getNativePreferences(req.user!.id), current: getEditionState(req.user!.id), candidates: editionCandidates(req.user!.id, new Date(), parsed.data.limit) });
 });
 
-resourcesRouter.post("/edition/generate", (req, res) => {
+resourcesRouter.post("/edition/generate", requireCapability("editions"), (req, res) => {
   const parsed = generateEditionSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed.error.flatten());
   nativeAction(res, () => {

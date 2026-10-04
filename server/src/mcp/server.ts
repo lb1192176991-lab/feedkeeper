@@ -39,6 +39,7 @@ import { APP_VERSION } from "../version.js";
 import { dismissEdition, editionCandidates, generateEdition, generateEditionSchema, getEditionState, publishCuratedEdition, publishEditionFields } from "../native/editions.js";
 import { getNativePreferences, patchNativePreferences, preferencePatchSchema } from "../native/preferences.js";
 import { NativeError } from "../native/requests.js";
+import { capabilityDenial, hasUserCapability } from "../auth/capabilities.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -374,6 +375,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
       },
     },
     async ({ itemId, force }) => {
+      if (!hasUserCapability(userId, "fulltext")) return { ...textResult(capabilityDenial(userId, "fulltext")), isError: true as const };
       const result = await loadFullText(userId, itemId, { force });
       if (!result.ok) return errorResult(result.message ? `${result.error}: ${result.message}` : result.error);
       return textResult({
@@ -423,6 +425,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
   ] as const;
   if (scope === "write") for (const [name, title, description, change] of itemActions) {
     server.registerTool(name, { title, description, inputSchema: itemSelection }, async (args) => {
+      if (!hasUserCapability(userId, "sync")) return { ...textResult(capabilityDenial(userId, "sync")), isError: true as const };
       const itemIds = selectedItemIds(args);
       if (itemIds.length === 0) return errorResult("Provide itemId or itemIds");
       // `updated` counts items whose state actually changed.
@@ -440,7 +443,9 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
         folderId: z.number().int().positive().optional(),
       },
     },
-    async ({ feedId, folderId }) => textResult({ marked: markAllRead(userId, { feedId, folderId }) }),
+    async ({ feedId, folderId }) => hasUserCapability(userId, "sync")
+      ? textResult({ marked: markAllRead(userId, { feedId, folderId }) })
+      : { ...textResult(capabilityDenial(userId, "sync")), isError: true as const },
   );
 
   server.registerTool(
@@ -542,6 +547,11 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     }
   };
 
+  const capabilityAction = (capability: string, action: () => unknown) => {
+    if (!hasUserCapability(userId, capability)) return { ...textResult(capabilityDenial(userId, capability)), isError: true as const };
+    return editionAction(action);
+  };
+
   server.registerTool("get_native_preferences", {
     title: "Get native reading preferences",
     description: "Returns the user's app-only folder order, newspaper exclusions, preferred sections, time zone and edition size. These settings do not change the web reader.",
@@ -558,25 +568,25 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     title: "Get edition candidates",
     description: "Returns a bounded shortlist of unread articles from the last seven days, respecting muted keywords and app-only section visibility. Includes the current revision and user preferences. Use get_item to inspect selected articles, then publish_edition with expectedRevision and a stable requestId.",
     inputSchema: { limit: z.number().int().min(1).max(200).default(100) },
-  }, async ({ limit }) => textResult({ preferences: getNativePreferences(userId), current: getEditionState(userId), candidates: editionCandidates(userId, new Date(), limit) }));
+  }, async ({ limit }) => capabilityAction("editions", () => ({ preferences: getNativePreferences(userId), current: getEditionState(userId), candidates: editionCandidates(userId, new Date(), limit) })));
 
   if (scope === "write") server.registerTool("update_native_preferences", {
     title: "Update native reading preferences",
     description: "Patches app-only preferences using expectedRevision and a UUID requestId. Retried requests return their original result; conflicts include the current settings. Folder IDs must belong to the current user. Never changes the web folder list or stream.",
     inputSchema: preferencePatchSchema.shape,
-  }, async (input) => editionAction(() => patchNativePreferences(userId, input)));
+  }, async (input) => capabilityAction("sync", () => patchNativePreferences(userId, input)));
 
   if (scope === "write") server.registerTool("publish_edition", {
     title: "Publish curated edition",
     description: "Publishes an ordered list of 1 to 24 accessible article IDs. Curated editions override automatic ones until expiry (default 24 hours, maximum seven days). App-only hidden sections and muted keywords are respected. Supply the revision from get_edition as expectedRevision and a UUID requestId for conflict detection and safe retries. Optional title and summary are editorial text; original articles stay unchanged.",
     inputSchema: publishEditionFields,
-  }, async (input) => editionAction(() => publishCuratedEdition(userId, input)));
+  }, async (input) => capabilityAction("editions", () => publishCuratedEdition(userId, input)));
 
   if (scope === "write") server.registerTool("generate_edition", {
     title: "Generate an automatic edition",
     description: "Ensures an automatic edition exists without disturbing a valid current issue. force=true requests a new automatic selection and requires expectedRevision. A valid curated edition must be explicitly dismissed first. Use a stable UUID requestId for retries.",
     inputSchema: generateEditionSchema.shape,
-  }, async (input) => editionAction(() => {
+  }, async (input) => capabilityAction("editions", () => {
     const parsed = generateEditionSchema.safeParse(input);
     if (!parsed.success) throw new NativeError("invalid_input");
     return { edition: generateEdition(userId, parsed.data), current: getEditionState(userId) };

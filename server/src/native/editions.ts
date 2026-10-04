@@ -1,3 +1,4 @@
+import { hasUserCapability } from "../auth/capabilities.js";
 import { randomUUID } from "node:crypto";
 import cron from "node-cron";
 import { z } from "zod";
@@ -226,6 +227,7 @@ export function maintainEditions(now = new Date()): void {
     "SELECT user_id FROM native_preferences UNION SELECT user_id FROM editions",
   ).all();
   for (const user of users) {
+    if (!hasUserCapability(user.user_id, "editions")) continue;
     try { generateEdition(user.user_id, {}, now); }
     catch (error) { console.error("[edition] could not refresh an edition", error instanceof Error ? error.message : "unknown error"); }
   }

@@ -15,7 +15,6 @@ export interface AccountCapabilities {
 
 export interface CapabilitiesProvider {
   getCapabilitiesForUser(userId: number): AccountCapabilities;
-  hasCapability(userId: number, capability: string): boolean;
 }
 
 class DefaultCapabilitiesProvider implements CapabilitiesProvider {
@@ -28,13 +27,10 @@ class DefaultCapabilitiesProvider implements CapabilitiesProvider {
         notes: true,
         editions: true,
         fulltext: true,
+        "search.fts": true,
       },
       manageUrl: null,
     };
-  }
-
-  hasCapability(_userId: number, _capability: string): boolean {
-    return true;
   }
 }
 
@@ -52,6 +48,19 @@ export function getUserCapabilities(userId: number): AccountCapabilities {
   return activeCapabilitiesProvider.getCapabilitiesForUser(userId);
 }
 
+/** The advertised feature map is also the authority for enforcement. Missing keys deny access. */
+export function hasUserCapability(userId: number, capability: string): boolean {
+  return getUserCapabilities(userId).features[capability] === true;
+}
+
+export function capabilityDenial(userId: number, capability: string) {
+  return {
+    error: "capability_not_available",
+    capability,
+    manageUrl: getUserCapabilities(userId).manageUrl ?? null,
+  };
+}
+
 export function requireCapability(capability: string) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const userId = req.user?.id;
@@ -59,13 +68,8 @@ export function requireCapability(capability: string) {
       res.status(401).json({ error: "not_authenticated" });
       return;
     }
-    if (!activeCapabilitiesProvider.hasCapability(userId, capability)) {
-      const caps = activeCapabilitiesProvider.getCapabilitiesForUser(userId);
-      res.status(403).json({
-        error: "capability_not_available",
-        capability,
-        manageUrl: caps.manageUrl ?? null,
-      });
+    if (!hasUserCapability(userId, capability)) {
+      res.status(403).json(capabilityDenial(userId, capability));
       return;
     }
     next();

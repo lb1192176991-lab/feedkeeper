@@ -12,6 +12,57 @@ Status: the core `/api/v1` contract, including sync, notes, icons, editions and 
 
 Non-goals: replacing the web app's API right away (it can move to `/api/v1` later), federation, multi-server accounts.
 
+## Account capabilities
+
+`GET /me` returns the authenticated user's `id`, `email`, `displayName`, `role`, token
+`scope` (`read` or `write`), nullable `deviceId` and `capabilities`. Its response is
+`Cache-Control: private, no-store`; clients may persist the last verified profile per
+account for offline display and refresh it on connection, account selection, sync
+and after a capability denial. A network error must not replace a verified cloud
+profile with a guessed self-hosted profile.
+
+`/meta.features` describes implementation support, `/me.capabilities.features`
+describes account permission, and `/me.scope` controls writes. All applicable checks
+must pass. `capabilities.type` is an opaque display identifier, not an authorization
+rule. Self-hosted instances return `selfhosted` and enable all known capabilities.
+Explicit `false` always denies access, including for `selfhosted`; a missing key in
+an existing capability map also denies access. Unknown keys may be ignored. Older
+servers with no capability object retain their previous behavior, subject to
+`/meta` and token scope; clients must distinguish this legacy case from a cloud plan.
+
+| Capability | Protected operations | Available after disabling |
+| --- | --- | --- |
+| `mcp` | Streamable HTTP MCP access | Native library and automatic editions, according to their own permissions |
+| `sync` | `/sync`, `item.read/save/progress` mutations, `/items/read-all`, native preference PATCH, folder creation/updates containing `iconSymbol`; corresponding MCP state/preference writes | Ordinary library/feed reads and management, reading existing preferences/icons; note and edition operations use their separate capabilities |
+| `notes` | Note PUT and `item.note.set` mutations | Existing note reads, Markdown exports and revision-checked deletion; stored notes remain protected from retention |
+| `editions` | Edition candidates, generation and MCP publication/generation; scheduled automatic generation | Reading the existing edition/state and dismissing it; disabling does not delete the issue |
+| `fulltext` | Fetching reader text via `/items/{id}/full-text` or MCP `fetch_full_text` | Already stored article content |
+| `search.fts` | `/search` | Ordinary item listing and local offline search |
+
+Full-text extraction and FTS search are independent. MCP access does not imply
+edition or extraction permission. These checks cover the native API and matching
+MCP operations; legacy web APIs are not a tariff boundary and hosted distributions
+must apply their policy there as well. A `CapabilitiesProvider` supplies the single
+authoritative feature map through `getCapabilitiesForUser`; the former independent
+`hasCapability` hook is no longer consulted.
+
+Denied requests return HTTP 403 with
+`{ "error": "capability_not_available", "capability": "notes", "manageUrl": null }`.
+A read-only token instead receives `read_only_token` on writes. In a valid mixed
+mutation batch the response remains HTTP 200: each blocked action has `outcome:
+"rejected"`, the same error/capability/manageUrl and `retryable: true`. Other actions
+are processed normally. Capability denials do not record mutation receipts; the same
+UUID can be retried after permission is restored, subject to the existing 30-day
+mutation time window. A previously processed UUID remains `duplicate` even after a
+permission change. Clients retain blocked changes and drafts, never turn them into
+successful acknowledgements, and never silently switch synced notes to local-only
+notes. Permission checks for notes and state mutations are independent.
+
+`manageUrl` is an optional HTTPS account-management URL. Clients offer a user-initiated
+native link only after validating its scheme and authority; malformed links should
+not break profile decoding. The contract grants no App Store subscription or app
+license. Any future hosted app entitlement needs a separate explicit contract.
+
 ## Conventions
 
 - Base path `/api/v1`, JSON over HTTPS, UTF-8. Timestamps are ISO 8601 in UTC. Resource IDs are integers and never reused; an edition also has an opaque string issue identity.
@@ -28,8 +79,8 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 ```json
 {
   "apiVersion": 1,
-  "serverVersion": "0.11.0",
-  "features": ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention", "feed-icons", "folder-icons", "notes", "edition", "edition.automatic", "edition.revisions", "native-preferences", "search.fts"],
+  "serverVersion": "0.12.0",
+  "features": ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention", "feed-icons", "folder-icons", "notes", "edition", "edition.automatic", "edition.revisions", "native-preferences", "search.fts", "account-capabilities", "mcp"],
   "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000, "protectActiveEdition": true } },
   "minClientVersion": null
 }

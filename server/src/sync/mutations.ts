@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { pruneArchive, scheduleArchive } from "../feeds/archive.js";
+import { capabilityDenial, hasUserCapability } from "../auth/capabilities.js";
 import {
   bookmarkItem,
   canAccessItem,
@@ -48,6 +49,9 @@ export interface MutationResult {
   outcome: MutationOutcome;
   error?: string;
   current?: NoteConflictState;
+  capability?: string;
+  manageUrl?: string | null;
+  retryable?: boolean;
 }
 
 type Field = "read_at" | "saved_at" | "progress_at";
@@ -125,6 +129,13 @@ export function applyMutations(userId: number, raw: unknown[]): MutationResult[]
       .prepare<[number, string], { outcome: string; error: string | null }>("SELECT outcome, error FROM applied_mutations WHERE user_id = ? AND mutation_id = ?")
       .get(userId, mutation.id);
     if (known) return { id: mutation.id, outcome: "duplicate" };
+
+    // A disabled feature is temporary. Keep the UUID reusable after access is restored;
+    // successful mutations in the same batch still apply. Existing notes may be deleted.
+    const capability = mutation.type === "item.note.set" ? "notes" : mutation.type === "item.note.delete" ? null : "sync";
+    if (capability && !hasUserCapability(userId, capability)) {
+      return { id: mutation.id, outcome: "rejected", ...capabilityDenial(userId, capability), retryable: true };
+    }
 
     const finish = (
       outcome: MutationOutcome,

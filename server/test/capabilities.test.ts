@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 import express from "express";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 test("account capabilities and feature negotiation for self-hosted instances", async () => {
   process.env.DATABASE_PATH = ":memory:";
@@ -108,6 +110,78 @@ test("account capabilities and feature negotiation for self-hosted instances", a
       body: { jsonrpc: "2.0", method: "tools/list", id: 1 },
     });
     assert.notEqual(mcpAllowedRes.status, 403);
+
+    // The feature map is authoritative even for selfhosted types and providers with an old hook.
+    const features: AccountCapabilities["features"] = {
+      mcp: true, sync: true, notes: true, editions: true, fulltext: false, "search.fts": true,
+    };
+    setCapabilitiesProvider({ getCapabilitiesForUser: () => ({ type: "selfhosted", features, manageUrl: "https://account.example.test" }) });
+    const { createMcpServerForUser } = await import("../src/mcp/server.js");
+    const { setItemNote, findItemNote } = await import("../src/feeds/repository.js");
+    const feed = Number(db.prepare("INSERT INTO feeds (url, title) VALUES ('https://example.test/feed', 'Test')").run().lastInsertRowid);
+    db.prepare("INSERT INTO subscriptions (user_id, feed_id) VALUES (?, ?)").run(testUserId, feed);
+    const item = Number(db.prepare("INSERT INTO items (feed_id, guid, title, content_snippet, published_at, created_at) VALUES (?, 'capability', 'Capability story', 'needle', ?, ?)").run(feed, new Date().toISOString(), new Date().toISOString()).lastInsertRowid);
+    setItemNote(testUserId, item, "Existing thought");
+    const readToken = createPersonalAccessToken(testUserId, "Read only", "read").token;
+    assert.equal((await call("/api/v1/me", testToken)).status, 200);
+    assert.equal((await call("/api/v1/search?q=needle", testToken)).status, 200);
+    assert.equal((await call(`/api/v1/items/${item}/full-text`, testToken, { method: "POST" })).status, 403);
+    features.fulltext = true;
+    delete features["search.fts"];
+    assert.equal((await call("/api/v1/search?q=needle", testToken)).status, 403);
+
+    features.notes = false;
+    const noteDenied = await call(`/api/v1/items/${item}/note`, testToken, { method: "PUT", body: { content: "Blocked" } });
+    assert.equal(noteDenied.status, 403);
+    assert.equal((noteDenied.body as { capability: string }).capability, "notes");
+    assert.equal((await call(`/api/v1/items/${item}/note`, testToken)).status, 200);
+    assert.equal((await call(`/api/v1/items/${item}/note.md`, testToken)).status, 200);
+    assert.equal((await call("/api/v1/notes/export", testToken)).status, 200);
+    assert.equal(findItemNote(testUserId, item)?.content, "Existing thought");
+    const at = new Date().toISOString();
+    const blocked = { id: "blocked-note-id", type: "item.note.set", itemId: item, at, content: "Queued thought" };
+    const mixed = await call("/api/v1/mutations", testToken, { method: "POST", body: { mutations: [blocked, { id: "allowed-read-id", type: "item.read", itemId: item, at, value: true }] } });
+    const results = (mixed.body as { results: { outcome: string; retryable?: boolean }[] }).results;
+    assert.deepEqual(results.map((entry) => entry.outcome), ["rejected", "applied"]);
+    assert.equal(results[0].retryable, true);
+    assert.equal(db.prepare("SELECT 1 FROM applied_mutations WHERE mutation_id = ?").get(blocked.id), undefined);
+    features.notes = true;
+    const retry = await call("/api/v1/mutations", testToken, { method: "POST", body: { mutations: [blocked] } });
+    assert.equal((retry.body as { results: { outcome: string }[] }).results[0].outcome, "applied");
+    assert.equal(findItemNote(testUserId, item)?.content, "Queued thought");
+
+    features.sync = false;
+    assert.equal((await call("/api/v1/sync", testToken)).status, 403);
+    assert.equal((await call("/api/v1/items", testToken)).status, 200);
+    assert.equal((await call("/api/v1/native-preferences", testToken)).status, 200);
+    assert.equal((await call("/api/v1/native-preferences", testToken, { method: "PATCH", body: {} })).status, 403);
+    assert.equal((await call("/api/v1/folders", testToken, { method: "POST", body: { name: "Plain" } })).status, 201);
+    assert.equal((await call("/api/v1/folders", testToken, { method: "POST", body: { name: "Icon", iconSymbol: "cpu" } })).status, 403);
+    assert.equal((await call(`/api/v1/items/${item}/note`, readToken, { method: "PUT", body: { content: "Forbidden" } })).status, 403);
+
+    features.editions = false;
+    assert.equal((await call("/api/v1/edition/state", testToken)).status, 200);
+    assert.equal((await call("/api/v1/edition/candidates", testToken)).status, 403);
+    assert.equal((await call("/api/v1/edition/generate", testToken, { method: "POST", body: {} })).status, 403);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const scopedServer = createMcpServerForUser(testUserId, "write");
+    const client = new Client({ name: "capability-test", version: "1" });
+    await scopedServer.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const candidateResult = await client.callTool({ name: "get_edition_candidates", arguments: {} });
+      assert.equal(candidateResult.isError, true);
+      const stateResult = await client.callTool({ name: "get_edition", arguments: {} });
+      assert.notEqual(stateResult.isError, true);
+      const readResult = await client.callTool({ name: "mark_read", arguments: { itemId: item } });
+      assert.equal(readResult.isError, true);
+      features.fulltext = false;
+      assert.equal((await client.callTool({ name: "fetch_full_text", arguments: { itemId: item } })).isError, true);
+    } finally { await client.close(); await scopedServer.close(); }
+
+    features.notes = false;
+    assert.equal((await call(`/api/v1/items/${item}/note`, testToken, { method: "DELETE" })).status, 204);
+
   } finally {
     server.close();
     db.close();
