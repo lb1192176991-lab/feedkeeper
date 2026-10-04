@@ -54,24 +54,28 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 
 ```mermaid
 flowchart LR
-    WebUI(["Web UI"])
+    WebUI(["Web reader"])
+    NativeApp(["Native app / clients<br/>(iOS, iPadOS, macOS)"])
     MCPClient(["MCP client<br/>(e.g. Claude)"])
 
     subgraph Server["One Node process"]
-        direction LR
-        API["Express API<br/>session auth"]
-        MCPEP["MCP endpoint<br/>token auth"]
-        DB[("SQLite +<br/>feed poller")]
+        direction TB
+        WebAPI["Web session API"]
+        NativeAPI["Native REST API (/api/v1)<br/>device & bearer tokens"]
+        MCPEP["MCP endpoint (/mcp)<br/>streamable HTTP"]
+        DB[("SQLite + FTS5<br/>feed poller & sync engine")]
 
-        API --- DB
+        WebAPI --- DB
+        NativeAPI --- DB
         MCPEP --- DB
     end
 
-    WebUI <--> API
+    WebUI <--> WebAPI
+    NativeApp <--> NativeAPI
     MCPClient <--> MCPEP
 ```
 
-One Node process serves the built web UI, a REST API, and an MCP endpoint (`/mcp`, using the [Streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports)) — all backed by the same SQLite database and feed poller.
+One Node process serves the built web reader, the open REST API (`/api/v1`), and an MCP endpoint (`/mcp`, using the [Streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports)) — all backed by a single SQLite database, the FTS5 search index, and the feed poller.
 
 ### Web reader, native apps, and MCP
 
