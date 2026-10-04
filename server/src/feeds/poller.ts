@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import cron from "node-cron";
 import { fetchFeed } from "./fetcher.js";
-import { discoverIconUrl, iconCheckDue } from "./icon.js";
+import { discoverIconUrls, iconCheckDue } from "./icon.js";
 import { refreshFeedIcon } from "./feedIcon.js";
 import { decodeEntities } from "./text.js";
 import { notifyNewItems } from "../push.js";
@@ -97,9 +97,9 @@ export async function pollFeed(feed: Feed): Promise<{ newItems: number; error: s
   try {
     const refreshIconIfDue = async (siteUrl: string | null) => {
       if (!iconCheckDue(feed.icon_checked_at)) return;
-      const iconUrl = siteUrl ? (await discoverIconUrl(siteUrl)) ?? feed.icon_url : feed.icon_url;
-      updateFeedIcon(feed.id, iconUrl);
-      await refreshFeedIcon(feed.id, siteUrl);
+      const iconUrls = siteUrl ? await discoverIconUrls(siteUrl) : [];
+      updateFeedIcon(feed.id, feed.icon_url);
+      await refreshFeedIcon(feed.id, siteUrl, iconUrls);
     };
     const fetched = await fetchFeed(feed.url, {
       etag: feed.etag ?? undefined,

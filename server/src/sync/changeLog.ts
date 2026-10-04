@@ -1,17 +1,18 @@
 import { db } from "../db/index.js";
 import {
   findItemNote,
-  getEdition,
   listFoldersForUser,
   listMutedKeywords,
   listSubscriptionsForUser,
   type SubscribedFeed,
 } from "../feeds/repository.js";
+import { getEditionState } from "../native/editions.js";
+import { getNativePreferences } from "../native/preferences.js";
 
 const TOMBSTONE_DAYS = 90;
 const MAX_PAGE = 500;
 
-export type ChangeEntity = "item_state" | "subscription" | "folder" | "muted_keyword" | "note" | "edition";
+export type ChangeEntity = "item_state" | "subscription" | "folder" | "muted_keyword" | "note" | "edition" | "native_preferences";
 
 export interface Change {
   seq: number;
@@ -98,6 +99,7 @@ export function ensureChangeLog(userId: number): void {
     if (db.prepare<[number], { user_id: number }>("SELECT user_id FROM editions WHERE user_id = ?").get(userId)) {
       addAll("edition", [1]);
     }
+    if (getNativePreferences(userId).revision > 0) addAll("native_preferences", [1]);
   })();
 }
 
@@ -135,6 +137,11 @@ export function listChanges(userId: number, since: number, limit = 200): { chang
 
   const changes = slice.map((row): Change => {
     const change: Change = { seq: row.seq, entity: row.entity, id: row.entity_id, op: row.op };
+    if (row.entity === "edition") {
+      const state = getEditionState(userId);
+      return state.edition ? { ...change, op: "upsert", data: { ...state.edition } } :
+        { ...change, op: "delete", data: { revision: state.revision, status: state.status } };
+    }
     if (row.entity === "note" && row.op === "delete") {
       const version = db.prepare<[number, number], { revision: number }>(
         "SELECT revision FROM item_note_revisions WHERE user_id = ? AND item_id = ?",
@@ -162,15 +169,8 @@ export function listChanges(userId: number, since: number, limit = 200): { chang
         createdAt: note.created_at,
         updatedAt: note.updated_at,
       };
-    } else if (row.entity === "edition") {
-      const edition = getEdition(userId);
-      data = edition && {
-        revision: edition.revision,
-        createdAt: edition.createdAt,
-        updatedAt: edition.updatedAt,
-        expiresAt: edition.expiresAt,
-        itemIds: edition.itemIds,
-      };
+    } else if (row.entity === "native_preferences") {
+      data = { ...getNativePreferences(userId) };
     }
     // The object disappeared after it was logged (for example an article removed by retention).
     return data ? { ...change, data } : { ...change, op: "delete" };

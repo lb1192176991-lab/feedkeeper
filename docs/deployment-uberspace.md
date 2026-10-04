@@ -84,6 +84,26 @@ supervisorctl restart feedkeeper
 
 ## Backup and restore
 
+### Hosts using a systemd user service
+
+If the host uses a systemd user service instead of supervisord, replace the restart command with:
+
+```bash
+systemctl --user restart feedkeeper.service
+systemctl --user is-active feedkeeper.service
+journalctl --user -u feedkeeper.service --no-pager -n 30
+```
+
+Build before restarting and check `/api/health` and `/api/v1/meta` afterwards. The native meta endpoint reports the running version and feature flags. A brief 502 while the process starts can be retried; continued failures require checking the service log.
+
+### Testing an unpublished update
+
+An unpublished source tree can be deployed through SSH without pushing to GitHub. Keep `.env`, the live database, article archive and installed dependencies outside the uploaded file list. Build and test in a separate directory first, then transfer the source and built server files and restart the service. Preserve the previous code and a verified database/archive backup until the test is accepted. A preview version such as `0.11.0-dev.1` identifies the test through `/meta`; release notes stay under Unreleased, with no tag or GitHub release created.
+
+For the shared-edition upgrade, migration `0023_server_editions.sql` runs at startup. See [design/editions.md](design/editions.md) for the preference-adoption sequence and compatibility changes. Transferring server files does not upload settings that still live on a native device. The app performs that initial transfer through the API.
+
+### Creating and restoring a backup
+
 Create a verified backup while the service is running:
 
 ```bash

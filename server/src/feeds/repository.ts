@@ -75,13 +75,7 @@ export interface NoteConflictState {
   deleted: boolean;
 }
 
-export interface CuratedEdition {
-  revision: number;
-  createdAt: string;
-  updatedAt: string;
-  expiresAt: string | null;
-  itemIds: number[];
-}
+export type { ServerEdition as CuratedEdition } from "../native/editions.js";
 
 export interface MutedKeyword {
   id: number;
@@ -143,7 +137,9 @@ export function unsubscribe(userId: number, feedId: number): void {
 export function removeFeedIfUnused(feedId: number): void {
   if (countFeedSubscribers(feedId) > 0) return;
   db.prepare(
-    "DELETE FROM items WHERE feed_id = ? AND id NOT IN (SELECT item_id FROM item_bookmarks) AND id NOT IN (SELECT item_id FROM item_notes)",
+    `DELETE FROM items WHERE feed_id = ? AND id NOT IN (SELECT item_id FROM item_bookmarks) AND id NOT IN (SELECT item_id FROM item_notes)
+      AND NOT EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected
+        WHERE selected.value = items.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now'))`,
   ).run(feedId);
   db.prepare("DELETE FROM feeds WHERE id = ? AND NOT EXISTS (SELECT 1 FROM items WHERE feed_id = ?)").run(feedId, feedId);
 }
@@ -154,7 +150,9 @@ export function removeUnusedFeeds(): number {
     `DELETE FROM feeds
      WHERE NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
        AND NOT EXISTS (SELECT 1 FROM items i JOIN item_bookmarks b ON b.item_id = i.id WHERE i.feed_id = feeds.id)
-       AND NOT EXISTS (SELECT 1 FROM items i JOIN item_notes n ON n.item_id = i.id WHERE i.feed_id = feeds.id)`,
+       AND NOT EXISTS (SELECT 1 FROM items i JOIN item_notes n ON n.item_id = i.id WHERE i.feed_id = feeds.id)
+       AND NOT EXISTS (SELECT 1 FROM items i, editions e, json_each(e.item_ids) selected
+         WHERE i.feed_id = feeds.id AND selected.value = i.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now'))`,
   ).run().changes;
 }
 
@@ -166,8 +164,10 @@ export function canAccessItem(userId: number, itemId: number): boolean {
        WHERE i.id = ?
          AND (EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = i.feed_id AND s.user_id = ?)
            OR EXISTS (SELECT 1 FROM item_bookmarks b WHERE b.item_id = i.id AND b.user_id = ?)
-           OR EXISTS (SELECT 1 FROM item_notes n WHERE n.item_id = i.id AND n.user_id = ?))`,
-    ).get(itemId, userId, userId, userId),
+           OR EXISTS (SELECT 1 FROM item_notes n WHERE n.item_id = i.id AND n.user_id = ?)
+           OR EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected WHERE e.user_id = ?
+             AND selected.value = i.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now')))`,
+    ).get(itemId, userId, userId, userId, userId),
   );
 }
 
@@ -429,7 +429,7 @@ export function listItemsForUser(
 }
 
 export function findItemForUser(userId: number, itemId: number): ReturnType<typeof listItemsForUser>[number] | undefined {
-  return db.prepare<[number, number, number, number, number], ReturnType<typeof listItemsForUser>[number]>(
+  return db.prepare<[number, number, number, number, number, number], ReturnType<typeof listItemsForUser>[number]>(
     `SELECT i.*, COALESCE(NULLIF(TRIM(s.label), ''), NULLIF(TRIM(f.title), ''), f.url) AS feed_title,
             f.site_url AS feed_site_url, f.url AS feed_url, s.full_text_mode AS feed_full_text_mode, f.icon_url AS feed_icon_url,
             (r.item_id IS NOT NULL) AS read, (b.item_id IS NOT NULL) AS bookmarked, b.created_at AS bookmarked_at
@@ -439,8 +439,10 @@ export function findItemForUser(userId: number, itemId: number): ReturnType<type
      LEFT JOIN item_reads r ON r.item_id = i.id AND r.user_id = ?
      LEFT JOIN item_bookmarks b ON b.item_id = i.id AND b.user_id = ?
      LEFT JOIN item_notes n ON n.item_id = i.id AND n.user_id = ?
-     WHERE i.id = ? AND (s.id IS NOT NULL OR b.item_id IS NOT NULL OR n.item_id IS NOT NULL)`,
-  ).get(userId, userId, userId, userId, itemId);
+     WHERE i.id = ? AND (s.id IS NOT NULL OR b.item_id IS NOT NULL OR n.item_id IS NOT NULL OR
+       EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected WHERE e.user_id = ?
+         AND selected.value = i.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now')))`,
+  ).get(userId, userId, userId, userId, itemId, userId);
 }
 
 export function updateSubscriptionLabel(userId: number, feedId: number, label: string | null): void {
@@ -804,74 +806,9 @@ export function itemsWithNotes(userId: number, itemIds: number[]): Set<number> {
 }
 
 // ---------------------------------------------------------------------------
-// Curated editions ("Deine Zeitung")
+// Server editions use the native service; keep existing imports compatible.
 // ---------------------------------------------------------------------------
-
-interface EditionRow {
-  user_id: number;
-  item_ids: string;
-  revision: number;
-  created_at: string;
-  updated_at: string;
-  expires_at: string | null;
-}
-
-export function getEdition(userId: number): CuratedEdition | null {
-  const row = db.prepare<[number], EditionRow>("SELECT * FROM editions WHERE user_id = ?").get(userId);
-  if (!row) return null;
-  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
-    return null;
-  }
-  let itemIds: number[] = [];
-  try {
-    itemIds = JSON.parse(row.item_ids);
-  } catch {
-    itemIds = [];
-  }
-  return {
-    revision: row.revision,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    expiresAt: row.expires_at,
-    itemIds,
-  };
-}
-
-export function publishEdition(userId: number, itemIds: number[], expiresAt?: string | null): CuratedEdition {
-  return db.transaction(() => {
-    const existing = db.prepare<[number], EditionRow>("SELECT * FROM editions WHERE user_id = ?").get(userId);
-    const now = new Date().toISOString();
-    const idsJson = JSON.stringify(itemIds);
-    if (existing) {
-      const nextRev = existing.revision + 1;
-      db.prepare(
-        "UPDATE editions SET item_ids = ?, revision = ?, updated_at = ?, expires_at = ? WHERE user_id = ?",
-      ).run(idsJson, nextRev, now, expiresAt ?? null, userId);
-      return {
-        revision: nextRev,
-        createdAt: existing.created_at,
-        updatedAt: now,
-        expiresAt: expiresAt ?? null,
-        itemIds,
-      };
-    } else {
-      db.prepare(
-        "INSERT INTO editions (user_id, item_ids, revision, created_at, updated_at, expires_at) VALUES (?, ?, 1, ?, ?, ?)",
-      ).run(userId, idsJson, now, now, expiresAt ?? null);
-      return {
-        revision: 1,
-        createdAt: now,
-        updatedAt: now,
-        expiresAt: expiresAt ?? null,
-        itemIds,
-      };
-    }
-  })();
-}
-
-export function deleteEdition(userId: number): boolean {
-  return db.prepare("DELETE FROM editions WHERE user_id = ?").run(userId).changes > 0;
-}
+export { getEdition, publishEdition, deleteEdition } from "../native/editions.js";
 
 export function formatFtsQuery(raw: string): string {
   const tokens = raw.match(/"[^"]*"|[^\s"]+/g) || [];

@@ -14,10 +14,10 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 
 ## Conventions
 
-- Base path `/api/v1`, JSON over HTTPS, UTF-8. Timestamps are ISO 8601 in UTC. IDs are integers and never reused.
+- Base path `/api/v1`, JSON over HTTPS, UTF-8. Timestamps are ISO 8601 in UTC. Resource IDs are integers and never reused; an edition also has an opaque string issue identity.
 - Errors: `{ "error": "<code>", "message": "<human readable>", "details": … }` with a matching HTTP status. Codes are stable strings.
 - Article lists use opaque cursors (`nextCursor`); full-text search uses `limit` and `offset`.
-- Offline mutations use client-generated IDs for idempotent retries. Other writes do not currently support an `Idempotency-Key` header.
+- Offline mutations use client-generated IDs for idempotent retries. Native preferences and edition commands use a `requestId` in the body; other writes do not currently support an `Idempotency-Key` header.
 - Feed icons have `ETag` and `If-None-Match`; matching versioned icon URLs can be cached immutably.
 - The implemented contract is described in the OpenAPI 3.1 file `docs/openapi.yaml`, kept next to the code.
 
@@ -28,9 +28,9 @@ Non-goals: replacing the web app's API right away (it can move to `/api/v1` late
 ```json
 {
   "apiVersion": 1,
-  "serverVersion": "0.10.1",
-  "features": ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention", "feed-icons", "folder-icons", "notes", "edition", "search.fts"],
-  "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000 } },
+  "serverVersion": "0.11.0",
+  "features": ["pairing", "sync", "mutations", "subscriptions", "folders", "items", "fulltext", "images", "muted-keywords", "opml", "retention", "feed-icons", "folder-icons", "notes", "edition", "edition.automatic", "edition.revisions", "native-preferences", "search.fts"],
+  "limits": { "maxMutationsPerRequest": 200, "retentionDays": 90, "retention": { "enabled": true, "readDays": 30, "maxDays": 90, "maxItemsPerFeed": 1000, "protectActiveEdition": true } },
   "minClientVersion": null
 }
 ```
@@ -59,7 +59,10 @@ New tables (migrations are additive and keep existing data):
 | `item_notes` | Personal article notes with content, revision and timestamps. |
 | `item_note_revisions` | Last revision after a note is deleted, so old edits and deletions cannot overwrite a recreated note. |
 | `feed_icons` | Server-cached raster icons and content hashes for subscriptions. |
-| `editions` | A user's current curated issue, its order, revision and expiry. |
+| `editions` | A user's current automatic or curated issue, identity, source, order, monotonic revision, status and expiry. The slot is retained after dismissal. |
+| `edition_history` | The last 32 issues per user, for avoiding repeated selections within 72 hours. No article content is duplicated. |
+| `native_preferences` | Revision-checked app-only section ordering, newspaper exclusions and edition preferences. |
+| `native_requests` | Atomic receipts for preference and edition commands, retained for at least 35 days. |
 | `item_progress` | Reading position per user and article, for every article: `position` 0..1, `updated_at`. Removed together with the article. |
 | `devices` metadata | Columns on the token table: `kind`, `platform`, `app_version`, `last_seen_at`. Native push registration remains planned. |
 
@@ -69,7 +72,7 @@ Article content stays global (one row per article, shared by subscribers); every
 
 Two streams, because articles and personal state behave differently.
 
-**Content stream (articles).** An article is created once for all subscribers, so it must not fan out into per-user change rows. Clients page through `GET /items?after=<cursor>` in "added" order, the same cursor idea as the MCP `list_items`. Each item carries its state (`read`, `saved`, tags, progress). Deletions caused by retention are not announced: the cleanup rules are public in `/meta.limits.retention` (whether cleanup runs, the age limits for read and for all articles, and the per-feed cap; 0 switches a rule off), and the client applies the same retention locally. Saved articles are never purged, so they are never dropped by this rule.
+**Content stream (articles).** An article is created once for all subscribers, so it must not fan out into per-user change rows. Clients page through `GET /items?after=<cursor>` in "added" order, the same cursor idea as the MCP `list_items`. Each item carries its state (`read`, `saved`, tags, progress). Deletions caused by retention are not announced: the cleanup rules are public in `/meta.limits.retention` (whether cleanup runs, the age limits for read and for all articles, and the per-feed cap; 0 switches a rule off), and the client applies the same retention locally. Saved and annotated articles are never purged. Active edition articles are protected until expiry or dismissal; clients observe `limits.retention.protectActiveEdition` and preserve the active item IDs locally.
 
 **State stream (per user).** Everything personal and small goes through the change log:
 
@@ -87,7 +90,7 @@ Two streams, because articles and personal state behave differently.
 }
 ```
 
-Entities: `item_state` (read, saved, saved time, reading position), `subscription`, `folder`, `muted_keyword`, `note` and `edition`. The log is filled by database triggers, so every code path (web app, MCP, native API) is covered. A "mark all read" produces one `item_state` entry per article it touches; compaction keeps that bounded. Changed feed icons produce a `subscription` upsert with a new `iconHash` and versioned `iconUrl`. Note deletions carry their new revision in `data`; other deletions have no data. Feed health and unread counts are refreshed separately with `GET /subscriptions`.
+Entities: `item_state` (read, saved, saved time, reading position), `subscription`, `folder`, `muted_keyword`, `note`, `edition` and `native_preferences`. The log is filled by database triggers, so every code path (web app, MCP, native API) is covered. A "mark all read" produces one `item_state` entry per article it touches; compaction keeps that bounded. Changed feed icons produce a `subscription` upsert with a new `iconHash` and versioned `iconUrl`. Note deletions carry their new revision in `data`. Edition tombstones carry the retained revision and status; other deletions have no data. Feed health and unread counts are refreshed separately with `GET /subscriptions`.
 
 The log is **compacted**: each object has exactly one row whose `seq` moves forward when the object changes, so toggling an article read and unread three times leaves one entry and the log grows with the number of objects, not the number of changes. Only deletions (tombstones) are remembered for 90 days. A client that is new, or whose `since` is older than the oldest remembered tombstone, gets `410 resync_required` and starts over: it drops its copy of this state and syncs from `since=0`. Because the log holds one entry per object, `since=0` *is* the complete state, so there is no separate snapshot endpoint. Users whose data predates the log are added to it on their first sync.
 
@@ -140,7 +143,7 @@ Implemented routes accept device tokens or personal access tokens unless noted. 
 **Native Extensions**
 
 - **Authoritative Feed Icons (`feed-icons`)**:
-  - The server persists icons in `feed_icons` with SHA-256 content hashes (`iconHash` in API responses). SVG and ICO sources are converted to PNG so all clients can display the same raster image.
+  - The server persists icons in `feed_icons` with SHA-256 content hashes (`iconHash` in API responses). Discovery prefers SVG artwork, then the largest declared raster icons, including Apple touch icons and icons from linked web app manifests. Failed candidates fall back to the next declared image, the previous source, then `/favicon.ico`. Monochrome mask icons are excluded. SVG sources are rendered to 512-pixel-wide PNGs; ICO sources use their largest embedded image. Raster sources retain their original resolution, with a 1 MiB download limit. All clients use the same cached image.
   - `/api/v1/subscriptions/{id}/icon` supports `ETag`, `If-None-Match` (304), and immutable caching (`Cache-Control: private, max-age=31536000, immutable`) when requested with matching `?v=<iconHash>`.
   - Feed polls recheck icons roughly once a week, including on a 304 feed response. A changed image logs a `subscription` upsert with updated `iconHash` and versioned `iconUrl`; unchanged images do not advance the sync log. Icons stored as SVG or ICO before 0.10.1 are converted when first requested.
 
@@ -160,12 +163,13 @@ Implemented routes accept device tokens or personal access tokens unless noted. 
   - Retention protection: articles with notes are permanently excluded from database retention cleanup (`runCleanup`), even after feed unsubscription or age limit expiration.
   - Item listing endpoints (`/items`, `/items/{id}`, `/items/bundle`, `/edition`) include `state.hasNote: boolean`.
 
-- **Curated Edition „Deine Zeitung“ (`edition`)**:
-  - Curated collection of 1 to 24 articles for the user with an expiration timestamp (`expiresAt`).
-  - Published via MCP tool `publish_edition(itemIds, durationHours)` (validates item uniqueness, accessibility, and computes expiry).
-  - Retrieved via `GET /edition` (returns populated article objects in preserved order). Returns 404 when expired or absent.
-  - Dismissed/deleted via `DELETE /edition`.
-  - Sync change log delivers `edition` entity with `itemIds`, `revision`, `expiresAt`.
+- **Shared Edition „Deine Zeitung“ (`edition`, `edition.automatic`, `edition.revisions`)**:
+  - The server creates automatic issues; an active MCP-curated issue takes priority until expiry or dismissal.
+  - `GET /edition` returns populated articles in preserved order; `/edition/state` returns the retained revision even after expiry or dismissal. Reads never generate an issue.
+  - `POST /edition/generate` ensures an issue exists or requests a new automatic selection. UUID request IDs make retries safe; forced generation requires a revision.
+  - `publish_edition` accepts a conditional revision, UUID request ID, optional title and summary, and a future expiry (default 24 hours, maximum seven days).
+  - `GET/PATCH /native-preferences` syncs app-only folder order, newspaper visibility and selection preferences. It has no effect on the web folder list or article stream.
+  - See [editions.md](editions.md) for defaults, lifecycle, scheduler, MCP workflow, first-time adoption and offline handling.
 
 - **SQLite FTS5 Full-Text Search (`search.fts`)**:
   - Migration `0020_fts.sql` adds virtual table `items_fts` (`title`, `content_snippet`, `content_html`, `full_content_html`) with `unicode61 remove_diacritics 2` tokenization, backed by database triggers on `items` for insert, update, delete.

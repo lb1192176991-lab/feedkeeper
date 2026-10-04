@@ -12,7 +12,6 @@ import {
   addMutedKeyword,
   canAccessItem,
   createFolder,
-  deleteEdition,
   deleteFolder,
   deleteItemNote,
   findFeedById,
@@ -20,7 +19,6 @@ import {
   findItemForUser,
   findItemNote,
   noteConflictState,
-  getEdition,
   isUserSubscribed,
   itemsWithNotes,
   listFoldersForUser,
@@ -40,6 +38,9 @@ import { SsrfBlockedError, normalizeUrlCandidate } from "../../feeds/ssrfGuard.j
 import { buildOverview } from "../../mcp/digest.js";
 import { decodeCursor, encodeCursor } from "../../mcp/items.js";
 import { readingPositions, serializeItem, serializeSubscriptionDetail } from "./serialize.js";
+import { dismissEdition, editionCandidates, generateEdition, generateEditionSchema, getEdition, getEditionState, type ServerEdition } from "../../native/editions.js";
+import { getNativePreferences, patchNativePreferences } from "../../native/preferences.js";
+import { NativeError } from "../../native/requests.js";
 
 export const resourcesRouter = Router();
 
@@ -535,30 +536,73 @@ resourcesRouter.get("/notes/export", (req, res) => {
 
 // ---- Curated Edition ("Deine Zeitung") ------------------------------------
 
-resourcesRouter.get("/edition", (req, res) => {
-  const edition = getEdition(req.user!.id);
-  if (!edition) {
-    return void res.status(404).json({ error: "no_edition", message: "No active edition available" });
-  }
+function editionResponse(req: Request, edition: ServerEdition) {
   const rows = edition.itemIds
     .map((id) => findItemForUser(req.user!.id, id))
     .filter((row): row is NonNullable<typeof row> => Boolean(row));
   const progress = readingPositions(req.user!.id, rows.map((r) => r.id));
   const hasNotes = itemsWithNotes(req.user!.id, rows.map((r) => r.id));
   const prepared = prepare(rows, req, "original");
-  res.json({
-    revision: edition.revision,
-    createdAt: edition.createdAt,
-    updatedAt: edition.updatedAt,
-    expiresAt: edition.expiresAt,
-    itemIds: edition.itemIds,
+  return {
+    ...edition,
     items: prepared.map((row) => serializeItem(row, progress, false, hasNotes.has(row.id))),
+  };
+}
+
+function nativeAction(res: import("express").Response, action: () => void) {
+  res.setHeader("Cache-Control", "private, no-store");
+  try { action(); } catch (error) {
+    if (!(error instanceof NativeError)) throw error;
+    res.status(error.status).json({ error: error.code, ...(error.current !== undefined ? { current: error.current } : {}) });
+  }
+}
+
+resourcesRouter.get("/native-preferences", (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json(getNativePreferences(req.user!.id));
+});
+
+resourcesRouter.patch("/native-preferences", (req, res) => {
+  nativeAction(res, () => res.json(patchNativePreferences(req.user!.id, req.body)));
+});
+
+resourcesRouter.get("/edition", (req, res) => {
+  nativeAction(res, () => {
+    const edition = getEdition(req.user!.id);
+    if (!edition) return void res.status(404).json({ error: "no_edition", current: getEditionState(req.user!.id) });
+    res.json(editionResponse(req, edition));
+  });
+});
+
+resourcesRouter.get("/edition/state", (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json(getEditionState(req.user!.id));
+});
+
+resourcesRouter.get("/edition/candidates", (req, res) => {
+  const parsed = z.object({ limit: z.coerce.number().int().min(1).max(200).default(100) }).safeParse(req.query);
+  if (!parsed.success) return invalid(res);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({ preferences: getNativePreferences(req.user!.id), current: getEditionState(req.user!.id), candidates: editionCandidates(req.user!.id, new Date(), parsed.data.limit) });
+});
+
+resourcesRouter.post("/edition/generate", (req, res) => {
+  const parsed = generateEditionSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed.error.flatten());
+  nativeAction(res, () => {
+    const edition = generateEdition(req.user!.id, parsed.data);
+    if (!edition) return void res.status(404).json({ error: "no_edition", current: getEditionState(req.user!.id) });
+    res.json(editionResponse(req, edition));
   });
 });
 
 resourcesRouter.delete("/edition", (req, res) => {
-  deleteEdition(req.user!.id);
-  res.status(204).end();
+  const parsed = z.object({ expectedRevision: z.number().int().min(0).optional(), requestId: z.uuid().optional() }).strict().safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res);
+  nativeAction(res, () => {
+    dismissEdition(req.user!.id, parsed.data);
+    res.status(204).end();
+  });
 });
 
 // ---- Images --------------------------------------------------------------

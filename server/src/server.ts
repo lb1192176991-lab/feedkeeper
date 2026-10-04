@@ -14,6 +14,7 @@ import { startPollingScheduler } from "./feeds/poller.js";
 import { startCleanupScheduler } from "./feeds/cleanup.js";
 import { repairEncodedText } from "./feeds/repository.js";
 import { pruneArchive, scheduleMissingArchives } from "./feeds/archive.js";
+import { startEditionScheduler } from "./native/editions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = join(__dirname, "../../web/dist");
@@ -26,6 +27,7 @@ const pendingArchives = scheduleMissingArchives();
 if (pendingArchives > 0) console.log(`[archive] archiving ${pendingArchives} saved articles in the background`);
 startPollingScheduler();
 startCleanupScheduler();
+startEditionScheduler();
 
 const app = express();
 

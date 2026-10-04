@@ -23,6 +23,7 @@ tags:
   - { name: Articles }
   - { name: Notes }
   - { name: Edition }
+  - { name: NativePreferences }
   - { name: Images }
 paths:
   /meta:
@@ -232,7 +233,7 @@ paths:
     get:
       tags: [Images]
       summary: The feed's raster icon, delivered by this server
-      description: SVG and ICO sources are converted to PNG. Icons are rechecked during weekly feed polls, including when the feed returns 304. A changed image produces a new iconHash and a subscription upsert in /sync.
+      description: Discovery prefers SVG artwork, then the largest declared raster or touch icons, including linked web app manifests. SVG sources are rendered as 512-pixel-wide PNGs; ICO sources use their largest embedded image. Raster sources keep their resolution. Failed candidates fall back to the next declared image, then the previous source and favicon.ico. Icons are rechecked during weekly feed polls, including when the feed returns 304. A changed image produces a new iconHash and a subscription upsert in /sync.
       parameters:
         - { $ref: "#/components/parameters/Id" }
         - { name: v, in: query, schema: { type: string }, description: "Optional content hash for immutable caching" }
@@ -508,14 +509,114 @@ paths:
     get:
       tags: [Edition]
       summary: Central curated edition
+      description: |
+        The active automatic or MCP-curated issue, preserving itemIds order. Reading and
+        refreshing do not reshuffle it. This GET never generates an issue. Expired and dismissed
+        issues return 404 with current EditionState; network errors must not discard offline copies.
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Edition" } } } }
-        "404": { description: No active edition available }
+        "404": { description: "no_edition, with current EditionState", content: { application/json: { schema: { $ref: "#/components/schemas/EditionError" } } } }
     delete:
       tags: [Edition]
       summary: Dismiss or delete active curated edition
+      description: |
+        Dismisses the shared issue and retains its revision. Automatic scheduling waits until
+        the next time slot. New clients supply expectedRevision and requestId; an empty body
+        remains supported for older clients. The receipt is retained for at least 35 days.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                expectedRevision: { type: integer, minimum: 0 }
+                requestId: { type: string, format: uuid }
       responses:
         "204": { description: Done }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "409": { description: "revision_conflict with current EditionState, or request_id_reused", content: { application/json: { schema: { $ref: "#/components/schemas/EditionError" } } } }
+  /edition/state:
+    get:
+      tags: [Edition]
+      summary: Current issue or retained revision after expiry and dismissal
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EditionState" } } } }
+  /edition/candidates:
+    get:
+      tags: [Edition]
+      summary: Compact candidates and preferences for curating an issue
+      description: Unread subscribed articles from the last seven days, excluding muted keywords and hidden app sections. Candidate gathering is bounded to 40 per source and 4000 total; the shortlist starts with a diversified selection. Original HTML is not included.
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [preferences, current, candidates]
+                properties:
+                  preferences: { $ref: "#/components/schemas/NativePreferences" }
+                  current: { $ref: "#/components/schemas/EditionState" }
+                  candidates: { type: array, items: { $ref: "#/components/schemas/EditionCandidate" } }
+        "400": { $ref: "#/components/responses/Invalid" }
+  /edition/generate:
+    post:
+      tags: [Edition]
+      summary: Ensure an automatic issue exists or request a new selection
+      description: |
+        Defaults to keeping an active issue, including a curated one. force=true requires
+        expectedRevision and never replaces active curation; dismiss that issue explicitly first.
+        An unchanged selection keeps its ID and revision. With no eligible articles or a dismissal
+        in the current slot this returns 404. Reading is not a trigger for replacement.
+        requestId replays the original result for at least 35 days; a new action needs a new UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId]
+              properties:
+                requestId: { type: string, format: uuid }
+                expectedRevision: { type: integer, minimum: 0 }
+                force: { type: boolean, default: false, description: Requires expectedRevision when true }
+      responses:
+        "200": { description: Active issue, content: { application/json: { schema: { $ref: "#/components/schemas/Edition" } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "404": { description: "no_edition, with current EditionState", content: { application/json: { schema: { $ref: "#/components/schemas/EditionError" } } } }
+        "409": { description: "revision_conflict or curated_edition_active with current EditionState, or request_id_reused", content: { application/json: { schema: { $ref: "#/components/schemas/EditionError" } } } }
+  /native-preferences:
+    get:
+      tags: [NativePreferences]
+      summary: Shared app presentation and edition preferences
+      description: Defaults have revision 0 and updatedAt null until first written. Reading preferences never opts a web-only user into automatic editions. These settings have no effect on web folder ordering or web article filters.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/NativePreferences" } } } }
+    patch:
+      tags: [NativePreferences]
+      summary: Patch app preferences with revision and replay protection
+      description: |
+        Fields not supplied remain unchanged; arrays replace their whole field. IDs must be unique
+        and refer to folders owned by the user. folderOrder may include null once for the unfiled
+        section; folders omitted from this order append in GET /folders order. Renames retain IDs;
+        deletion atomically prunes those IDs and emits a native_preferences sync change.
+        First-time local adoption uses expectedRevision=0. A conflict returns current settings;
+        retain the offline change and merge or ask the user instead of silently overwriting.
+        requestId replays the original response for at least 35 days, even after newer updates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NativePreferencesPatch" }
+      responses:
+        "200": { description: Updated or unchanged, content: { application/json: { schema: { $ref: "#/components/schemas/NativePreferences" } } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "404": { description: folder_not_found }
+        "409": { description: "revision_conflict with current NativePreferences, or request_id_reused", content: { application/json: { schema: { $ref: "#/components/schemas/NativePreferencesError" } } } }
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer }
@@ -551,6 +652,7 @@ components:
                 readDays: { type: integer, description: "Read articles older than this many days are removed" }
                 maxDays: { type: integer, description: "All articles older than this many days are removed" }
                 maxItemsPerFeed: { type: integer, description: "Only the newest articles up to this number are kept per feed" }
+                protectActiveEdition: { type: boolean, description: Preserve active edition articles in offline copies, including read articles }
         minClientVersion: { type: [string, "null"] }
     PairingCode:
       type: object
@@ -653,16 +755,93 @@ components:
       properties:
         error: { type: string, enum: [item_not_found, note_not_found] }
         current: { $ref: "#/components/schemas/NoteConflictState", description: "Present for note_not_found" }
-    Edition:
+    EditionMetadata:
       type: object
-      required: [revision, createdAt, updatedAt, itemIds, items]
+      required: [id, revision, source, period, createdAt, updatedAt, expiresAt, preferencesRevision, title, summary, itemIds]
       properties:
+        id: { type: string, description: Opaque issue identity; newly published issues use UUIDs }
         revision: { type: integer }
+        source: { type: string, enum: [automatic, curated] }
+        period: { type: string, enum: [morning, midday, evening, late] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-        expiresAt: { type: [string, "null"], format: date-time }
-        itemIds: { type: array, items: { type: integer } }
-        items: { type: array, items: { $ref: "#/components/schemas/Item" } }
+        expiresAt: { type: string, format: date-time }
+        preferencesRevision: { type: integer, minimum: 0 }
+        title: { type: [string, "null"], maxLength: 200 }
+        summary: { type: [string, "null"], maxLength: 2000, description: Optional editorial text; treat as untrusted plain text }
+        itemIds: { type: array, minItems: 1, maxItems: 24, uniqueItems: true, items: { type: integer, minimum: 1 } }
+    Edition:
+      allOf:
+        - { $ref: "#/components/schemas/EditionMetadata" }
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/Item" } }
+    EditionState:
+      type: object
+      required: [revision, status, edition]
+      properties:
+        revision: { type: integer, minimum: 0, description: Monotonic slot revision, retained after dismissal and expiry }
+        status: { type: string, enum: [none, active, expired, dismissed] }
+        edition:
+          description: Edition metadata including ordered itemIds, without populated items; null when inactive
+          oneOf:
+            - { type: "null" }
+            - { $ref: "#/components/schemas/EditionMetadata" }
+    EditionError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, enum: [no_edition, revision_conflict, request_id_reused, curated_edition_active] }
+        current: { $ref: "#/components/schemas/EditionState" }
+    NativePreferencesError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, enum: [revision_conflict, request_id_reused] }
+        current: { $ref: "#/components/schemas/NativePreferences" }
+    EditionCandidate:
+      type: object
+      required: [id, subscriptionId, folderId, title, url, publishedAt, snippet, imageUrl, readingMinutes, previouslySelected, score]
+      properties:
+        id: { type: integer }
+        subscriptionId: { type: integer }
+        folderId: { type: [integer, "null"] }
+        title: { type: [string, "null"] }
+        url: { type: [string, "null"] }
+        publishedAt: { type: string, format: date-time }
+        snippet: { type: [string, "null"] }
+        imageUrl: { type: [string, "null"], description: Publisher URL; native apps load reader images through the authenticated proxy }
+        readingMinutes: { type: integer, minimum: 1, description: Approximate length based on cached content }
+        previouslySelected: { type: boolean, description: Appeared in a retained issue within the last 72 hours }
+        score: { type: number, description: Base freshness and preference score before diversity adjustments }
+    NativePreferences:
+      type: object
+      required: [revision, updatedAt, timeZone, editionSize, readingMinutes, folderOrder, hiddenFolderIds, preferredFolderIds, showUnfiled]
+      properties:
+        revision: { type: integer, minimum: 0 }
+        updatedAt: { type: [string, "null"], format: date-time }
+        timeZone: { type: string, maxLength: 100, default: UTC, description: Shared IANA time zone }
+        editionSize: { type: integer, minimum: 1, maximum: 24, default: 24 }
+        readingMinutes: { type: [integer, "null"], minimum: 5, maximum: 180, default: null }
+        folderOrder: { type: array, maxItems: 1001, uniqueItems: true, items: { type: [integer, "null"], minimum: 1 } }
+        hiddenFolderIds: { type: array, maxItems: 1000, uniqueItems: true, items: { type: integer, minimum: 1 } }
+        preferredFolderIds: { type: array, maxItems: 1000, uniqueItems: true, items: { type: integer, minimum: 1 } }
+        showUnfiled: { type: boolean, default: true }
+    NativePreferencesPatch:
+      type: object
+      additionalProperties: false
+      required: [requestId, expectedRevision]
+      properties:
+        requestId: { type: string, format: uuid }
+        expectedRevision: { type: integer, minimum: 0 }
+        timeZone: { type: string, maxLength: 100, description: IANA time zone }
+        editionSize: { type: integer, minimum: 1, maximum: 24 }
+        readingMinutes: { type: [integer, "null"], minimum: 5, maximum: 180 }
+        folderOrder: { type: array, maxItems: 1001, uniqueItems: true, items: { type: [integer, "null"], minimum: 1 } }
+        hiddenFolderIds: { type: array, maxItems: 1000, uniqueItems: true, items: { type: integer, minimum: 1 } }
+        preferredFolderIds: { type: array, maxItems: 1000, uniqueItems: true, items: { type: integer, minimum: 1 } }
+        showUnfiled: { type: boolean }
     SyncPage:
       type: object
       properties:
@@ -673,7 +852,7 @@ components:
       type: object
       properties:
         seq: { type: integer }
-        entity: { type: string, enum: [item_state, subscription, folder, muted_keyword, note, edition] }
+        entity: { type: string, enum: [item_state, subscription, folder, muted_keyword, note, edition, native_preferences] }
         id: { type: integer }
         op: { type: string, enum: [upsert, delete] }
         data: { type: object, description: "Current data for upserts. Note deletions carry {revision}; other deletions omit data." }

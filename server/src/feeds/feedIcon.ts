@@ -5,7 +5,7 @@ import { db } from "../db/index.js";
 import { fetchImage } from "./fetcher.js";
 import { detectImageType } from "./archive.js";
 
-const MAX_ICON_BYTES = 256 * 1024;
+const MAX_ICON_BYTES = 1024 * 1024;
 const TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CACHED = 500;
 
@@ -43,8 +43,8 @@ export function canAccessFeed(userId: number, feedId: number): boolean {
   );
 }
 
-function candidates(feed: { icon_url: string | null; site_url: string | null; url: string }): string[] {
-  const urls = new Set<string>();
+function candidates(feed: { icon_url: string | null; site_url: string | null; url: string }, declaredUrls: string[]): string[] {
+  const urls = new Set<string>(declaredUrls);
   if (feed.icon_url) urls.add(feed.icon_url);
   for (const source of [feed.site_url, feed.url]) {
     try {
@@ -59,7 +59,7 @@ function candidates(feed: { icon_url: string | null; site_url: string | null; ur
 /** Keep the same raster icon in every client, including clients without SVG or ICO support. */
 function rasterIcon(buffer: Buffer, mime: string): { buffer: Buffer; mime: string } {
   if (mime === "image/svg+xml") {
-    const svg = new Resvg(buffer, { fitTo: { mode: "width", value: 128 }, font: { loadSystemFonts: false } });
+    const svg = new Resvg(buffer, { fitTo: { mode: "width", value: 512 }, font: { loadSystemFonts: false } });
     if (svg.width > 4096 || svg.height > 4096 || svg.width < 1 || svg.height < 1 ||
         svg.width / svg.height > 8 || svg.height / svg.width > 8) throw new Error("Invalid SVG icon size");
     return { buffer: svg.render().asPng(), mime: "image/png" };
@@ -89,15 +89,19 @@ export function storeFeedIcon(feedId: number, buffer: Buffer, mime: string): Fee
 }
 
 /** Re-check remote candidates during the weekly feed poll, even if a stored icon exists. */
-export async function refreshFeedIcon(feedId: number, siteUrl?: string | null): Promise<FeedIcon | null> {
+export async function refreshFeedIcon(feedId: number, siteUrl?: string | null, declaredUrls: string[] = []): Promise<FeedIcon | null> {
   const feed = db.prepare<[number], { icon_url: string | null; site_url: string | null; url: string }>(
     "SELECT icon_url, site_url, url FROM feeds WHERE id = ?",
   ).get(feedId);
-  for (const url of feed ? candidates({ ...feed, site_url: siteUrl ?? feed.site_url }) : []) {
+  for (const url of feed ? candidates({ ...feed, site_url: siteUrl ?? feed.site_url }, declaredUrls) : []) {
     try {
       const { buffer } = await fetchImage(url, MAX_ICON_BYTES);
       const mime = detectIconType(buffer);
-      if (mime) return storeFeedIcon(feedId, buffer, mime);
+      if (mime) {
+        const icon = storeFeedIcon(feedId, buffer, mime);
+        db.prepare("UPDATE feeds SET icon_url = ? WHERE id = ?").run(url, feedId);
+        return icon;
+      }
     } catch {
       // Keep the last good icon and try the next candidate.
     }

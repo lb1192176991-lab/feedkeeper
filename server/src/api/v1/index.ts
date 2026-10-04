@@ -32,6 +32,9 @@ const FEATURES = [
   "folder-icons",
   "notes",
   "edition",
+  "edition.automatic",
+  "edition.revisions",
+  "native-preferences",
   "search.fts",
 ];
 
@@ -52,6 +55,7 @@ v1Router.get("/meta", (_req, res) => {
         readDays: retention.retentionReadDays,
         maxDays: retention.retentionMaxDays,
         maxItemsPerFeed: retention.retentionMaxItemsPerFeed,
+        protectActiveEdition: true,
       },
     },
     minClientVersion: null,

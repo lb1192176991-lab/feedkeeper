@@ -4,6 +4,23 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-04
+
+### Added
+- Automatic editions for native apps: the server puts together up to 24 unread stories using freshness, preferred sections, source diversity and duplicate detection. A shared time zone defines morning, midday, evening and late issues; a reading-time budget can keep an issue short.
+- App-only reading preferences: `GET/PATCH /api/v1/native-preferences` synchronizes section order, newspaper visibility, preferred sections, time zone and edition size. Stable folder IDs survive renames, deleted folders are removed from the preferences, and the web reader keeps its existing category order and filters.
+- Edition state, candidates and generation endpoints: `/api/v1/edition/state`, `/edition/candidates` and `/edition/generate`. Issue identities and revisions are retained across expiry and dismissal, and active issue articles are protected from retention cleanup and unsubscribing until the issue ends.
+- MCP tools `get_edition`, `get_edition_candidates`, `generate_edition`, `dismiss_edition`, `get_native_preferences` and `update_native_preferences`. Agents can inspect the current issue and shared preferences, curate a selection, and publish it with revision checks and safe retries.
+
+### Changed
+- Curated editions take priority over automatic issues until expiry, defaulting to 24 hours and capped at seven days. `publish_edition` accepts an optional title, introduction, expected revision and request ID. Reading an article or refreshing feeds keeps the current issue in place.
+- Native preference writes and edition commands use UUID request IDs with receipts retained for at least 35 days. Conflicts return the current state; changing the payload of an already used request ID is rejected.
+- Feed icons prefer SVG artwork and the largest declared raster or touch icons, including icons from web app manifests. Unavailable candidates fall back to the next declared image, then the previous source and `/favicon.ico`.
+- SVG icons are stored as 512-pixel PNGs for larger native displays. Existing feeds recheck their icons on the next poll, retaining the previous image until a replacement is available.
+
+### Fixed
+- New issues receive their own identity and creation time. Expiry and dismissal are delivered through native sync, and recreating an issue no longer resets its revision.
+
 ## [0.10.1] - 2026-10-03
 
 ### Changed
@@ -152,7 +169,9 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/visualfusion/feedkeeper/compare/v0.10.1...v0.11.0
+[0.10.1]: https://github.com/visualfusion/feedkeeper/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/visualfusion/feedkeeper/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/visualfusion/feedkeeper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/visualfusion/feedkeeper/compare/v0.7.0...v0.8.0

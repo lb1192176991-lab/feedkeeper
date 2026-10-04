@@ -21,7 +21,6 @@ import {
   updateSubscriptionFolder,
   applyToItems,
   canAccessItem,
-  publishEdition,
 } from "../feeds/repository.js";
 import type { TokenScope } from "../auth/tokens.js";
 import { getItemForMcp, listItemsPage } from "./items.js";
@@ -37,6 +36,9 @@ import { discoverFeeds } from "../feeds/discovery.js";
 import { findUserById } from "../auth/users.js";
 import { getDatabaseStats, runCleanup } from "../feeds/cleanup.js";
 import { APP_VERSION } from "../version.js";
+import { dismissEdition, editionCandidates, generateEdition, generateEditionSchema, getEditionState, publishCuratedEdition, publishEditionFields } from "../native/editions.js";
+import { getNativePreferences, patchNativePreferences, preferencePatchSchema } from "../native/preferences.js";
+import { NativeError } from "../native/requests.js";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
@@ -532,38 +534,59 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     },
   );
 
-  if (scope === "write") server.registerTool(
-    "publish_edition",
-    {
-      title: "Publish curated edition",
-      description: "Publishes an ordered list of 1 to 24 article IDs as the curated daily edition for the current user.",
-      inputSchema: {
-        itemIds: z.array(z.number().int().positive()).min(1).max(24).describe("Ordered list of 1 to 24 article IDs"),
-        expiresAt: z.string().datetime({ offset: true }).optional().describe("Optional ISO date-time when the edition expires"),
-        durationHours: z.number().positive().max(168).optional().describe("Alternative to expiresAt: duration in hours from now until expiry (e.g. 24)"),
-      },
-    },
-    async ({ itemIds, expiresAt, durationHours }) => {
-      const seen = new Set<number>();
-      const duplicates = itemIds.filter((id) => (seen.has(id) ? true : (seen.add(id), false)));
-      if (duplicates.length > 0) {
-        return errorResult(`itemIds must not contain duplicates (duplicate IDs: ${duplicates.join(", ")})`);
-      }
+  const editionAction = (action: () => unknown) => {
+    try { return textResult(action()); }
+    catch (error) {
+      if (!(error instanceof NativeError)) throw error;
+      return { ...textResult({ error: error.code, ...(error.current !== undefined ? { current: error.current } : {}) }), isError: true as const };
+    }
+  };
 
-      const inaccessible = itemIds.filter((id) => !canAccessItem(userId, id));
-      if (inaccessible.length > 0) {
-        return errorResult(`Invalid or inaccessible article IDs: ${inaccessible.join(", ")}`);
-      }
+  server.registerTool("get_native_preferences", {
+    title: "Get native reading preferences",
+    description: "Returns the user's app-only folder order, newspaper exclusions, preferred sections, time zone and edition size. These settings do not change the web reader.",
+    inputSchema: {},
+  }, async () => textResult(getNativePreferences(userId)));
 
-      let expiry = expiresAt ?? null;
-      if (!expiry && durationHours) {
-        expiry = new Date(Date.now() + durationHours * 3600_000).toISOString();
-      }
+  server.registerTool("get_edition", {
+    title: "Get current edition",
+    description: "Returns the authoritative edition state and revision, including when absent, expired or dismissed. Call before publishing with expectedRevision.",
+    inputSchema: {},
+  }, async () => textResult(getEditionState(userId)));
 
-      const edition = publishEdition(userId, itemIds, expiry);
-      return textResult(edition);
-    },
-  );
+  server.registerTool("get_edition_candidates", {
+    title: "Get edition candidates",
+    description: "Returns a bounded shortlist of unread articles from the last seven days, respecting muted keywords and app-only section visibility. Includes the current revision and user preferences. Use get_item to inspect selected articles, then publish_edition with expectedRevision and a stable requestId.",
+    inputSchema: { limit: z.number().int().min(1).max(200).default(100) },
+  }, async ({ limit }) => textResult({ preferences: getNativePreferences(userId), current: getEditionState(userId), candidates: editionCandidates(userId, new Date(), limit) }));
+
+  if (scope === "write") server.registerTool("update_native_preferences", {
+    title: "Update native reading preferences",
+    description: "Patches app-only preferences using expectedRevision and a UUID requestId. Retried requests return their original result; conflicts include the current settings. Folder IDs must belong to the current user. Never changes the web folder list or stream.",
+    inputSchema: preferencePatchSchema.shape,
+  }, async (input) => editionAction(() => patchNativePreferences(userId, input)));
+
+  if (scope === "write") server.registerTool("publish_edition", {
+    title: "Publish curated edition",
+    description: "Publishes an ordered list of 1 to 24 accessible article IDs. Curated editions override automatic ones until expiry (default 24 hours, maximum seven days). App-only hidden sections and muted keywords are respected. Supply the revision from get_edition as expectedRevision and a UUID requestId for conflict detection and safe retries. Optional title and summary are editorial text; original articles stay unchanged.",
+    inputSchema: publishEditionFields,
+  }, async (input) => editionAction(() => publishCuratedEdition(userId, input)));
+
+  if (scope === "write") server.registerTool("generate_edition", {
+    title: "Generate an automatic edition",
+    description: "Ensures an automatic edition exists without disturbing a valid current issue. force=true requests a new automatic selection and requires expectedRevision. A valid curated edition must be explicitly dismissed first. Use a stable UUID requestId for retries.",
+    inputSchema: generateEditionSchema.shape,
+  }, async (input) => editionAction(() => {
+    const parsed = generateEditionSchema.safeParse(input);
+    if (!parsed.success) throw new NativeError("invalid_input");
+    return { edition: generateEdition(userId, parsed.data), current: getEditionState(userId) };
+  }));
+
+  if (scope === "write") server.registerTool("dismiss_edition", {
+    title: "Dismiss the current edition",
+    description: "Explicitly dismisses the current edition, including curated issues, using a revision and stable UUID requestId. Automatic scheduling waits until the next time slot; generate_edition with force=true can start a new issue immediately.",
+    inputSchema: { requestId: z.uuid(), expectedRevision: z.number().int().min(0) },
+  }, async (input) => editionAction(() => dismissEdition(userId, input)));
 
   const currentUser = findUserById(userId);
   if (scope === "write" && currentUser?.role === "admin") {

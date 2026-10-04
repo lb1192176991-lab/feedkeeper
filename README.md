@@ -197,7 +197,13 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `remove_muted_keyword` | Remove a muted keyword rule |
 | `export_opml` | Export all subscribed feeds as an OPML 2.0 XML string |
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
-| `publish_edition` | Publish an ordered list of 1 to 24 article IDs as the curated daily edition |
+| `get_edition` | Read the current issue, source and revision, including expired or dismissed state |
+| `get_edition_candidates` | Get compact candidates respecting app section preferences and muted keywords |
+| `publish_edition` | Publish an ordered curated issue with optional editorial text, expiry, revision checks and safe retries |
+| `generate_edition` | Ensure an automatic issue exists, or explicitly request a new selection |
+| `dismiss_edition` | Dismiss the shared issue with revision and replay protection |
+| `get_native_preferences` | Read app-only section order, newspaper visibility and edition preferences |
+| `update_native_preferences` | Patch shared app preferences without changing the web reader |
 | `cleanup_database` | *(Admin only)* Purge old items and reclaim disk space after deletions |
 
 Besides tools, the server offers prompts (`daily_briefing`, `catch_up_on_topic`, `saved_reading_list`, `triage_unread`) and resources (`feedkeeper://feeds`, `opml`, `saved`, `digest` and `feedkeeper://items/{id}`) that clients can show as ready-made actions.
@@ -206,7 +212,7 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 
 ## Native apps
 
-A native **iOS app** for FeedKeeper is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides full-text search with FTS5, synchronized article notes, SF Symbols for ressorts/categories, curated editions, and end-to-end encrypted push notifications via an external zero-knowledge relay (see [docs/design/native-api.md](docs/design/native-api.md)). Third-party clients are welcome to build on the same API.
+A native app for **iOS, iPadOS and macOS** is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides full-text search with FTS5, synchronized article notes, SF Symbols for sections/categories, and shared automatic or MCP-curated editions. App-only section order and newspaper visibility sync without changing the web reader. See [the edition contract](docs/design/editions.md) for generation, priorities, preferences and offline handling. Native push through an external relay remains planned (see [docs/design/native-api.md](docs/design/native-api.md)). Third-party clients are welcome to build on the same API.
 
 ## Security
 
