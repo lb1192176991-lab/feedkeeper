@@ -101,6 +101,10 @@ export function unsubscribeFromFeed(userId: number, feedId: number): void {
   if (!isUserSubscribed(userId, feedId)) {
     throw new FeedError("not_subscribed");
   }
+  const feed = findFeedById(feedId);
+  if (feed?.is_system_inbox) {
+    throw new FeedError("cannot_unsubscribe_inbox");
+  }
   unsubscribeRepo(userId, feedId);
 }
 

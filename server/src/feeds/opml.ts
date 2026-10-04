@@ -58,7 +58,7 @@ function feedToOutlineXml(s: SubscribedFeed, indent = "    "): string {
  * Generates standard OPML 2.0 XML representation of all subscribed feeds for a user.
  */
 export function generateOpml(userId: number): string {
-  const subscriptions = listSubscriptionsForUser(userId);
+  const subscriptions = listSubscriptionsForUser(userId).filter((s) => !s.is_system_inbox);
 
   // Group feeds by folder
   const unfiled: SubscribedFeed[] = [];

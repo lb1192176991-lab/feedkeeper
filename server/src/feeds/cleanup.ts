@@ -126,6 +126,7 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
          FROM items i
          WHERE i.id NOT IN (SELECT item_id FROM item_bookmarks)
            AND i.id NOT IN (SELECT item_id FROM item_notes)
+           AND i.feed_id NOT IN (SELECT id FROM feeds WHERE is_system_inbox = 1)
            AND NOT EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected
              WHERE selected.value = i.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now'))
            AND i.id IN (SELECT item_id FROM item_reads)
@@ -146,6 +147,7 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
       `DELETE FROM items
        WHERE id NOT IN (SELECT item_id FROM item_bookmarks)
          AND id NOT IN (SELECT item_id FROM item_notes)
+         AND feed_id NOT IN (SELECT id FROM feeds WHERE is_system_inbox = 1)
          AND NOT EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected
            WHERE selected.value = items.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now'))
          AND COALESCE(published_at, created_at) <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' days')`,
@@ -159,6 +161,7 @@ export function runCleanup(custom?: Partial<RetentionSettings>): CleanupResult {
       `DELETE FROM items
        WHERE id NOT IN (SELECT item_id FROM item_bookmarks)
          AND id NOT IN (SELECT item_id FROM item_notes)
+         AND feed_id NOT IN (SELECT id FROM feeds WHERE is_system_inbox = 1)
          AND NOT EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected
            WHERE selected.value = items.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now'))
          AND id IN (

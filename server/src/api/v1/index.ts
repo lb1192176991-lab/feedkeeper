@@ -39,6 +39,7 @@ const FEATURES = [
   "search.fts",
   "account-capabilities",
   "mcp",
+  "inbox",
 ];
 
 v1Router.get("/meta", (_req, res) => {

@@ -8,6 +8,8 @@ export interface AccountCapabilities {
     notes: boolean;
     editions: boolean;
     fulltext: boolean;
+    "search.fts": boolean;
+    inbox: boolean;
     [key: string]: boolean;
   };
   manageUrl: string | null;
@@ -28,6 +30,7 @@ class DefaultCapabilitiesProvider implements CapabilitiesProvider {
         editions: true,
         fulltext: true,
         "search.fts": true,
+        inbox: true,
       },
       manageUrl: null,
     };

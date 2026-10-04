@@ -17,6 +17,7 @@ export interface Feed {
   full_text_blocked_at: string | null;
   icon_url: string | null;
   icon_checked_at: string | null;
+  is_system_inbox: number;
   created_at: string;
 }
 
@@ -141,14 +142,15 @@ export function removeFeedIfUnused(feedId: number): void {
       AND NOT EXISTS (SELECT 1 FROM editions e, json_each(e.item_ids) selected
         WHERE selected.value = items.id AND e.status = 'active' AND julianday(e.expires_at) > julianday('now'))`,
   ).run(feedId);
-  db.prepare("DELETE FROM feeds WHERE id = ? AND NOT EXISTS (SELECT 1 FROM items WHERE feed_id = ?)").run(feedId, feedId);
+  db.prepare("DELETE FROM feeds WHERE id = ? AND is_system_inbox = 0 AND NOT EXISTS (SELECT 1 FROM items WHERE feed_id = ?)").run(feedId, feedId);
 }
 
 /** Feeds kept only for saved articles or annotated articles whose last bookmark and note are gone. */
 export function removeUnusedFeeds(): number {
   return db.prepare(
     `DELETE FROM feeds
-     WHERE NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
+     WHERE is_system_inbox = 0
+       AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
        AND NOT EXISTS (SELECT 1 FROM items i JOIN item_bookmarks b ON b.item_id = i.id WHERE i.feed_id = feeds.id)
        AND NOT EXISTS (SELECT 1 FROM items i JOIN item_notes n ON n.item_id = i.id WHERE i.feed_id = feeds.id)
        AND NOT EXISTS (SELECT 1 FROM items i, editions e, json_each(e.item_ids) selected
@@ -215,7 +217,8 @@ export function listFeedsDueForPoll(): Feed[] {
   return db
     .prepare<[], Feed>(
       `SELECT * FROM feeds
-       WHERE EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
+       WHERE is_system_inbox = 0
+         AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_id = feeds.id)
          AND (last_polled_at IS NULL
           OR last_polled_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || poll_interval_minutes || ' minutes'))`,
     )

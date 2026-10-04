@@ -27,6 +27,7 @@ import { getItemForMcp, listItemsPage } from "./items.js";
 import { buildDigest, buildOverview, truncate } from "./digest.js";
 import { registerPromptsAndResources } from "./promptsAndResources.js";
 import { subscribeToFeed, unsubscribeFromFeed, updateFeedSettings, changeFeedUrl, FeedError, MultipleFeedsFoundError } from "../feeds/service.js";
+import { saveToInbox } from "../feeds/inbox.js";
 import { loadFullText } from "../feeds/fullText.js";
 import { pruneArchive, scheduleArchive } from "../feeds/archive.js";
 import { SsrfBlockedError, normalizeUrlCandidate } from "../feeds/ssrfGuard.js";
@@ -155,6 +156,42 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
         unsubscribeFromFeed(userId, feedId);
         return textResult({ ok: true });
       } catch (error) {
+        return errorResult(error instanceof Error ? error.message : String(error));
+      }
+    },
+  );
+
+  if (scope === "write") server.registerTool(
+    "save_to_inbox",
+    {
+      title: "Save article or note to Inbox",
+      description: "Saves a web article URL, raw HTML, text clipping, or markdown note directly into the user's Universal Inbox.",
+      inputSchema: {
+        url: mcpUrlSchema.optional().describe("Web page URL to fetch, extract, and save"),
+        title: z.string().max(500).optional().describe("Optional custom title"),
+        contentHtml: z.string().optional().describe("Optional pre-rendered HTML content"),
+        textContent: z.string().optional().describe("Optional plain text or markdown clipping"),
+        note: z.string().max(20000).optional().describe("Optional note or summary attached to the saved item"),
+      },
+    },
+    async ({ url, title, contentHtml, textContent, note }) => {
+      if (!url && !contentHtml && !textContent) {
+        return errorResult("At least one of url, contentHtml, or textContent must be provided");
+      }
+      if (!hasUserCapability(userId, "inbox")) {
+        return { ...textResult(capabilityDenial(userId, "inbox")), isError: true as const };
+      }
+      try {
+        const result = await saveToInbox(userId, { url, title, contentHtml, textContent, note });
+        return textResult({
+          success: true,
+          itemId: result.itemId,
+          title: result.item.title,
+          url: result.item.link,
+          hasNote: result.hasNote,
+        });
+      } catch (error) {
+        if (error instanceof SsrfBlockedError) return errorResult(error.message);
         return errorResult(error instanceof Error ? error.message : String(error));
       }
     },

@@ -33,6 +33,7 @@ import {
   setItemNote,
   updateFolder,
 } from "../../feeds/repository.js";
+import { saveToInbox, deleteInboxItem } from "../../feeds/inbox.js";
 import { changeFeedUrl, FeedError, MultipleFeedsFoundError, subscribeToFeed, unsubscribeFromFeed, updateFeedSettings } from "../../feeds/service.js";
 import { SsrfBlockedError, normalizeUrlCandidate } from "../../feeds/ssrfGuard.js";
 import { buildOverview } from "../../mcp/digest.js";
@@ -610,6 +611,46 @@ resourcesRouter.delete("/edition", (req, res) => {
     dismissEdition(req.user!.id, parsed.data);
     res.status(204).end();
   });
+});
+
+// ---- Universal Inbox ("Save to FeedKeeper") -------------------------------
+
+const saveInboxSchema = z
+  .object({
+    url: z.string().url().optional(),
+    title: z.string().max(500).optional(),
+    contentHtml: z.string().optional(),
+    textContent: z.string().optional(),
+    note: z.string().max(20000).optional(),
+  })
+  .refine((data) => Boolean(data.url || data.contentHtml || data.textContent), {
+    message: "At least one of url, contentHtml, or textContent must be provided",
+  });
+
+resourcesRouter.post("/inbox", requireCapability("inbox"), async (req, res) => {
+  const parsed = saveInboxSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error.flatten());
+
+  try {
+    const result = await saveToInbox(req.user!.id, parsed.data);
+    const progress = readingPositions(req.user!.id, [result.itemId]);
+    const prepared = prepare([result.item], req, "original");
+    res.status(201).json(serializeItem(prepared[0], progress, true, result.hasNote));
+  } catch (error) {
+    if (error instanceof SsrfBlockedError) {
+      return void res.status(400).json({ error: error.message });
+    }
+    throw error;
+  }
+});
+
+resourcesRouter.delete("/inbox/:id", requireCapability("inbox"), (req, res) => {
+  const id = Number(req.params.id);
+  const deleted = deleteInboxItem(req.user!.id, id);
+  if (!deleted) {
+    return void res.status(404).json({ error: "item_not_found" });
+  }
+  res.status(204).end();
 });
 
 // ---- Images --------------------------------------------------------------

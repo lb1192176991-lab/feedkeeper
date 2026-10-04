@@ -25,6 +25,7 @@ tags:
   - { name: Edition }
   - { name: NativePreferences }
   - { name: Images }
+  - { name: Inbox }
 paths:
   /meta:
     get:
@@ -634,6 +635,41 @@ paths:
         "400": { $ref: "#/components/responses/Invalid" }
         "404": { description: folder_not_found }
         "409": { description: "revision_conflict with current NativePreferences, or request_id_reused", content: { application/json: { schema: { $ref: "#/components/schemas/NativePreferencesError" } } } }
+  /inbox:
+    post:
+      tags: [Inbox]
+      summary: Save a web clipping, URL, or note to Universal Inbox
+      description: Captures an article URL (auto-extracting readable content) or direct content into the user's Inbox.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, format: uri }
+                title: { type: string, maxLength: 500 }
+                contentHtml: { type: string }
+                textContent: { type: string }
+                note: { type: string, maxLength: 20000 }
+      responses:
+        "201":
+          description: Saved to inbox
+          content: { application/json: { schema: { $ref: "#/components/schemas/Article" } } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
+  /inbox/{id}:
+    delete:
+      tags: [Inbox]
+      summary: Delete an item from Universal Inbox
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "204": { description: Done }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer }
