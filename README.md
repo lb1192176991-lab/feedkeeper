@@ -73,6 +73,16 @@ flowchart LR
 
 One Node process serves the built web UI, a REST API, and an MCP endpoint (`/mcp`, using the [Streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports)) — all backed by the same SQLite database and feed poller.
 
+### Web reader, native apps, and MCP
+
+FeedKeeper uses a single backend with clients tailored to different situations:
+
+- **The web reader** is a straightforward browser interface for day-to-day reading, categorizing feeds, and triaging your stream.
+- **Native apps (iOS, iPadOS, macOS)** build on platform features: offline sync via SQLite change logs, personal Markdown notes per article, and daily newspaper editions.
+- **Remote MCP access** lets AI tools curate reading lists, search past items, and inspect candidates using the same APIs.
+
+Features developed for native apps (such as article notes and edition scheduling) are exposed through the open API (`/api/v1`) so third-party clients can use them too.
+
 ## Quick start with Docker
 
 Prebuilt images for `amd64` and `arm64` (including Raspberry Pi) are published to the GitHub Container Registry. You only need Docker, no clone and no build:
@@ -212,7 +222,8 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 
 ## Native apps
 
-A native app for **iOS, iPadOS and macOS** is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides full-text search with FTS5, synchronized article notes, SF Symbols for sections/categories, and shared automatic or MCP-curated editions. App-only section order and newspaper visibility sync without changing the web reader. See [the edition contract](docs/design/editions.md) for generation, priorities, preferences and offline handling. Native push through an external relay remains planned (see [docs/design/native-api.md](docs/design/native-api.md)). Third-party clients are welcome to build on the same API.
+A native app for **iOS, iPadOS and macOS** is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides full-text search with FTS5, synchronized article notes, SF Symbols for sections/categories, and shared automatic or MCP-curated editions. App-only section order and newspaper visibility sync without changing the web reader. See [the edition contract](docs/design/editions.md) for generation, priorities, preferences and offline handling. Native push through an external relay remains planned (see [docs/design/native-api.md](docs/design/native-api.md)).
+Third-party clients are welcome to build on the same API — see [docs/building-clients.md](docs/building-clients.md) for a getting-started guide.
 
 ## Security
 
