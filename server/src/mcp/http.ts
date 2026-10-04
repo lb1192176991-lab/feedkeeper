@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { requireBearerToken } from "../auth/middleware.js";
+import { requireCapability } from "../auth/capabilities.js";
 import { createMcpServerForUser } from "./server.js";
 
 export const mcpRouter = Router();
@@ -8,7 +9,7 @@ export const mcpRouter = Router();
 // Stateless mode: a fresh McpServer + transport per request, scoped to the
 // user resolved from the bearer token. This is what makes the same endpoint
 // safely usable by many different users/clients from anywhere.
-mcpRouter.post("/", requireBearerToken, async (req, res) => {
+mcpRouter.post("/", requireBearerToken, requireCapability("mcp"), async (req, res) => {
   try {
     const server = createMcpServerForUser(req.user!.id, req.tokenScope!);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });

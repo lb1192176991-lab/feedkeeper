@@ -76,6 +76,45 @@ export function McpSettings() {
             <li>{t("settings.mcpStepUrl")}</li>
             <li>{t("settings.mcpStepHeader")}</li>
           </ol>
+          <div className="mt-5 border-t border-[var(--c-border)] pt-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--c-text-muted)]">
+                {t("settings.mcpClaudeTitle")}
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  const snippet = JSON.stringify({
+                    mcpServers: {
+                      feedkeeper: {
+                        url: mcpUrl,
+                        headers: {
+                          Authorization: `Bearer ${freshToken ?? "<YOUR_TOKEN>"}`
+                        }
+                      }
+                    }
+                  }, null, 2);
+                  await navigator.clipboard.writeText(snippet);
+                  alert(t("settings.mcpConfigCopied"));
+                }}
+                className="btn-secondary shrink-0 px-2.5 py-1 text-xs"
+              >
+                {t("settings.mcpCopyConfig")}
+              </button>
+            </div>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-[var(--c-bg)] p-3 text-xs text-[var(--c-text-muted)]">
+{`{
+  "mcpServers": {
+    "feedkeeper": {
+      "url": "${mcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${freshToken ? freshToken : "<YOUR_TOKEN>"}"
+      }
+    }
+  }
+}`}
+            </pre>
+          </div>
         </SettingBlock>
       </SettingsCard>
 

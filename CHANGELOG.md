@@ -4,6 +4,12 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+- Account capabilities negotiation: user endpoints (`GET /api/v1/me` and `GET /api/auth/me`) now expose an `AccountCapabilities` object (`type: "selfhosted"`, `features`, `manageUrl`), allowing clients to discover active capabilities dynamically.
+- Pluggable `CapabilitiesProvider` and `requireCapability` middleware: allows downstream or hosted distributions to customize capability discovery and access control cleanly without patching core logic.
+- Claude Desktop and Cowork configuration snippet in web settings: allows one-click copying of the complete MCP server configuration block including personal access tokens.
+- Capability checks on the Streamable HTTP `/mcp` route ensuring active MCP support.
+
 ## [0.11.0] - 2026-10-04
 
 ### Added

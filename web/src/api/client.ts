@@ -99,6 +99,19 @@ export interface CleanupResult {
   sizeAfter: number;
 }
 
+export interface AccountCapabilities {
+  type: "selfhosted" | string;
+  features: {
+    mcp: boolean;
+    sync: boolean;
+    notes: boolean;
+    editions: boolean;
+    fulltext: boolean;
+    [key: string]: boolean;
+  };
+  manageUrl: string | null;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -106,6 +119,7 @@ export interface User {
   role: "admin" | "user";
   created_at: string;
   avatar_updated_at: string | null;
+  capabilities?: AccountCapabilities;
 }
 
 /** Versioned photo URL so a new upload bypasses the long-lived browser cache. */

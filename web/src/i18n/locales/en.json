@@ -278,6 +278,10 @@
     "devicePairExpired": "This code has expired. Add a device again for a new one.",
     "devicePairDone": "Done",
     "deviceRevoke": "Revoke",
-    "deviceRevokeConfirm": "Revoke \"{{name}}\"? The device will be signed out."
+    "deviceRevokeConfirm": "Revoke \"{{name}}\"? The device will be signed out.",
+    "mcpClaudeTitle": "Use with Claude Desktop or Cowork",
+    "mcpClaudeHint": "Add this snippet to your claude_desktop_config.json to connect Claude directly to your feeds.",
+    "mcpCopyConfig": "Copy Claude config",
+    "mcpConfigCopied": "Config copied!"
   }
 }

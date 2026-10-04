@@ -46,3 +46,33 @@ FeedKeeper uses a compact change log so offline clients stay in step without dow
 - **Article notes**: `GET`, `PUT`, and `DELETE` on `/api/v1/items/{id}/note` let users save personal Markdown notes on any story. Articles with notes are permanently excluded from server retention cleanup.
 - **Full-text search**: `GET /api/v1/search?q=...` uses SQLite FTS5 with BM25 relevance ranking across titles, snippets, cached full text, and personal notes.
 - **Editions**: `GET /api/v1/edition` serves an ordered issue of up to 24 stories, either generated automatically by the server based on time slots and reading preferences, or hand-curated through MCP.
+
+## 6. Account capabilities
+
+Clients can inspect active features and account details via `GET /api/v1/me`. The response includes a `capabilities` object:
+
+```json
+{
+  "id": 1,
+  "email": "reader@example.com",
+  "displayName": "Reader",
+  "role": "user",
+  "scope": "write",
+  "deviceId": 42,
+  "capabilities": {
+    "type": "selfhosted",
+    "features": {
+      "mcp": true,
+      "sync": true,
+      "notes": true,
+      "editions": true,
+      "fulltext": true
+    },
+    "manageUrl": null
+  }
+}
+```
+
+- **`type`**: Indicates the server deployment model (defaults to `"selfhosted"`).
+- **`features`**: Map of active features on the account. Self-hosted instances have all features enabled.
+- **`manageUrl`**: Optional URL to external account administration (if configured by the host).

@@ -278,6 +278,10 @@
     "devicePairExpired": "Dieser Code ist abgelaufen. Füge das Gerät erneut hinzu, um einen neuen zu erhalten.",
     "devicePairDone": "Fertig",
     "deviceRevoke": "Widerrufen",
-    "deviceRevokeConfirm": "„{{name}}“ widerrufen? Das Gerät wird abgemeldet."
+    "deviceRevokeConfirm": "„{{name}}“ widerrufen? Das Gerät wird abgemeldet.",
+    "mcpClaudeTitle": "In Claude Desktop oder Cowork nutzen",
+    "mcpClaudeHint": "Füge diesen Schnipsel in deine claude_desktop_config.json ein, um Claude mit deinen Feeds zu verbinden.",
+    "mcpCopyConfig": "Claude-Konfiguration kopieren",
+    "mcpConfigCopied": "Konfiguration kopiert!"
   }
 }

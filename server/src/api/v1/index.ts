@@ -10,6 +10,7 @@ import { getRetentionSettings } from "../../feeds/cleanup.js";
 import { APP_VERSION } from "../../version.js";
 import { ResyncRequired, currentSeq, listChanges } from "../../sync/changeLog.js";
 import { applyMutations } from "../../sync/mutations.js";
+import { getUserCapabilities } from "../../auth/capabilities.js";
 import { resourcesRouter } from "./resources.js";
 
 /** The API for native apps. See docs/design/native-api.md for the contract and what is still to come. */
@@ -109,7 +110,15 @@ v1Router.use((req, res, next) => {
 
 v1Router.get("/me", (req, res) => {
   const { id, email, display_name, role } = req.user!;
-  res.json({ id, email, displayName: display_name, role, scope: req.tokenScope ?? "write", deviceId: req.tokenKind === "device" ? req.tokenId : null });
+  res.json({
+    id,
+    email,
+    displayName: display_name,
+    role,
+    scope: req.tokenScope ?? "write",
+    deviceId: req.tokenKind === "device" ? req.tokenId : null,
+    capabilities: getUserCapabilities(id),
+  });
 });
 
 v1Router.get("/devices", (req, res) => {

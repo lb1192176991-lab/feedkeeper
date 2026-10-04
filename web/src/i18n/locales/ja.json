@@ -278,6 +278,10 @@
     "devicePairExpired": "このコードは期限切れです。もう一度デバイスを追加して新しいコードを取得してください。",
     "devicePairDone": "完了",
     "deviceRevoke": "取り消す",
-    "deviceRevokeConfirm": "「{{name}}」を取り消しますか？デバイスはサインアウトされます。"
+    "deviceRevokeConfirm": "「{{name}}」を取り消しますか？デバイスはサインアウトされます。",
+    "mcpClaudeTitle": "Claude Desktop または Cowork で利用する",
+    "mcpClaudeHint": "claude_desktop_config.json にこのスニペットを追加すると、Claude をフィードに接続できます。",
+    "mcpCopyConfig": "Claude 設定をコピー",
+    "mcpConfigCopied": "設定をコピーしました！"
   }
 }

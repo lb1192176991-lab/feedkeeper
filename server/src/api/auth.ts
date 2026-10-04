@@ -17,6 +17,7 @@ import {
 } from "../auth/users.js";
 import { AVATAR_MAX_BYTES, detectAvatarType } from "../auth/avatar.js";
 import { verifyPassword } from "../auth/password.js";
+import { getUserCapabilities } from "../auth/capabilities.js";
 
 export const authRouter = Router();
 
@@ -55,7 +56,10 @@ authRouter.post("/logout", (req, res) => {
 });
 
 authRouter.get("/me", requireSession, (req, res) => {
-  res.json(req.user);
+  res.json({
+    ...req.user,
+    capabilities: getUserCapabilities(req.user!.id),
+  });
 });
 
 const profileSchema = z.object({
