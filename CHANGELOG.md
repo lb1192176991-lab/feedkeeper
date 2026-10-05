@@ -4,6 +4,22 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-05
+
+### Added
+- Shared article-content lifecycle for every reader: persistent preparation jobs, per-article extraction outcomes and retry times, content revisions, and item-content changes in native delta sync.
+- Access-checked background preparation for selected articles through POST /api/v1/items/prepare. Ordinary article and bundle reads remain cache-only.
+- Revision-checked MCP content pagination in HTML or plain text, so agents can retrieve all parts of long articles without silently losing the end.
+
+### Changed
+- Automatic full-text preparation prioritizes active editions, saved articles and notes, including protected articles after unsubscribing. The worker uses at most two concurrent requests and one per host, with durable jobs and access/capability checks before execution.
+- Consent failures are remembered per article rather than disabling an entire feed. Paywalls, bot blocks, timeouts and short partial extractions have distinct outcomes; shorter extracts and later feed teasers preserve richer stored content.
+- Native image proxy references cover all article images instead of only the first eight. Existing raster validation, image ownership checks and SSRF protection remain in force.
+- Cached source helpers return complete available source text and content revisions; bounded consumers are responsible for explicit chunking or rejection, rather than unnoticed truncation.
+
+### Fixed
+- Metadata-only content updates do not update FTS5 a second time from nested triggers; reader revisions and full-text search remain consistent.
+
 ## [0.13.0] - 2026-10-05
 
 ### Added
