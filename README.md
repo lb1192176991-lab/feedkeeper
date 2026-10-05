@@ -43,7 +43,7 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
 - **Remote MCP access** — stream items directly into Claude or any MCP-compatible environment via standard Streamable HTTP, with read-only or read-write tokens and cursor-based paging for incremental sync.
 - **Privacy & self-hosting first** — a single Node.js process and one SQLite file. No external database engines, no telemetry, no tracking.
 - **OPML 2.0 import & export** — switch back and forth from Feedly, NetNewsWire, Inoreader, or Reeder at any time.
-- **Article reader** — read feed content in the app, optionally fetch the full article on demand, and browse with keyboard controls. Sites that answer with a cookie-consent or subscription wall are remembered per feed, and full-text fetching can be turned off for any subscription.
+- **Article reader & background preparation** — read feed content in the app, with persistent background full-text extraction, article-level paywall/consent tracking, and offline reader images. Full-text fetching can be tuned per subscription.
 - **List and newspaper views** — switch between a compact list and an editorial layout with wide lead stories and longer previews; phones always use the newspaper layout.
 - **Mobile-friendly web app** — responsive layout with tab navigation and pull to refresh, installable on the home screen, with light, dark and system themes.
 - **Works offline** — a service worker lets the installed app start without a connection. It keeps your saved articles and the newest unread ones on the device with their full text and images, so you can read, search and filter them on the train. Changes such as marking read or saving are kept and sent once you are back online. Switch it off in the settings; cached data is removed when you log out.
@@ -188,6 +188,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `list_feeds` | List subscribed feeds with unread counts and health status, optionally only feeds with errors |
 | `subscribe_feed` | Subscribe to a feed URL or website URL (auto-discovering the feed) |
 | `discover_feeds` | Discover available RSS/Atom feeds on a website URL |
+| `save_to_inbox` | Save a web clipping, URL, or personal note to your inbox with automatic full-text and image archiving |
 | `unsubscribe_feed` | Remove a subscription |
 | `update_feed` | Change a subscription's feed URL, name, poll interval, full-text setting, push notifications or app icon count; a new URL is validated before it replaces the old one |
 | `list_folders` | List folders with feed and unread counts |
@@ -200,8 +201,8 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `get_overview` | Counts for the whole account: unread and saved articles, top feeds, folders and failing feeds |
 | `get_new_items` | Fetch unread items, optionally filtered by feed, search, or bookmarks; can leave out article HTML and shorten summaries |
 | `list_items` | Page through compact items by time added; use cursors to fetch older or newly added items |
-| `get_item` | Fetch one article and its cached content, optionally shortened with `maxChars` |
-| `fetch_full_text` | Download and cache the full article when the feed only has a teaser |
+| `get_item` | Fetch one article and its cached content (HTML or plain text) with optional pagination (`offset`, `nextOffset`, `revision`) |
+| `fetch_full_text` | Download and cache the full article when the feed only has a teaser; use `get_item` for subsequent paginated parts |
 | `search_items` | Search titles and summaries across all items (with optional bookmarks filter) |
 | `mark_read` | Mark one or more items as read |
 | `mark_unread` | Mark one or more items as unread |
@@ -215,7 +216,7 @@ Every tool call is scoped to the token's owner — a client can only see and man
 | `import_opml` | Import feeds from an OPML 2.0 XML string |
 | `get_edition` | Read the current issue, source and revision, including expired or dismissed state |
 | `get_edition_candidates` | Get compact candidates respecting app section preferences and muted keywords |
-| `publish_edition` | Publish an ordered curated issue with optional editorial text, expiry, revision checks and safe retries |
+| `publish_edition` | Publish an ordered curated issue with optional structured topic overviews, expiry, revision checks and safe retries |
 | `generate_edition` | Ensure an automatic issue exists, or explicitly request a new selection |
 | `dismiss_edition` | Dismiss the shared issue with revision and replay protection |
 | `get_native_preferences` | Read app-only section order, newspaper visibility and edition preferences |
@@ -228,7 +229,7 @@ Read-only tokens expose only the tools that leave FeedKeeper data unchanged. `ge
 
 ## Native apps
 
-A native app for **iOS, iPadOS and macOS** is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides full-text search with FTS5, synchronized article notes, SF Symbols for sections/categories, and shared automatic or MCP-curated editions. App-only section order and newspaper visibility sync without changing the web reader. See [the edition contract](docs/design/editions.md) for generation, priorities, preferences and offline handling. Native push through an external relay remains planned (see [docs/design/native-api.md](docs/design/native-api.md)).
+A native app for **iOS, iPadOS and macOS** is in development. It uses the API under `/api/v1`, which is open and described in [docs/openapi.yaml](docs/openapi.yaml): pair a device with a QR code from **Settings → Devices**, sync your subscriptions and reading state incrementally, keep articles offline, and queue changes made without a connection. The API also provides background article preparation (`/items/prepare`), full-text search with FTS5, synchronized article notes, SF Symbols for sections/categories, a personal inbox (`/inbox`), and shared automatic or MCP-curated editions with linked overviews. App-only section order and newspaper visibility sync without changing the web reader. See [the edition contract](docs/design/editions.md) for generation, priorities, preferences and offline handling. Native push through an external relay remains planned (see [docs/design/native-api.md](docs/design/native-api.md)).
 Third-party clients are welcome to build on the same API — see [docs/building-clients.md](docs/building-clients.md) for a getting-started guide.
 
 ## Security
