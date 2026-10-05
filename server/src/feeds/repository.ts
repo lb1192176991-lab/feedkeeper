@@ -1,4 +1,5 @@
 import { db } from "../db/index.js";
+import { articleText } from "./articleContent.js";
 import { decodeEntities } from "./text.js";
 
 export interface Feed {
@@ -32,6 +33,10 @@ export interface Item {
   content_snippet: string | null;
   content_html: string | null;
   full_content_html: string | null;
+  content_revision: number;
+  extraction_status: string;
+  extraction_attempted_at: string | null;
+  extraction_retry_at: string | null;
   image_url: string | null;
   published_at: string | null;
   created_at: string;
@@ -297,7 +302,12 @@ export function upsertItems(
       if (result.changes > 0) {
         inserted++;
       } else {
-        update.run(...values.slice(2), feedId, row.guid);
+        const previous = db.prepare<[number, string], { content_html: string | null }>("SELECT content_html FROM items WHERE feed_id = ? AND guid = ?").get(feedId, row.guid);
+        const next = row.contentHtml;
+        // Some publishers replace complete feed bodies with short teasers on a later poll.
+        const retained = previous?.content_html && next && next.length < previous.content_html.length * 0.9 &&
+          articleText(next).length < articleText(previous.content_html).length * 0.9 ? previous.content_html : next ?? null;
+        update.run(row.title ?? null, row.link ?? null, row.contentSnippet ?? null, retained, row.publishedAt ?? null, row.imageUrl ?? null, feedId, row.guid);
       }
     }
     return inserted;

@@ -89,7 +89,9 @@ test("Universal Inbox: save web clippings, sync, retention protection, and unsub
     assert.equal(saved.title, "Exciting Read It Later Article");
     assert.equal(saved.state.saved, true);
     assert.equal(saved.state.hasNote, true);
-    assert.ok(saved.hasFullText);
+    assert.equal(saved.hasFullText, false, "Very short extractions are not declared complete");
+    assert.ok(saved.contentHtml.includes("software architecture"), "Available extracted content remains readable");
+    assert.equal(saved.content.status, "partial");
 
     // 3. Verify Inbox subscription created and flagged with isInbox
     const syncRes = await call("/sync?since=0");

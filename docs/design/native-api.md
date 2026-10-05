@@ -265,3 +265,61 @@ Status: pairing, `/meta`, change log, `/sync`, `/mutations`, subscriptions, fold
 - Pairing codes live 10 minutes, one per user, with a limit on wrong attempts.
 - The change log is compacted per object; only deletions are remembered for 90 days.
 - Highlights and notes can be exported as Markdown from the start.
+
+## Shared article content and offline preparation
+
+The core owns publisher extraction, independent of client or model vendor. Web readers,
+native apps, archives and MCP reuse the same cached text. No provider prompt, paid model,
+summarization or app license logic belongs to this service.
+
+Item.content contains revision (monotonically increasing publisher/body identity version),
+source (reader, feed or snippet), status, attemptedAt and retryAt. A source identifies what
+is actually available, not a guarantee that the publisher has exposed the entire article.
+Statuses are pending, ready, feed_only, consent_wall, paywall, bot_blocked, timeout, partial
+and failed. ready means an accepted extraction is cached; feed_only means the existing
+feed text was richer than the extraction. Very short extracts remain partial. Access
+barriers are not bypassed. Feed HTML is retained when a later poll supplies a shorter teaser.
+
+Features content.revisions and content.prepare advertise the additive contract.
+POST /items/prepare accepts 1–50 positive IDs, validates ownership of all of them before
+changing the queue, requires a write token and fulltext permission, and responds 202
+with queued IDs. Already prepared, opted-out or temporarily blocked articles are omitted.
+The queue has a 1000-job ceiling for explicit requests (503 queue_full); the automatic
+refill holds at most 200 jobs. Consumers read outcomes with ordinary item/bundle requests.
+GET operations never trigger publisher fetching. POST /items/{id}/full-text is the
+interactive single-article path; force retries that article only, and never overrides
+a subscription set to never or revoked permission.
+
+The startup worker repairs legacy consent-only cached bodies, then refills and runs every
+five seconds. Active issues precede bookmarks/notes and new retained articles. Jobs persist
+through restarts and cascade away with item/user deletion. Requests are deduplicated per
+item in the process, globally bounded to two and serialized per publisher host. Ownership,
+subscription opt-out and account permission are checked before execution. Cookie/paywall
+failures retry after seven days, partial text after one day, transient failures after one
+hour. Other articles from the same feed stay eligible. Publisher requests keep the existing
+timeout, byte ceiling, public-address validation and redirect restrictions.
+
+Body/title/link/image changes advance content.revision. Metadata changes also emit
+item_content upserts through the compacted, per-user delta log, containing the current
+Item.content object. Clients should fetch a bundle for known changed articles before
+advancing their saved sync sequence. A list without content may reveal a newer server
+revision but must not advance the downloaded-body revision. Keep the previous offline
+body until its replacement has actually been received. Failed extraction never deletes
+good feed or reader content. Retention still protects active editions, bookmarks and notes.
+
+GET /items and /items/bundle with images=proxy use the authenticated server proxy for all
+referenced body and lead images; actual image fetching remains lazy, ownership-checked,
+SSRF-guarded and restricted to verified raster formats. A client must download its reader's
+referenced images before declaring them offline-ready. Having HTML alone is insufficient.
+Keep a durable copy of active-issue text and images separately from purgeable thumbnails,
+respect storage budgets and report incomplete downloads. Existing archived images retain
+their original archive behavior.
+
+MCP get_item takes format (html by default, or text), offset, maxChars (up to 40000) and
+optional revision. Read nextOffset until null, carrying content.revision and the same
+format. A changed revision returns content_revision_conflict; restart at zero. Each
+window respects UTF-16 surrogate boundaries. fetch_full_text prepares a single article
+and returns the first HTML window using this same contract; read-only tokens can page
+already cached material. Internal cachedEditionSources returns complete access-checked
+sources with revision, status and truncated=false. External/model consumers must choose
+their own explicit processing budget and preserve the previous result on budget failure.

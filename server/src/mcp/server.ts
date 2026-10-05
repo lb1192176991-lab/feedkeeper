@@ -389,15 +389,20 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     "get_item",
     {
       title: "Get an article",
-      description: "Returns one subscribed article, including cached feed or reader content when available. Content is capped at 40,000 characters; pass maxChars for less.",
+      description: "Returns one subscribed article, including cached feed or reader content when available. Content is paginated at 40,000 characters; follow nextOffset with offset and the returned content.revision to read every part. Pass maxChars for less.",
       inputSchema: {
         itemId: z.number().int().positive(),
         maxChars: z.number().int().positive().max(40_000).optional().describe("Shorten the content to this many characters"),
+        format: z.enum(["html", "text"]).optional().describe("Use text to read plain publisher text without HTML markup"),
+        offset: z.number().int().nonnegative().max(10_000_000).optional(),
+        revision: z.number().int().positive().optional().describe("Keep pagination on the same content revision"),
       },
     },
-    async ({ itemId, maxChars }) => {
-      const item = getItemForMcp(userId, itemId, maxChars);
-      return item ? textResult(item) : errorResult("item_not_found");
+    async ({ itemId, maxChars, offset, revision, format }) => {
+      try {
+        const item = getItemForMcp(userId, itemId, maxChars, offset, revision, format);
+        return item ? textResult(item) : errorResult("item_not_found");
+      } catch { return errorResult("content_revision_conflict"); }
     },
   );
 
@@ -405,7 +410,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
     "fetch_full_text",
     {
       title: "Fetch an article's full text",
-      description: "Downloads the full article from its website when the feed only has a teaser, caches it and returns it. Content is capped at 40,000 characters.",
+      description: "Downloads the full article from its website when the feed only has a teaser, caches it and returns it. Content is capped at 40,000 characters; use get_item with nextOffset and content.revision for remaining text.",
       inputSchema: {
         itemId: z.number().int().positive(),
         force: z.boolean().optional().describe("Fetch again even when a cached full text exists"),
@@ -420,8 +425,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
         title: result.title ?? undefined,
         byline: result.byline ?? undefined,
         cached: result.cached,
-        content_html: result.fullContentHtml.slice(0, MAX_CONTENT_LENGTH),
-        content_truncated: result.fullContentHtml.length > MAX_CONTENT_LENGTH,
+        ...getItemForMcp(userId, itemId),
       });
     },
   );

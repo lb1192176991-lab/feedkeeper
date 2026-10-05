@@ -1,3 +1,4 @@
+import { enqueueArticleContents } from "../../feeds/fullTextQueue.js";
 import { Router, type Request } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -434,6 +435,19 @@ resourcesRouter.get("/items/bundle", (req, res) => {
   res.json({ items: prepare(rows, req, parsed.data.images).map((row) => serializeItem(row, progress, true, hasNotes.has(row.id))) });
 });
 
+// Explicit extraction side effect; read-only devices continue to consume the shared cache.
+resourcesRouter.post("/items/prepare", requireCapability("fulltext"), async (req, res) => {
+  const parsed = z.object({ ids: z.array(z.number().int().positive()).min(1).max(50) }).strict().safeParse(req.body);
+  if (!parsed.success) return invalid(res);
+  try {
+    const queued = enqueueArticleContents(req.user!.id, parsed.data.ids);
+    res.status(202).json({ queued });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "preparation_failed";
+    res.status(code === "item_not_found" ? 404 : code === "capability_not_available" ? 403 : code === "queue_full" ? 503 : 500).json({ error: code });
+  }
+});
+
 resourcesRouter.get("/items/:id", (req, res) => {
   const parsed = z.object({ images: z.enum(["original", "proxy"]).default("original") }).safeParse(req.query);
   const row = parsed.success ? findItemForUser(req.user!.id, Number(req.params.id)) : undefined;
@@ -448,11 +462,11 @@ resourcesRouter.post("/items/:id/full-text", requireCapability("fulltext"), asyn
   const id = Number(req.params.id);
   const result = await loadFullText(req.user!.id, id, { force: req.query.force === "true" });
   if (!result.ok) {
-    return void res.status(FULL_TEXT_STATUS[result.error]).json({ error: result.error, ...(result.message ? { message: result.message } : {}) });
+    return void res.status(FULL_TEXT_STATUS[result.error]).json({ error: result.error, ...(result.error === "capability_not_available" ? { capability: "fulltext" } : {}), ...(result.message ? { message: result.message } : {}) });
   }
   const row = findItemForUser(req.user!.id, id)!;
   const hasNotes = itemsWithNotes(req.user!.id, [id]);
-  res.json(serializeItem(prepare([row], req, "original")[0], readingPositions(req.user!.id, [id]), true, hasNotes.has(id)));
+  res.json(serializeItem(prepare([row], req, req.query.images === "proxy" ? "proxy" : "original")[0], readingPositions(req.user!.id, [id]), true, hasNotes.has(id)));
 });
 
 const readAllSchema = z.object({ subscriptionId: z.number().int().positive().optional(), folderId: z.number().int().positive().optional() });

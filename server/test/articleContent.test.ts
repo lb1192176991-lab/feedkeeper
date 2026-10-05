@@ -1,0 +1,101 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
+process.env.DATABASE_PATH = ":memory:";
+process.env.SESSION_SECRET = "content-tests-only-at-least-32-characters";
+process.env.ALLOW_PRIVATE_FEEDS = "true";
+
+test("content preparation preserves text, tracks failures and synchronizes revisions", async () => {
+  const { db, runMigrations } = await import("../src/db/index.js");
+  const repo = await import("../src/feeds/repository.js");
+  const { loadFullText } = await import("../src/feeds/fullText.js");
+  const { enqueueArticleContents, runFullTextQueue } = await import("../src/feeds/fullTextQueue.js");
+  const { currentSeq, listChanges } = await import("../src/sync/changeLog.js");
+  const { cachedEditionSources } = await import("../src/native/editionText.js");
+  const { getItemForMcp } = await import("../src/mcp/items.js");
+  const { setCapabilitiesProvider, getCapabilitiesProvider } = await import("../src/auth/capabilities.js");
+  runMigrations();
+  let requests = 0;
+  const full = "A concrete publisher fact with useful detail and context. ".repeat(1000);
+  const source = createServer((req, res) => {
+    requests++;
+    if (req.url === "/bot") return res.writeHead(403).end("Forbidden");
+    if (req.url === "/consent") return res.end("<html><body><h1>Cookie-Einstellungen</h1><p>Alle Cookies akzeptieren</p></body></html>");
+    const content = req.url === "/short" ? "A legitimate short extracted story. ".repeat(12) : full;
+    const paywall = req.url === "/paid" ? '<script type="application/ld+json">{"isAccessibleForFree":false}</script>' : "";
+    return res.writeHead(200, { "content-type": "text/html" }).end("<html><head><title>News</title>" + paywall + "</head><body><article><h1>News</h1><p>" + content + "</p></article></body></html>");
+  });
+  await new Promise<void>(resolve => source.listen(0, "127.0.0.1", resolve));
+  try {
+    const base = "http://127.0.0.1:" + (source.address() as AddressInfo).port;
+    const user = Number(db.prepare("INSERT INTO users(email,password_hash,display_name) VALUES ('content@example.test','hash','Content')").run().lastInsertRowid);
+    const other = Number(db.prepare("INSERT INTO users(email,password_hash,display_name) VALUES ('other-content@example.test','hash','Other')").run().lastInsertRowid);
+    const feed = Number(db.prepare("INSERT INTO feeds(url) VALUES (?)").run(base + "/feed").lastInsertRowid);
+    db.prepare("INSERT INTO subscriptions(user_id,feed_id) VALUES (?,?)").run(user, feed);
+    const add = (path: string, text = "<p>A feed teaser.</p>") => {
+      repo.upsertItems(feed, [{ guid: path, link: base + path, title: path, contentHtml: text }]);
+      return Number((db.prepare("SELECT id FROM items WHERE guid=?").get(path) as { id: number }).id);
+    };
+    const normal = add("/full");
+    const consent = add("/consent");
+    const paid = add("/paid");
+    const bot = add("/bot");
+    const rich = add("/short", "<p>" + full + "</p>");
+    const seq = currentSeq(user);
+    const before = requests;
+    const [first, second] = await Promise.all([loadFullText(user, normal), loadFullText(user, normal)]);
+    assert.equal(first.ok, true); assert.equal(second.ok, true);
+    assert.equal(requests - before, 1);
+    const item = repo.findItemById(normal)!;
+    assert.equal(item.extraction_status, "ready");
+    assert.ok(item.content_revision > 1);
+    assert.ok(listChanges(user, seq).changes.some(change => change.entity === "item_content" && change.id === normal));
+    await loadFullText(user, consent);
+    assert.equal(repo.findItemById(consent)!.extraction_status, "consent_wall");
+    await loadFullText(user, paid);
+    assert.equal(repo.findItemById(paid)!.extraction_status, "paywall");
+    await loadFullText(user, bot);
+    assert.equal(repo.findItemById(bot)!.extraction_status, "bot_blocked");
+    const retried = requests;
+    await loadFullText(user, consent);
+    assert.equal(requests, retried, "retry delay is per article");
+    assert.equal((await loadFullText(user, rich)).ok, true, "another article in the feed is not blocked");
+    assert.equal(repo.findItemById(rich)!.full_content_html, null);
+    assert.equal(repo.findItemById(rich)!.extraction_status, "feed_only");
+    assert.ok(cachedEditionSources(user, [normal])[0].text.endsWith("context."));
+    assert.ok(cachedEditionSources(user, [normal])[0].text.length > 48000);
+    repo.upsertItems(feed, [{ guid: "/short", contentHtml: "<p>Changed short teaser</p>" }]);
+    assert.ok(repo.findItemById(rich)!.content_html!.length > 48000, "feed refresh preserves richer cached feed text");
+    assert.equal(getItemForMcp(other, normal), null);
+    const retained = add("/retained");
+    db.prepare("INSERT INTO editions(user_id,item_ids,status,expires_at) VALUES (?,?,'active',?)")
+      .run(other, JSON.stringify([retained]), new Date(Date.now() + 3600000).toISOString());
+    const retainedSeq = currentSeq(other);
+    assert.equal(repo.canAccessItem(other, retained), true);
+    repo.updateItemFullContent(retained, "<p>" + full + "</p>");
+    assert.ok(listChanges(other, retainedSeq).changes.some(change => change.entity === "item_content" && change.id === retained), "active editions receive body revisions without a subscription");
+    assert.ok(getItemForMcp(user, normal, 40000, 0, undefined, "text")!.text!.includes("publisher fact"));
+    assert.equal(getItemForMcp(user, normal, 40000, 0, undefined, "text")!.content_html, undefined);
+    const page = getItemForMcp(user, normal, 40000)!;
+    const next = getItemForMcp(user, normal, 40000, page.nextOffset!, page.content.revision)!;
+    assert.equal(page.content_html! + next.content_html!, item.full_content_html);
+    repo.updateItemFullContent(normal, "<p>" + full + " revised</p>");
+    assert.throws(() => getItemForMcp(user, normal, 40000, 40000, page.content.revision), /content_revision_conflict/);
+    assert.throws(() => enqueueArticleContents(other, [normal]), /item_not_found/);
+    const queued = add("/queue");
+    assert.deepEqual(enqueueArticleContents(user, [queued]), [queued]);
+    const provider = getCapabilitiesProvider();
+    setCapabilitiesProvider({ getCapabilitiesForUser(id: number) {
+      const caps = provider.getCapabilitiesForUser(id);
+      return { ...caps, features: { ...caps.features, fulltext: false } };
+    } });
+    const deniedRequests = requests;
+    await runFullTextQueue();
+    assert.equal(requests, deniedRequests);
+    assert.equal((await loadFullText(user, queued)).ok, false);
+    assert.equal(requests, deniedRequests, "all extraction entry points enforce capability");
+    setCapabilitiesProvider(provider);
+  } finally { await new Promise<void>(resolve => source.close(() => resolve())); }
+});

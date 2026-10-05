@@ -68,6 +68,8 @@ export async function saveToInbox(
   let title: string | null = input.title?.trim() || null;
   let contentHtml: string | null = input.contentHtml?.trim() || null;
   let snippet: string | null = null;
+  let extractionStatus = contentHtml ? "ready" : "pending";
+  let extractedPartial = false;
   let imageUrl: string | null = null;
 
   if (input.url?.trim()) {
@@ -78,7 +80,9 @@ export async function saveToInbox(
     if (!contentHtml) {
       try {
         const extracted = await extractArticle(targetUrl);
-        if (extracted.status === "ok") {
+        if (extracted.status === "ok" || extracted.status === "partial") {
+          extractionStatus = extracted.status === "ok" ? "ready" : "partial";
+          extractedPartial = extracted.status === "partial";
           if (!title && extracted.article.title) {
             title = extracted.article.title;
           }
@@ -114,18 +118,21 @@ export async function saveToInbox(
 
   const row = db
     .prepare(
-      `INSERT INTO items (feed_id, guid, title, link, content_snippet, content_html, full_content_html, image_url, published_at, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO items (feed_id, guid, title, link, content_snippet, content_html, full_content_html, image_url, published_at, created_at, extraction_status, extraction_retry_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (feed_id, guid) DO UPDATE SET
          title = COALESCE(excluded.title, items.title),
          link = COALESCE(excluded.link, items.link),
          content_snippet = COALESCE(excluded.content_snippet, items.content_snippet),
          content_html = COALESCE(excluded.content_html, items.content_html),
          full_content_html = COALESCE(excluded.full_content_html, items.full_content_html),
-         image_url = COALESCE(excluded.image_url, items.image_url)
+         image_url = COALESCE(excluded.image_url, items.image_url),
+         extraction_status = CASE WHEN COALESCE(excluded.full_content_html, items.full_content_html) IS NOT NULL THEN 'ready' ELSE excluded.extraction_status END,
+         extraction_retry_at = excluded.extraction_retry_at
        RETURNING id`,
     )
-    .get(inbox.id, guid, title, targetUrl, snippet, contentHtml, contentHtml, imageUrl, now, now) as { id: number };
+    .get(inbox.id, guid, title, targetUrl, snippet, contentHtml, extractedPartial ? null : contentHtml, imageUrl, now, now,
+      contentHtml && !extractedPartial ? "ready" : extractionStatus, extractedPartial ? new Date(Date.now() + 86400_000).toISOString() : null) as { id: number };
 
   const itemId = row.id;
 

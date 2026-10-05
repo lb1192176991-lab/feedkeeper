@@ -1,3 +1,5 @@
+import { contentMetadata } from "../feeds/articleContent.js";
+import { canAccessItem, findItemById } from "../feeds/repository.js";
 import { db } from "../db/index.js";
 import {
   findItemNote,
@@ -12,7 +14,7 @@ import { getNativePreferences } from "../native/preferences.js";
 const TOMBSTONE_DAYS = 90;
 const MAX_PAGE = 500;
 
-export type ChangeEntity = "item_state" | "subscription" | "folder" | "muted_keyword" | "note" | "edition" | "native_preferences";
+export type ChangeEntity = "item_state" | "item_content" | "subscription" | "folder" | "muted_keyword" | "note" | "edition" | "native_preferences";
 
 export interface Change {
   seq: number;
@@ -151,7 +153,10 @@ export function listChanges(userId: number, since: number, limit = 200): { chang
     }
     if (row.op === "delete") return change;
     let data: Record<string, unknown> | null | undefined;
-    if (row.entity === "item_state") data = itemState(userId, row.entity_id);
+    if (row.entity === "item_content") {
+      const item = findItemById(row.entity_id);
+      data = item && canAccessItem(userId, row.entity_id) ? contentMetadata(item) : null;
+    } else if (row.entity === "item_state") data = itemState(userId, row.entity_id);
     else if (row.entity === "subscription") {
       const subscription = subscriptions.get(row.entity_id);
       data = subscription && serializeSubscription(subscription);
@@ -189,7 +194,7 @@ export function pruneChangeLog(): number {
          (SELECT MAX(seq) FROM changes WHERE changes.user_id = sync_state.user_id AND op = 'delete' AND changed_at < ?), 0))`,
     ).run(cutoff);
     const old = db.prepare("DELETE FROM changes WHERE op = 'delete' AND changed_at < ?").run(cutoff).changes;
-    const gone = db.prepare("DELETE FROM changes WHERE entity = 'item_state' AND entity_id NOT IN (SELECT id FROM items)").run().changes;
+    const gone = db.prepare("DELETE FROM changes WHERE entity IN ('item_state', 'item_content') AND entity_id NOT IN (SELECT id FROM items)").run().changes;
     const goneNotes = db.prepare("DELETE FROM changes WHERE entity = 'note' AND entity_id NOT IN (SELECT id FROM items)").run().changes;
     db.prepare("DELETE FROM applied_mutations WHERE applied_at < ?").run(new Date(Date.now() - 30 * 86_400_000).toISOString());
     return old + gone + goneNotes;

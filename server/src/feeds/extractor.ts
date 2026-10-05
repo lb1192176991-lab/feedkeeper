@@ -78,15 +78,11 @@ export function isConsentContent(finalUrl: string, html: string, title?: string 
 
   const headText = `${title || ""} ${text || ""}`.toLowerCase().slice(0, 600);
 
-  for (const sig of strongSignatures) {
-    if (combined.includes(sig)) {
-      if (headText.includes(sig) || (text || "").length < 6000) {
-        return true;
-      }
-    }
-  }
-
-  return false;
+  const hits = strongSignatures.filter(sig => combined.includes(sig));
+  if (hits.length === 0) return false;
+  const heading = (title || "").toLowerCase();
+  if (strongSignatures.some(sig => heading.includes(sig))) return true;
+  return (text || "").length < 1200 && hits.length >= 2 && hits.some(sig => headText.includes(sig));
 }
 
 /**
@@ -100,6 +96,8 @@ export function isCachedConsentSnippet(html: string): boolean {
 const FETCH_USER_AGENT = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 FeedKeeper/${APP_VERSION}`;
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
+class ArticleHttpError extends Error { constructor(readonly status: number) { super("article_http_error"); } }
+
 const MAX_HTML_BYTES = 5 * 1024 * 1024;
 
 async function fetchArticleHtml(rawUrl: string, signal: AbortSignal, dispatcher: Agent, fetchImpl: ArticleFetch): Promise<{ html: string; url: string } | null> {
@@ -127,7 +125,7 @@ async function fetchArticleHtml(rawUrl: string, signal: AbortSignal, dispatcher:
       currentUrl = new URL(location, safeUrl).toString();
       continue;
     }
-    if (!response.ok) return null;
+    if (!response.ok) { await response.body?.cancel(); throw new ArticleHttpError(response.status); }
 
     const contentLength = Number(response.headers.get("content-length"));
     if (contentLength > MAX_HTML_BYTES) return null;
@@ -157,7 +155,8 @@ async function fetchArticleHtml(rawUrl: string, signal: AbortSignal, dispatcher:
 export type ExtractionResult =
   | { status: "ok"; article: ExtractedArticle }
   | { status: "consent_wall" }
-  | { status: "failed" };
+  | { status: "partial"; article: ExtractedArticle }
+  | { status: "paywall" | "bot_blocked" | "timeout" | "failed" };
 
 export async function extractArticleFromUrl(rawUrl: string, fetchImpl: ArticleFetch = defaultFetch): Promise<ExtractedArticle | null> {
   const result = await extractArticle(rawUrl, fetchImpl);
@@ -177,16 +176,18 @@ export async function extractArticle(rawUrl: string, fetchImpl: ArticleFetch = d
     if (!fetched) return { status: "failed" };
 
     const dom = new JSDOM(fetched.html, { url: fetched.url });
+    const paywall = /"isAccessibleForFree"\s*:\s*(?:false|"false")/i.test(fetched.html);
     cleanConsentDom(dom.window.document);
 
     const parsed = new Readability(dom.window.document, { charThreshold: 60 }).parse();
     if (isConsentContent(fetched.url, parsed?.content ?? fetched.html, parsed?.title, parsed?.textContent)) {
       return { status: "consent_wall" };
     }
+    if (paywall || ((parsed?.textContent?.length ?? 0) < 2500 && /(?:subscribe to (?:continue|read)|sign in to (?:continue|read)|abonnieren und weiterlesen|nur für abonnenten|jetzt abonnieren.{0,40}weiterlesen)/i.test(parsed?.textContent ?? ""))) return { status: "paywall" };
     if (!parsed?.content) return { status: "failed" };
 
     return {
-      status: "ok",
+      status: (parsed.textContent?.trim().length ?? 0) < 200 ? "partial" : "ok",
       article: {
         title: parsed.title || null,
         byline: parsed.byline || null,
@@ -198,6 +199,9 @@ export async function extractArticle(rawUrl: string, fetchImpl: ArticleFetch = d
     };
   } catch (error) {
     if (error instanceof SsrfBlockedError) throw error;
+    if (controller.signal.aborted) return { status: "timeout" };
+    if (error instanceof ArticleHttpError && [401, 402].includes(error.status)) return { status: "paywall" };
+    if (error instanceof ArticleHttpError && [403, 429, 503].includes(error.status)) return { status: "bot_blocked" };
     return { status: "failed" };
   } finally {
     clearTimeout(timeout);

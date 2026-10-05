@@ -10,6 +10,7 @@ import { config } from "./config.js";
 import { runMigrations } from "./db/index.js";
 import { apiRouter } from "./api/index.js";
 import { mcpRouter } from "./mcp/http.js";
+import { startFullTextScheduler } from "./feeds/fullTextQueue.js";
 import { startPollingScheduler } from "./feeds/poller.js";
 import { startCleanupScheduler } from "./feeds/cleanup.js";
 import { repairEncodedText } from "./feeds/repository.js";
@@ -26,6 +27,7 @@ pruneArchive();
 const pendingArchives = scheduleMissingArchives();
 if (pendingArchives > 0) console.log(`[archive] archiving ${pendingArchives} saved articles in the background`);
 startPollingScheduler();
+startFullTextScheduler();
 startCleanupScheduler();
 startEditionScheduler();
 

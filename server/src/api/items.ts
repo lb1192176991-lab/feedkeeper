@@ -15,6 +15,7 @@ import { loadFullText, type FullTextError } from "../feeds/fullText.js";
 import { fetchItemImage, pruneArchive, scheduleArchive, withArchivedImages, withProxiedImages } from "../feeds/archive.js";
 
 export const FULL_TEXT_STATUS: Record<FullTextError, number> = {
+  capability_not_available: 403, paywall: 422, bot_blocked: 422, timeout: 504, partial: 422,
   item_not_found: 404,
   item_has_no_link: 400,
   full_text_disabled: 409,

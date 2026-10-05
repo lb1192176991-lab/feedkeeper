@@ -9,7 +9,7 @@ const rss = (title: string, guids: string[]) => `<?xml version="1.0"?><rss versi
 const article = `<html><head><title>Story</title></head><body><article><h1>Story</h1>${"<p>A long paragraph about something that matters a lot to readers.</p>".repeat(20)}</article></body></html>`;
 const consentPage = `<html><head><title>Cookies zustimmen</title></head><body><h2>Cookies zustimmen</h2><p>Bitte stimmen Sie der Nutzung von Cookies zu oder bestellen Sie ein Abo.</p></body></html>`;
 
-test("feed URL changes are validated and consent walls are remembered per feed", async () => {
+test("feed URL changes are validated and consent walls use article-specific retry delays", async () => {
   const hits: Record<string, number> = {};
   const server = createServer((req, res) => {
     const path = req.url ?? "/";
@@ -31,7 +31,7 @@ test("feed URL changes are validated and consent walls are remembered per feed",
   process.env.ALLOW_PRIVATE_FEEDS = "true";
   const { db, runMigrations } = await import("../src/db/index.js");
   const { subscribeToFeed, changeFeedUrl, updateFeedSettings } = await import("../src/feeds/service.js");
-  const { findFeedById, bookmarkItem } = await import("../src/feeds/repository.js");
+  const { findItemById, findFeedById, bookmarkItem } = await import("../src/feeds/repository.js");
   const { loadFullText } = await import("../src/feeds/fullText.js");
   runMigrations();
 
@@ -66,12 +66,12 @@ test("feed URL changes are validated and consent walls are remembered per feed",
     assert.equal(split.subscription.label, "Mine");
     assert.equal(findFeedById(feedId)?.url, `${base}/new.xml`);
 
-    // Full text: a consent wall is remembered after two hits and then skipped without a request.
+    // Full text: a consent wall is remembered for this article, leaving other articles eligible.
     const oldFeed = await subscribeToFeed(otherId, `${base}/old.xml`);
     await assert.rejects(changeFeedUrl(otherId, oldFeed.id, `${base}/new.xml`), /already_subscribed/);
     assert.deepEqual(await loadFullText(otherId, itemId("walled")), { ok: false, error: "consent_wall" });
     assert.equal((await loadFullText(otherId, itemId("walled"), { force: true })).ok, false);
-    assert.ok(findFeedById(oldFeed.id)?.full_text_blocked_at);
+    assert.ok(findItemById(itemId("walled"))?.extraction_retry_at);
     const requestsBefore = hits["/walled"];
     assert.deepEqual(await loadFullText(otherId, itemId("walled")), { ok: false, error: "consent_wall" });
     assert.equal(hits["/walled"], requestsBefore);

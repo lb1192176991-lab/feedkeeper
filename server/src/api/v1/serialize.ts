@@ -1,3 +1,4 @@
+import { contentMetadata } from "../../feeds/articleContent.js";
 import { db } from "../../db/index.js";
 import type { listItemsForUser, SubscribedFeed } from "../../feeds/repository.js";
 import { serializeSubscription } from "../../sync/changeLog.js";
@@ -37,6 +38,7 @@ export function serializeItem(row: ItemRow, progress: Map<number, number>, withC
     snippet: row.content_snippet,
     imageUrl: row.image_url,
     hasFullText: Boolean(row.full_content_html),
+    content: contentMetadata(row),
     ...(withContent ? { contentHtml: row.content_html, fullTextHtml: row.full_content_html } : {}),
     state: {
       read: Boolean(row.read),

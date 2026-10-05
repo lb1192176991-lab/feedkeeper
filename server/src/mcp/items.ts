@@ -1,3 +1,4 @@
+import { contentMetadata, sourceText } from "../feeds/articleContent.js";
 import { z } from "zod";
 import { findItemForUser, listItemsForUser } from "../feeds/repository.js";
 
@@ -62,15 +63,25 @@ export function listItemsPage(
 
 export const MAX_CONTENT_LENGTH = 40_000;
 
-export function getItemForMcp(userId: number, itemId: number, maxChars = MAX_CONTENT_LENGTH) {
+export function getItemForMcp(userId: number, itemId: number, maxChars = MAX_CONTENT_LENGTH, offset = 0, revision?: number, format: "html" | "text" = "html") {
   const item = findItemForUser(userId, itemId);
   if (!item) return null;
+  if (revision !== undefined && revision !== item.content_revision) throw new Error("content_revision_conflict");
   const content = item.full_content_html ?? item.content_html;
-  const maxContentLength = Math.min(maxChars, MAX_CONTENT_LENGTH);
+  const body = format === "text" ? sourceText(item) : content ?? "";
+  let end = Math.min(offset + Math.min(maxChars, MAX_CONTENT_LENGTH), body.length);
+  if (end < body.length && /[\uD800-\uDBFF]/.test(body[end - 1])) end--;
+  if (end === offset && offset < body.length) end = Math.min(offset + 2, body.length);
+
   return {
     ...item,
-    content_html: content?.slice(0, maxContentLength) ?? null,
-    content_truncated: Boolean(content && content.length > maxContentLength),
+    content_html: format === "html" ? body.slice(offset, end) : undefined,
+    content_truncated: end < body.length,
     full_content_html: undefined,
+    content: contentMetadata(item),
+    ...(format === "text" ? { text: body.slice(offset, end) } : {}),
+    format,
+    offset,
+    nextOffset: end < body.length ? end : null,
   };
 }

@@ -25,6 +25,8 @@ const FEATURES = [
   "folders",
   "items",
   "fulltext",
+  "content.revisions",
+  "content.prepare",
   "images",
   "muted-keywords",
   "opml",

@@ -415,6 +415,35 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/Item" } } } } } } }
         "400": { $ref: "#/components/responses/Invalid" }
+  /items/prepare:
+    post:
+      tags: [Articles]
+      summary: Prepare selected article content in the background
+      description: Requires fulltext capability and a write token. Validates access to every ID before enqueueing. Does not wait for publisher requests. Full texts and per-article outcomes are available via ordinary item reads and item_content sync changes. Respects fullTextMode and retryAt; duplicate requests share jobs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ids]
+              properties:
+                ids: { type: array, minItems: 1, maxItems: 50, items: { type: integer, minimum: 1 } }
+      responses:
+        "202":
+          description: IDs queued for preparation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued]
+                properties:
+                  queued: { type: array, items: { type: integer } }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "403": { $ref: "#/components/responses/CapabilityDenied" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { description: queue_full; retry later }
   /items/read-all:
     post:
       tags: [Articles]
@@ -441,11 +470,13 @@ paths:
       parameters:
         - { $ref: "#/components/parameters/Id" }
         - { name: force, in: query, schema: { type: boolean } }
+        - { $ref: "#/components/parameters/Images" }
       responses:
         "403": { $ref: "#/components/responses/CapabilityDenied" }
         "200": { description: The article with `fullTextHtml`, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
         "409": { description: full_text_disabled for this subscription }
-        "422": { description: consent_wall or could_not_extract_content }
+        "504": { description: Publisher request timed out }
+        "422": { description: consent_wall, paywall, bot_blocked, partial or could_not_extract_content }
   /items/{id}/image:
     get:
       tags: [Images]
@@ -790,6 +821,15 @@ components:
         archivedAt: { type: [string, "null"] }
         progress: { type: [number, "null"], minimum: 0, maximum: 1 }
         hasNote: { type: boolean }
+    ArticleContent:
+      type: object
+      required: [revision, source, status, attemptedAt, retryAt]
+      properties:
+        revision: { type: integer, minimum: 1, description: Increases when publisher content or article identity/image changes }
+        source: { type: string, enum: [reader, feed, snippet] }
+        status: { type: string, enum: [pending, ready, feed_only, consent_wall, paywall, bot_blocked, timeout, partial, failed] }
+        attemptedAt: { type: [string, "null"], format: date-time }
+        retryAt: { type: [string, "null"], format: date-time }
     Item:
       type: object
       properties:
@@ -803,6 +843,7 @@ components:
         snippet: { type: [string, "null"] }
         imageUrl: { type: [string, "null"] }
         hasFullText: { type: boolean }
+        content: { $ref: "#/components/schemas/ArticleContent" }
         contentHtml: { type: [string, "null"], description: Only with content included }
         fullTextHtml: { type: [string, "null"], description: Only with content included }
         state: { $ref: "#/components/schemas/ItemState" }
@@ -962,7 +1003,7 @@ components:
       type: object
       properties:
         seq: { type: integer }
-        entity: { type: string, enum: [item_state, subscription, folder, muted_keyword, note, edition, native_preferences] }
+        entity: { type: string, enum: [item_state, item_content, subscription, folder, muted_keyword, note, edition, native_preferences] }
         id: { type: integer }
         op: { type: string, enum: [upsert, delete] }
         data: { type: object, description: "Current data for upserts. Note deletions carry {revision}; other deletions omit data." }

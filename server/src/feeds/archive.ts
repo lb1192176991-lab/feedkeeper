@@ -245,7 +245,7 @@ function proxiedImageUrl(origin: string, itemId: number, imageUrl: string, apiBa
 export function withProxiedImages<T extends ImageSource & { id: number }>(items: T[], origin: string, apiBase = "/api"): T[] {
   const own = `${origin.replace(/\/$/, "")}/api/`;
   return items.map((item) => {
-    const urls = new Set(itemImageUrls(item).filter((url) => !url.startsWith(own)).slice(0, MAX_OFFLINE_IMAGES_PER_ITEM));
+    const urls = new Set(itemImageUrls(item).filter((url) => !url.startsWith(own)));
     if (urls.size === 0) return item;
     const replace = (url: string) => (urls.has(url) ? proxiedImageUrl(origin, item.id, url, apiBase) : undefined);
     const hero = item.image_url ? resolveImageUrl(item.image_url, item.link) : null;
