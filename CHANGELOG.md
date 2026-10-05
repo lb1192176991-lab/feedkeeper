@@ -4,6 +4,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-05
+
 ### Added
 - Universal Inbox (Read-it-Later): save web clippings, URLs, and personal notes directly to an isolated personal inbox feed (`POST /api/v1/inbox`) with automatic text/image archiving, sync support, and retention cleanup immunity. Includes `save_to_inbox` MCP tool for external agents and workflows.
 - Linked edition overviews with up to five topics and validated article references, available to MCP publishers and native clients through `edition.overview`.
