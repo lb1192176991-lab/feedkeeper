@@ -4,6 +4,14 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-10-05
+
+### Fixed
+- Close JSDOM window instances after Readability extraction to prevent a Node.js heap memory leak in long-running daemon processes.
+- Strip script, style, SVG, and iframe tags before JSDOM parsing, reducing memory footprint and DOM extraction latency from seconds to milliseconds.
+- Optimize the full-text background queue candidate query to use index-backed relations, dropping query time from >2s to <80ms.
+- Set a balanced scheduler interval and concurrency limit to ensure responsive API request handling on resource-constrained servers.
+
 ## [0.14.0] - 2026-10-05
 
 ### Added
