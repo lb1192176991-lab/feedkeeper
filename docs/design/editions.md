@@ -1,6 +1,6 @@
 # Shared editions and native reading preferences
 
-Status: implemented in FeedKeeper `0.11.0`. The HTTP schemas are in [../openapi.yaml](../openapi.yaml); the wider native API is described in [native-api.md](native-api.md).
+Status: base contract implemented in FeedKeeper `0.11.0`; linked overviews and explicit article limits are additive, unreleased extensions. The HTTP schemas are in [../openapi.yaml](../openapi.yaml); the wider native API is described in [native-api.md](native-api.md).
 
 ## Responsibilities and priority
 
@@ -20,14 +20,15 @@ Feature flag: `native-preferences`. `GET /api/v1/native-preferences` returns def
 | Field | Default | Meaning |
 |---|---|---|
 | `timeZone` | `UTC` | Shared IANA time zone for issue boundaries. Apps adopt the user's current zone once or change it explicitly; devices must not overwrite it on every launch. |
-| `editionSize` | `24` | Maximum articles in an automatic issue, from 1 to 24. Smaller issues are allowed; agents receive this preference when curating. |
+| `editionSize` | `24` | Maximum articles, from 1 to 24. Automatic core selection defaults to 24; other producers may choose their own default while `editionSizeIsCustom` is false. |
+| `editionSizeIsCustom` | `false` | Read-only marker for an explicit personal limit. A folder-only preference write never sets it. |
 | `readingMinutes` | `null` | Optional approximate reading budget, from 5 to 180 minutes. An issue may include a single article longer than the budget. |
 | `folderOrder` | `[]` | Ordered stable folder IDs for app sidebars and section controls. `null` may appear once for the unfiled section. Unlisted folders append in the order returned by `GET /folders`. |
 | `hiddenFolderIds` | `[]` | Folders excluded from the newspaper, including automatic selection and new MCP publications. The ordinary article library stays available. |
 | `preferredFolderIds` | `[]` | A modest selection boost. Hidden folders remain excluded even if preferred. |
 | `showUnfiled` | `true` | Include subscribed feeds without a folder in the newspaper. |
 
-`PATCH /native-preferences` merges only supplied fields. Arrays replace their complete field. It requires `expectedRevision` and a UUID `requestId`; duplicate IDs, foreign folders, invalid zones and unknown fields are rejected. A successful first write records revision 1 even when it only adopts defaults. Later writes which change nothing retain the revision.
+`PATCH /native-preferences` merges only supplied fields. With `native-preferences.edition-size`, an integer `editionSize` sets `editionSizeIsCustom: true`, including an explicit 24; null resets it to false with the core fallback 24. Omission preserves the marker. `readingMinutes: null` removes the time budget. On older stored preferences, non-24 values are treated as explicit; legacy 24 is treated as an implicit default because historical folder-only writes stored 24 too. A user who deliberately chose 24 can select it again to retain that intent. Arrays replace their complete field. It requires `expectedRevision` and a UUID `requestId`; duplicate IDs, foreign folders, invalid zones and unknown fields are rejected. A successful first write records revision 1 even when it only adopts defaults. Later writes which change nothing retain the revision.
 
 ```json
 {
@@ -115,3 +116,25 @@ A fresh 404 and an offline failure have different meanings. An expired cached is
 Migration `0023_server_editions.sql` is additive: it introduces preferences, receipts and history and extends the existing edition slot. Existing curated issues retain their IDs, order, timestamps and revision; they receive an opaque issue identity. Legacy issues without an expiry receive a 24-hour expiry at migration time. Existing explicit expiries are retained. Notes, tokens and subscriptions are preserved.
 
 Back up the database and article archive before deploying. Build and test before restart; startup applies the migration and starts edition maintenance. Deploy a tagged release with matching package versions and built assets. For an unpublished preview, use a distinct development version and keep its changes under Unreleased until publication is authorized.
+
+## Linked overviews (unreleased)
+
+Feature flag: `edition.overview`. `publish_edition` accepts optional `overview`, an array of 1–5 `{heading, segments}` blocks. Each segment has plain `text` and an optional positive integer `itemId`. The server requires at least one linked segment per block, validates every reference against the selected and access-checked `itemIds`, and rejects invalid links with `invalid_overview_reference`. Headings are limited to 160 UTF-16 code units, segments to 1000, at most 20 segments per block and 3000 visible code units in total. The server assigns stable per-issue IDs (`topic-1`, etc.). Native responses and sync include the stored overview. Older clients ignore it and display `summary`; when no summary is supplied, a plain-text fallback is derived from the blocks.
+
+```json
+{
+  "itemIds": [123, 456],
+  "expectedRevision": 7,
+  "requestId": "d3b258ec-5bc7-487c-9bca-e685c2b84d61",
+  "overview": [{
+    "heading": "City plans three libraries",
+    "segments": [{"text": "According to "}, {"text": "Local News", "itemId": 123}, {"text": ", the city plans three libraries in May."}]
+  }]
+}
+```
+
+Clients concatenate segments, create native article links from validated IDs, and never open URLs supplied by the producer. A link may only open a cached article from the displayed issue of the active account. Changing issues keeps the existing reader and offline retention behavior. Reference validation proves identity/access, not the truth of a producer's prose. Producers remain responsible for grounding claims in the originals.
+
+Candidate payloads additionally include `sourceName` and `folderName`. The generic internal helper `cachedEditionSources(userId, itemIds)` provides access-checked cached reader/feed/snippet text, with no network fetching or scripts. It permits at most 24 distinct IDs, at most 6000 characters per article and 48000 total (UTF-16 units); it indicates `textKind` and may truncate source material. This is an internal extension point, not a new public full-text endpoint.
+
+Migration `0025_edition_overview.sql` adds a nullable JSON column without changing existing editions, accounts or tokens. Consumers must build the current core before validation; core builds now emit declarations so downstream TypeScript contracts cannot silently use stale declaration files.

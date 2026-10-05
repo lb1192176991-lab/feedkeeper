@@ -141,8 +141,25 @@ test("Universal Inbox: save web clippings, sync, retention protection, and unsub
 
     // 7. Test MCP tool save_to_inbox
     const mcpServer = createMcpServerForUser(userId, "write");
-    // Verify tool exists in MCP server
     assert.ok(mcpServer);
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "inbox-test", version: "1" });
+    await mcpServer.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const tools = (await client.listTools()).tools.map((t) => t.name);
+      assert.ok(tools.includes("save_to_inbox"));
+      const mcpSaveRes = await client.callTool({
+        name: "save_to_inbox",
+        arguments: { title: "MCP Clipping", textContent: "Saved via MCP", note: "Created via MCP" },
+      });
+      assert.equal(mcpSaveRes.isError, undefined);
+    } finally {
+      await client.close();
+      await mcpServer.close();
+    }
 
     // 8. Test DELETE /api/v1/inbox/:id
     const delRes = await call(`/inbox/${saved.id}`, { method: "DELETE" });

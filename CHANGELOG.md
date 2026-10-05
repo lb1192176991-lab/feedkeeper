@@ -4,6 +4,18 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+- Universal Inbox (Read-it-Later): save web clippings, URLs, and personal notes directly to an isolated personal inbox feed (`POST /api/v1/inbox`) with automatic text/image archiving, sync support, and retention cleanup immunity. Includes `save_to_inbox` MCP tool for external agents and workflows.
+- Linked edition overviews with up to five topics and validated article references, available to MCP publishers and native clients through `edition.overview`.
+- Source and section names in edition candidates, plus an access-checked internal helper for bounded cached article text.
+
+### Changed
+- Native preferences distinguish explicit article limits from producer defaults. Setting `editionSize` to null restores the default; section-only changes preserve the choice.
+- Emit current TypeScript declarations with core builds for downstream consumers.
+
+### Fixed
+- Prevent section preference initialization from implicitly overriding a downstream edition producer's default article count with 24.
+
 ## [0.12.0] - 2026-10-04
 
 ### Added

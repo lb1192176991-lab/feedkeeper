@@ -76,6 +76,42 @@ test("server editions and app preferences keep devices in step without changing 
     assert.equal(listChanges(owner, 0, 1).changes.length, 1);
   });
 
+  await t.test("article count defaults are independent of folder changes and reset explicitly", () => {
+    const owner = user();
+    let value = prefs.patchNativePreferences(owner, { requestId: randomUUID(), expectedRevision: 0, timeZone: "Europe/Berlin" });
+    assert.equal(value.editionSizeIsCustom, false);
+    value = prefs.patchNativePreferences(owner, { requestId: randomUUID(), expectedRevision: value.revision, editionSize: 24 });
+    assert.equal(value.editionSizeIsCustom, true, "explicit 24 differs from the inherited default");
+    value = prefs.patchNativePreferences(owner, { requestId: randomUUID(), expectedRevision: value.revision, editionSize: null });
+    assert.equal(value.editionSizeIsCustom, false);
+    assert.equal(value.editionSize, 24);
+    db.prepare("UPDATE native_preferences SET settings = json_remove(settings, '$.editionSizeIsCustom') WHERE user_id = ?").run(owner);
+    assert.equal(prefs.getNativePreferences(owner).editionSizeIsCustom, false);
+    db.prepare("UPDATE native_preferences SET settings = json_set(settings, '$.editionSize', 8) WHERE user_id = ?").run(owner);
+    assert.equal(prefs.getNativePreferences(owner).editionSizeIsCustom, true);
+  });
+
+  await t.test("linked overviews persist, replay and sync without permitting foreign references", async () => {
+    const owner = user(), source = feed(owner), a = article(source), b = article(source);
+    const overview = [{ heading: "Concrete development", segments: [{ text: "A report by " }, { text: "Source", itemId: a }] }];
+    const input = { itemIds: [a], overview, requestId: randomUUID(), expectedRevision: 0 };
+    const first = editions.publishCuratedEdition(owner, input, now);
+    assert.deepEqual(first.overview, [{ id: "topic-1", ...overview[0] }]);
+    assert.equal(first.summary, "Concrete development: A report by Source");
+    assert.deepEqual(editions.publishCuratedEdition(owner, input, now), first);
+    assert.deepEqual(editions.getEdition(owner, now)?.overview, first.overview);
+    assert.deepEqual(listChanges(owner, 0).changes.find(c => c.entity === "edition")?.data?.overview, first.overview);
+    assert.throws(() => editions.publishCuratedEdition(owner, { itemIds: [a], overview: [{ heading: "Other", segments: [{ text: "Foreign", itemId: b }] }] }, now), isError("invalid_overview_reference"));
+    assert.throws(() => editions.publishCuratedEdition(owner, { itemIds: [a], overview: [{ heading: "Unlinked", segments: [{ text: "Text" }] }] }, now), isError("invalid_overview_reference"));
+    const { cachedEditionSources } = await import("../src/native/editionText.js");
+    db.prepare("UPDATE items SET full_content_html = '<p>Specific &amp; factual.</p><script>ignored secret</script>' WHERE id = ?").run(a);
+    const text = cachedEditionSources(owner, [a])[0];
+    assert.ok(text.text.includes("Specific & factual."));
+    assert.ok(!text.text.includes("ignored secret"));
+    assert.equal(text.textKind, "reader");
+    assert.throws(() => cachedEditionSources(user(), [a]), /item_not_found/);
+  });
+
   await t.test("automatic selection respects exclusions, diversity, age, tracking URL duplicates and previous issues", () => {
     const owner = user();
     const news = repo.createFolder(owner, "News"), hidden = repo.createFolder(owner, "Hidden");
@@ -249,14 +285,16 @@ test("server editions and app preferences keep devices in step without changing 
       assert.ok(tools.includes("get_edition") && tools.includes("get_edition_candidates") && tools.includes("get_native_preferences"));
       for (const name of ["publish_edition", "generate_edition", "dismiss_edition", "update_native_preferences"]) assert.ok(!tools.includes(name));
       const id = randomUUID();
-      const first = await writer.client.callTool({ name: "publish_edition", arguments: { itemIds: [a], requestId: id, expectedRevision: 0 } });
+      const overview = [{heading: "Original report", segments: [{text: "Source report", itemId: a}]}];
+      const first = await writer.client.callTool({ name: "publish_edition", arguments: { itemIds: [a], requestId: id, expectedRevision: 0, overview } });
       assert.equal(first.isError, undefined);
+      assert.equal(editions.getEdition(owner)?.overview?.[0].segments[0].itemId, a);
       const second = await writer.client.callTool({ name: "publish_edition", arguments: { itemIds: [a], requestId: randomUUID(), expectedRevision: 0 } });
       assert.equal(second.isError, true);
       const conflict = JSON.parse((second.content as { text: string }[])[0].text);
       assert.equal(conflict.error, "revision_conflict");
       assert.equal(conflict.current.revision, 1);
-      assert.deepEqual(await writer.client.callTool({ name: "publish_edition", arguments: { itemIds: [a], requestId: id, expectedRevision: 0 } }), first);
+      assert.deepEqual(await writer.client.callTool({ name: "publish_edition", arguments: { itemIds: [a], requestId: id, expectedRevision: 0, overview } }), first);
     } finally {
       for (const session of [writer, reader]) { await session.client.close(); await session.server.close(); }
     }

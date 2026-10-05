@@ -36,6 +36,8 @@ const FEATURES = [
   "edition.automatic",
   "edition.revisions",
   "native-preferences",
+  "native-preferences.edition-size",
+  "edition.overview",
   "search.fts",
   "account-capabilities",
   "mcp",

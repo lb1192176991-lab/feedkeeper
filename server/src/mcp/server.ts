@@ -603,7 +603,7 @@ export function createMcpServerForUser(userId: number, scope: TokenScope): McpSe
 
   server.registerTool("get_edition_candidates", {
     title: "Get edition candidates",
-    description: "Returns a bounded shortlist of unread articles from the last seven days, respecting muted keywords and app-only section visibility. Includes the current revision and user preferences. Use get_item to inspect selected articles, then publish_edition with expectedRevision and a stable requestId.",
+    description: "Returns a bounded shortlist of unread articles from the last seven days, respecting muted keywords and app-only section visibility. Includes the current revision and user preferences. Includes sourceName and folderName. Use get_item to inspect selected articles, then publish_edition with expectedRevision and a stable requestId.",
     inputSchema: { limit: z.number().int().min(1).max(200).default(100) },
   }, async ({ limit }) => capabilityAction("editions", () => ({ preferences: getNativePreferences(userId), current: getEditionState(userId), candidates: editionCandidates(userId, new Date(), limit) })));
 

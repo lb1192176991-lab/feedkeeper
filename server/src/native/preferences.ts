@@ -10,7 +10,7 @@ const timezone = z.string().max(100).refine((value) => {
 
 export const preferenceFields = {
   timeZone: timezone,
-  editionSize: z.number().int().min(1).max(24),
+  editionSize: z.number().int().min(1).max(24).nullable(),
   readingMinutes: z.number().int().min(5).max(180).nullable(),
   folderOrder: z.array(folderId.nullable()).max(1001).refine((ids) => new Set(ids).size === ids.length, "IDs must be unique"),
   hiddenFolderIds: distinctIds,
@@ -25,6 +25,8 @@ export const preferencePatchSchema = z.object(preferenceFields).partial().extend
 export interface NativeSettings {
   timeZone: string;
   editionSize: number;
+  /** False means the edition producer chooses its default size. */
+  editionSizeIsCustom?: boolean;
   readingMinutes: number | null;
   folderOrder: (number | null)[];
   hiddenFolderIds: number[];
@@ -36,7 +38,7 @@ export interface NativePreferences extends NativeSettings {
   updatedAt: string | null;
 }
 const defaults: NativeSettings = {
-  timeZone: "UTC", editionSize: 24, readingMinutes: null,
+  timeZone: "UTC", editionSize: 24, editionSizeIsCustom: false, readingMinutes: null,
   folderOrder: [], hiddenFolderIds: [], preferredFolderIds: [], showUnfiled: true,
 };
 
@@ -44,10 +46,13 @@ export function getNativePreferences(userId: number): NativePreferences {
   const row = db.prepare<[number], { revision: number; settings: string; updated_at: string }>(
     "SELECT revision, settings, updated_at FROM native_preferences WHERE user_id = ?",
   ).get(userId);
-  return { ...defaults, ...(row ? JSON.parse(row.settings) : {}), revision: row?.revision ?? 0, updatedAt: row?.updated_at ?? null };
+  const stored = row ? JSON.parse(row.settings) : {};
+  // Legacy non-default values express intent. Legacy 24 is indistinguishable from
+  // an implicit default recorded by a folder-only write; treat it as the default.
+  return { ...defaults, ...stored, editionSizeIsCustom: stored.editionSizeIsCustom ?? (stored.editionSize != null && stored.editionSize !== 24), revision: row?.revision ?? 0, updatedAt: row?.updated_at ?? null };
 }
 
-export function patchNativePreferences(userId: number, input: { requestId: string; expectedRevision: number } & Partial<NativeSettings>): NativePreferences {
+export function patchNativePreferences(userId: number, input: { requestId: string; expectedRevision: number } & Omit<Partial<NativeSettings>, "editionSize" | "editionSizeIsCustom"> & { editionSize?: number | null }): NativePreferences {
   const parsed = preferencePatchSchema.safeParse(input);
   if (!parsed.success) throw new NativeError("invalid_input");
   const { requestId, expectedRevision, ...patch } = parsed.data as typeof input;
@@ -59,7 +64,8 @@ export function patchNativePreferences(userId: number, input: { requestId: strin
       if (ids?.some((id) => id !== null && !ownedIds.has(id))) throw new NativeError("folder_not_found", 404);
     }
     const { revision, updatedAt: _updatedAt, ...settings } = current;
-    const next = { ...settings, ...patch };
+    const next = { ...settings, ...patch, editionSize: patch.editionSize === null ? defaults.editionSize : patch.editionSize ?? current.editionSize,
+      editionSizeIsCustom: patch.editionSize === undefined ? current.editionSizeIsCustom : patch.editionSize !== null };
     // The first write records ownership of defaults, allowing a one-time local migration.
     if (revision > 0 && JSON.stringify(settings) === JSON.stringify(next)) return current;
     const now = new Date().toISOString();

@@ -4,6 +4,8 @@ export interface EditionCandidate {
   id: number;
   subscriptionId: number;
   folderId: number | null;
+  sourceName?: string | null;
+  folderName?: string | null;
   title: string | null;
   url: string | null;
   publishedAt: string;
