@@ -98,7 +98,16 @@ const FETCH_TIMEOUT_MS = 12_000;
 const MAX_REDIRECTS = 5;
 class ArticleHttpError extends Error { constructor(readonly status: number) { super("article_http_error"); } }
 
-const MAX_HTML_BYTES = 5 * 1024 * 1024;
+const MAX_HTML_BYTES = 2 * 1024 * 1024;
+
+function stripHeavyTags(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "")
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, "");
+}
 
 async function fetchArticleHtml(rawUrl: string, signal: AbortSignal, dispatcher: Agent, fetchImpl: ArticleFetch): Promise<{ html: string; url: string } | null> {
   let currentUrl = rawUrl;
@@ -175,16 +184,22 @@ export async function extractArticle(rawUrl: string, fetchImpl: ArticleFetch = d
     const fetched = await fetchArticleHtml(safeUrl.toString(), controller.signal, dispatcher, fetchImpl);
     if (!fetched) return { status: "failed" };
 
-    const dom = new JSDOM(fetched.html, { url: fetched.url });
-    const paywall = /"isAccessibleForFree"\s*:\s*(?:false|"false")/i.test(fetched.html);
-    cleanConsentDom(dom.window.document);
+    const cleanedHtml = stripHeavyTags(fetched.html);
+    const dom = new JSDOM(cleanedHtml, { url: fetched.url });
+    let parsed;
+    try {
+      const paywall = /"isAccessibleForFree"\s*:\s*(?:false|"false")/i.test(fetched.html);
+      cleanConsentDom(dom.window.document);
 
-    const parsed = new Readability(dom.window.document, { charThreshold: 60 }).parse();
-    if (isConsentContent(fetched.url, parsed?.content ?? fetched.html, parsed?.title, parsed?.textContent)) {
-      return { status: "consent_wall" };
+      parsed = new Readability(dom.window.document, { charThreshold: 60 }).parse();
+      if (isConsentContent(fetched.url, parsed?.content ?? fetched.html, parsed?.title, parsed?.textContent)) {
+        return { status: "consent_wall" };
+      }
+      if (paywall || ((parsed?.textContent?.length ?? 0) < 2500 && /(?:subscribe to (?:continue|read)|sign in to (?:continue|read)|abonnieren und weiterlesen|nur für abonnenten|jetzt abonnieren.{0,40}weiterlesen)/i.test(parsed?.textContent ?? ""))) return { status: "paywall" };
+      if (!parsed?.content) return { status: "failed" };
+    } finally {
+      dom.window.close();
     }
-    if (paywall || ((parsed?.textContent?.length ?? 0) < 2500 && /(?:subscribe to (?:continue|read)|sign in to (?:continue|read)|abonnieren und weiterlesen|nur für abonnenten|jetzt abonnieren.{0,40}weiterlesen)/i.test(parsed?.textContent ?? ""))) return { status: "paywall" };
-    if (!parsed?.content) return { status: "failed" };
 
     return {
       status: (parsed.textContent?.trim().length ?? 0) < 200 ? "partial" : "ok",
