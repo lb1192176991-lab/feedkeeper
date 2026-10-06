@@ -4,11 +4,15 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
-### Added
-- ESLint runs as part of `npm run lint` and in CI. Unused code and a few unnecessary regex escapes found by it were removed.
+## [0.16.1] - 2026-10-06
 
 ### Changed
 - Settings → MCP explains signing in with OAuth as the recommended way to connect ChatGPT, Claude and other apps, step by step. Tokens are now described as the second option for scripts and clients without connector support.
+- The README has a quick start and a "Why FeedKeeper?" section near the top, and describes OAuth sign-in for MCP clients. The changelog is shorter.
+- ESLint runs as part of `npm run lint` and in CI. Unused code and a few unnecessary regex escapes found by it were removed.
+
+### Security
+- Updated `source-map-js` and the MCP SDK (1.32.1) to clear an `npm audit` finding.
 
 ## [0.16.0] - 2026-10-06
 
@@ -224,7 +228,8 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/visualfusion/feedkeeper/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/visualfusion/feedkeeper/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/visualfusion/feedkeeper/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/visualfusion/feedkeeper/compare/v0.14.2...v0.15.0
