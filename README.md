@@ -26,6 +26,39 @@ It is multi-user by default, with isolated accounts, personal access tokens, and
   <img src="docs/screenshots/ipad.png" alt="FeedKeeper on iPad in dark mode: magazine view with lead story" width="592" />
 </p>
 
+## Why FeedKeeper?
+
+There are good self-hosted readers already, such as Miniflux and FreshRSS. FeedKeeper is for you if you want your feeds to be part of your AI workflows without giving up ownership:
+
+- **MCP built in.** Claude, ChatGPT and other MCP clients connect to `/mcp` directly, with OAuth sign-in or personal access tokens, read-only or read and write. Ask for a daily briefing, let an agent triage unread articles, or let it curate an edition. No separate bridge to run.
+- **Small to run.** One Node process and one SQLite file, with full-text search built in. No PostgreSQL, no Redis. It runs on a Raspberry Pi or on shared hosting such as Uberspace.
+- **An open API.** The REST API under `/api/v1` is described in an [OpenAPI file](docs/openapi.yaml), with offline sync, notes and editions, so third parties can build their own clients.
+- **Built to be extended.** Operators can add settings, footer links or a single sign-on form to the web app without forking it, see [Extending the web app](docs/extending-the-web-app.md).
+
+If you only need a plain, mature reader with many integrations, the established projects are the safer choice. FeedKeeper is young (version 0.x), so expect some rough edges.
+
+## Quick start
+
+Up and running in about a minute. Prebuilt images for `amd64` and `arm64` (including Raspberry Pi) are published to the GitHub Container Registry. You only need Docker, no clone and no build:
+
+```bash
+mkdir feedkeeper && cd feedkeeper
+curl -fsSLO https://raw.githubusercontent.com/visualfusion/feedkeeper/main/compose.yaml
+echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
+docker compose up -d
+```
+
+Open `http://localhost:3000` to complete the initial setup via the web onboarding screen. For a public domain, also add `PUBLIC_URL=https://your.domain` to `.env` (see [`.env.example`](.env.example) for all options).
+
+To update, pull the new image and restart:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Changing `SESSION_SECRET` signs out active browser sessions; feeds and accounts stay in the database. Want to build the image yourself? Clone the repository and run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
+
 ## Features
 
 - **Categories and feed ordering** — group subscriptions into categories, search and filter the feed list, rename categories in place, and reorder feeds by dragging.
@@ -88,28 +121,6 @@ FeedKeeper uses a single backend with clients tailored to different situations:
 - **Remote MCP access** lets AI tools curate reading lists, search past items, and inspect candidates using the same APIs.
 
 Features developed for native apps (such as article notes and edition scheduling) are exposed through the open API (`/api/v1`) so third-party clients can use them too.
-
-## Quick start with Docker
-
-Prebuilt images for `amd64` and `arm64` (including Raspberry Pi) are published to the GitHub Container Registry. You only need Docker, no clone and no build:
-
-```bash
-mkdir feedkeeper && cd feedkeeper
-curl -fsSLO https://raw.githubusercontent.com/visualfusion/feedkeeper/main/compose.yaml
-echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
-docker compose up -d
-```
-
-Open `http://localhost:3000` to complete the initial setup via the web onboarding screen. For a public domain, also add `PUBLIC_URL=https://your.domain` to `.env` (see [`.env.example`](.env.example) for all options).
-
-To update, pull the new image and restart:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Changing `SESSION_SECRET` signs out active browser sessions; feeds and accounts stay in the database. Want to build the image yourself? Clone the repository and run `docker compose -f compose.yaml -f compose.build.yaml up -d --build`.
 
 ## Back up and restore
 
@@ -175,11 +186,15 @@ npm run start
 
 ## Connecting an MCP client
 
+**With OAuth (ChatGPT, Claude and other connectors).** Add `https://<your-domain>/mcp` as a remote MCP server or custom connector. The client discovers the sign-in on its own: you log in to FeedKeeper, choose **read only** or **read and write** on the consent page, and the client gets a short-lived token (1 hour, refreshed for 30 days). Connected apps are listed under **Settings → MCP** and can be disconnected at any time. `OAUTH_ALLOWED_REDIRECT_HOSTS` can limit which hosts may register. Set `PUBLIC_URL` to the address the client reaches the server at; see [docs/design/mcp-oauth.md](docs/design/mcp-oauth.md).
+
+**With a personal access token (scripts and clients without OAuth).**
+
 1. Log in to the FeedKeeper web UI and go to **Settings → Personal access tokens**.
 2. Create a token and copy it immediately — it's only shown once. Choose **Read only** for clients that only need to browse articles; choose **Read and write** to let the client change feeds or reading state. Existing tokens retain their previous write access.
-3. Add an MCP server entry pointing at `https://<your-domain>/mcp`, sending `Authorization: Bearer <token>` as a header.
+3. Add an MCP server entry pointing at `https://<your-domain>/mcp`, sending `Authorization: Bearer <token>` as a header. Settings → MCP also offers a ready-made Claude Desktop configuration.
 
-Every tool call is scoped to the token's owner — a client can only see and manage that user's own feeds and items.
+Every tool call is scoped to the signed-in user — a client can only see and manage that user's own feeds and items. OAuth tokens work only on `/mcp`.
 
 ### Available MCP tools
 
@@ -238,6 +253,8 @@ Third-party clients are welcome to build on the same API — see [docs/building-
 - **SSRF protection**: feed URLs and redirects are checked before fetching and again when connecting. Private/internal addresses are blocked by default. On trusted instances that need local feeds, set `ALLOW_PRIVATE_FEEDS=true`.
 - **Rate limiting** on login and the general API surface.
 - **Personal access tokens** are stored as salted hashes, never in plaintext.
+- **OAuth 2.1 for MCP** with required PKCE, expiring tokens, refresh-token rotation with reuse detection, and a consent page that asks every time.
+- **Behind a proxy or CDN**: `TRUST_PROXY` and `CLIENT_IP_HEADER` make sure rate limits see the real client address.
 - **Per-user data isolation**: every query is scoped to the authenticated user; feeds are deduplicated by URL under the hood, but subscriptions, read state, and tokens are always per-user.
 
 Feed icons and the images of saved articles are delivered by the FeedKeeper server, so browsing does not contact third-party sites for them; images of other articles still load from their source websites. To find a feed's icon, the server fetches the site's homepage about once a week. Opening a full article through the reader also fetches that page from the FeedKeeper server.
@@ -247,6 +264,10 @@ Found a security issue? Please report it privately as described in [SECURITY.md]
 ## Configuration
 
 See [.env.example](.env.example) for all available environment variables.
+
+## Extending
+
+Operators and products built on FeedKeeper can add settings sections, footer links and a custom sign-in to the web app through `window.feedkeeperExtensions`, without patching the code. See [Extending the web app](docs/extending-the-web-app.md).
 
 ## Tech stack
 

@@ -4,131 +4,105 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+- Settings → MCP explains signing in with OAuth as the recommended way to connect ChatGPT, Claude and other apps, step by step. Tokens are now described as the second option for scripts and clients without connector support.
+
 ## [0.16.0] - 2026-10-06
 
 ### Added
-- Extension points for the web app, for operators and products built on FeedKeeper: through `window.feedkeeperExtensions` a script on the page can add sections to the settings (listed under group headings, limited to administrators if wished) and hide built-in ones, add footer links such as a legal notice and privacy policy (localised, shown under the sign-in card, in the account menu and on the settings pages), and replace the sign-in form, for example to sign in through a company's single sign-on. Everything is validated, so a broken entry cannot break the page. See [Extending the web app](docs/extending-the-web-app.md).
+- Extension points for the web app, for operators and products built on FeedKeeper: a script on the page can add settings sections, add footer links (such as a legal notice) and replace the sign-in form, for example with a company single sign-on. See [Extending the web app](docs/extending-the-web-app.md).
 
 ## [0.15.1] - 2026-10-06
 
 ### Fixed
-- The OAuth consent and sign-in forms were rejected as coming from another site. With `Referrer-Policy: no-referrer`, which helmet sets by default, browsers send `Origin: null` on a same-origin form post, and the origin check treated that as foreign, so connectors could sign in but never complete the consent. The check now relies on `Sec-Fetch-Site` and falls back to `Origin` only for browsers without it; the consent and sign-in pages send `Referrer-Policy: same-origin`.
+- Connectors could sign in through OAuth but never complete the consent, because the form post was rejected as coming from another site. The origin check now relies on `Sec-Fetch-Site`.
 
 ### Changed
-- The web app shows the wordmark from the new FeedKeeper logo file next to the logo in the header, on the sign-in page and on the setup page (light and dark, in the text color), sized like visualfusion.de: x-height 0.45, baseline at 0.772 and gap 0.375 of the logo height. The logo is cropped to its visible shape, so the splash and offline screens keep their size at 62 and 48 pixels.
+- The web app shows the new FeedKeeper wordmark next to the logo.
 
 ## [0.15.0] - 2026-10-06
 
 ### Added
-- OAuth 2.1 sign-in for the remote MCP endpoint, so connectors such as ChatGPT and Claude can connect without a hand-made token: discovery metadata (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`), dynamic client registration, authorization code flow with required PKCE (S256), refresh-token rotation with reuse detection, and revocation. The consent page asks every time and lets you choose read-only or read and write. OAuth tokens expire (access 1 hour, refresh 30 days) and only work on `/mcp`; existing `fk_` tokens are unchanged. `OAUTH_ALLOWED_REDIRECT_HOSTS` optionally limits which hosts may register redirect addresses.
+- OAuth 2.1 sign-in for the remote MCP endpoint, so connectors such as ChatGPT and Claude can connect without a hand-made token: discovery metadata, dynamic client registration, authorization code flow with PKCE, refresh-token rotation and revocation. The consent page asks every time and lets you choose read-only or read and write. OAuth tokens expire (access 1 hour, refresh 30 days) and only work on `/mcp`; existing `fk_` tokens are unchanged. `OAUTH_ALLOWED_REDIRECT_HOSTS` optionally limits which hosts may register.
 - Settings → MCP lists the apps that signed in through OAuth and lets you disconnect them.
 
 ## [0.14.2] - 2026-10-06
 
 ### Fixed
-- `TRUST_PROXY` accepts a comma-separated list of trusted proxies (addresses, CIDR ranges, `loopback`, `linklocal`, `uniquelocal`) or a hop count. Behind a CDN in front of the host's web server, `true` treated the CDN edge address as the client, so all visitors behind one edge shared the API and login rate limits. With the proxies listed, rate limits see the real client address and requests that bypass the CDN cannot forge one. `true` keeps its previous meaning; an invalid list stops the server at startup.
-- `CLIENT_IP_HEADER` (e.g. `CF-Connecting-IP`) takes the client address from the CDN's header for web servers that replace `X-Forwarded-For` with the CDN edge, as Uberspace does. The header is used only for requests from the proxies listed in `TRUST_PROXY`, so clients that bypass the CDN cannot set it.
+- Behind a CDN, all visitors of one edge shared the rate limits. `TRUST_PROXY` now accepts a list of trusted proxies (addresses, CIDR ranges, `loopback`, `linklocal`, `uniquelocal`) or a hop count, and `CLIENT_IP_HEADER` (e.g. `CF-Connecting-IP`) takes the client address from the CDN's header, as needed on Uberspace. An invalid value stops the server at startup.
 
 ## [0.14.1] - 2026-10-05
 
 ### Fixed
-- Close JSDOM window instances after Readability extraction to prevent a Node.js heap memory leak in long-running daemon processes.
-- Strip script, style, SVG, and iframe tags before JSDOM parsing, reducing memory footprint and DOM extraction latency from seconds to milliseconds.
-- Optimize the full-text background queue candidate query to use index-backed relations, dropping query time from >2s to <80ms.
-- Set a balanced scheduler interval and concurrency limit to ensure responsive API request handling on resource-constrained servers.
+- A memory leak during full-text extraction in long-running processes, and much faster extraction and background queue queries on small servers.
 
 ## [0.14.0] - 2026-10-05
 
 ### Added
-- Shared article-content lifecycle for every reader: persistent preparation jobs, per-article extraction outcomes and retry times, content revisions, and item-content changes in native delta sync.
-- Access-checked background preparation for selected articles through POST /api/v1/items/prepare. Ordinary article and bundle reads remain cache-only.
-- Revision-checked MCP content pagination in HTML or plain text, so agents can retrieve all parts of long articles without silently losing the end.
+- Background preparation of articles for every reader: persistent jobs, per-article extraction outcomes with retry times, and content changes in native sync. Selected articles can be prepared through `POST /api/v1/items/prepare`.
+- MCP: long articles can be read in parts (HTML or plain text) with revision checks, so nothing is silently cut off.
 
 ### Changed
-- Automatic full-text preparation prioritizes active editions, saved articles and notes, including protected articles after unsubscribing. The worker uses at most two concurrent requests and one per host, with durable jobs and access/capability checks before execution.
-- Consent failures are remembered per article rather than disabling an entire feed. Paywalls, bot blocks, timeouts and short partial extractions have distinct outcomes; shorter extracts and later feed teasers preserve richer stored content.
-- Native image proxy references cover all article images instead of only the first eight. Existing raster validation, image ownership checks and SSRF protection remain in force.
-- Cached source helpers return complete available source text and content revisions; bounded consumers are responsible for explicit chunking or rejection, rather than unnoticed truncation.
+- Full-text preparation prioritizes active editions, saved articles and notes, using at most two concurrent requests and one per host.
+- Paywalls and consent walls are remembered per article instead of disabling a whole feed; richer stored content is not replaced by shorter extracts.
+- All article images go through the server's image proxy, still with SSRF and ownership checks.
 
 ### Fixed
-- Metadata-only content updates do not update FTS5 a second time from nested triggers; reader revisions and full-text search remain consistent.
+- Full-text search stays consistent when only an article's metadata changes.
 
 ## [0.13.0] - 2026-10-05
 
 ### Added
-- Universal Inbox (Read-it-Later): save web clippings, URLs, and personal notes directly to an isolated personal inbox feed (`POST /api/v1/inbox`) with automatic text/image archiving, sync support, and retention cleanup immunity. Includes `save_to_inbox` MCP tool for external agents and workflows.
-- Linked edition overviews with up to five topics and validated article references, available to MCP publishers and native clients through `edition.overview`.
-- Source and section names in edition candidates, plus an access-checked internal helper for bounded cached article text.
-
-### Changed
-- Native preferences distinguish explicit article limits from producer defaults. Setting `editionSize` to null restores the default; section-only changes preserve the choice.
-- Emit current TypeScript declarations with core builds for downstream consumers.
+- Universal Inbox (read it later): save web pages, URLs and notes to a personal inbox with automatic text and image archiving (`POST /api/v1/inbox`, MCP tool `save_to_inbox`). Inbox items are exempt from cleanup.
+- Edition overviews with up to five topics and validated article links, for MCP publishers and native clients.
 
 ### Fixed
-- Prevent section preference initialization from implicitly overriding a downstream edition producer's default article count with 24.
+- Setting section preferences no longer overrides the default article count of an edition.
 
 ## [0.12.0] - 2026-10-04
 
 ### Added
-- Account capabilities negotiation: user endpoints (`GET /api/v1/me` and `GET /api/auth/me`) now expose an `AccountCapabilities` object (`type: "selfhosted"`, `features`, `manageUrl`), allowing clients to discover active capabilities dynamically.
-- Pluggable `CapabilitiesProvider` and `requireCapability` middleware: allows downstream or hosted distributions to customize capability discovery and access control cleanly without patching core logic.
-- Independent account capability for server full-text search (`search.fts`), separate from fetching reader text (`fulltext`). Native metadata advertises account capability discovery (`account-capabilities`).
-- Claude Desktop and Cowork configuration snippet in web settings: allows one-click copying of the complete MCP server configuration block including personal access tokens.
-- Capability checks on the Streamable HTTP `/mcp` route ensuring active MCP support.
+- Account capabilities: `GET /api/v1/me` and `GET /api/auth/me` list the features of an account, so clients can adapt. Hosted or downstream distributions can plug in their own capability rules; the open source server grants everything.
+- A ready-made Claude Desktop and Cowork configuration in the MCP settings, token included.
 
 ### Changed
-- Account capability discovery and enforcement use the same feature map. Explicit denials apply to every account type, and omitted flags do not grant access.
-- Native sync, reading-state writes, note updates, app preferences, folder icon edits, full-text fetches and edition generation enforce the advertised account capabilities. MCP tools and automatic edition scheduling respect the same permissions.
-- Existing notes and editions remain readable after a capability is disabled. Notes can still be exported or deleted; disabled features never delete stored content.
-- Mixed mutation batches report capability denials per action, without consuming their mutation IDs, so queued changes can be retried after access is restored.
+- Disabling a feature never deletes stored content; notes and editions stay readable and notes can still be exported or deleted.
 
 ## [0.11.0] - 2026-10-04
 
 ### Added
-- Automatic editions for native apps: the server puts together up to 24 unread stories using freshness, preferred sections, source diversity and duplicate detection. A shared time zone defines morning, midday, evening and late issues; a reading-time budget can keep an issue short.
-- App-only reading preferences: `GET/PATCH /api/v1/native-preferences` synchronizes section order, newspaper visibility, preferred sections, time zone and edition size. Stable folder IDs survive renames, deleted folders are removed from the preferences, and the web reader keeps its existing category order and filters.
-- Edition state, candidates and generation endpoints: `/api/v1/edition/state`, `/edition/candidates` and `/edition/generate`. Issue identities and revisions are retained across expiry and dismissal, and active issue articles are protected from retention cleanup and unsubscribing until the issue ends.
-- MCP tools `get_edition`, `get_edition_candidates`, `generate_edition`, `dismiss_edition`, `get_native_preferences` and `update_native_preferences`. Agents can inspect the current issue and shared preferences, curate a selection, and publish it with revision checks and safe retries.
+- Automatic editions for native apps: up to 24 unread stories chosen by freshness, preferred sections, source diversity and duplicate detection, in morning, midday and evening issues.
+- App-only reading preferences (`/api/v1/native-preferences`) that sync section order, newspaper visibility and edition size without touching the web reader.
+- Edition endpoints and MCP tools (`get_edition`, `get_edition_candidates`, `generate_edition`, `dismiss_edition`, `get_native_preferences`, `update_native_preferences`) so agents can inspect, curate and publish an issue with revision checks and safe retries.
 
 ### Changed
-- Curated editions take priority over automatic issues until expiry, defaulting to 24 hours and capped at seven days. `publish_edition` accepts an optional title, introduction, expected revision and request ID. Reading an article or refreshing feeds keeps the current issue in place.
-- Native preference writes and edition commands use UUID request IDs with receipts retained for at least 35 days. Conflicts return the current state; changing the payload of an already used request ID is rejected.
-- Feed icons prefer SVG artwork and the largest declared raster or touch icons, including icons from web app manifests. Unavailable candidates fall back to the next declared image, then the previous source and `/favicon.ico`.
-- SVG icons are stored as 512-pixel PNGs for larger native displays. Existing feeds recheck their icons on the next poll, retaining the previous image until a replacement is available.
-
-### Fixed
-- New issues receive their own identity and creation time. Expiry and dismissal are delivered through native sync, and recreating an issue no longer resets its revision.
+- Curated editions take priority over automatic ones until they expire (24 hours by default, at most seven days).
+- Feed icons prefer SVG and the largest declared icons, including web app manifests; SVG icons are stored as 512-pixel PNGs.
 
 ## [0.10.1] - 2026-10-03
 
 ### Changed
-- Feed icons from SVG and ICO sources are stored as PNG, so native and web clients can use the same cached image. Existing icons are converted when first requested.
-- The native API design and OpenAPI specification now describe the implemented routes and the note conflict contract.
+- Feed icons from SVG and ICO sources are stored as PNG so web and native clients share one image.
 
 ### Fixed
-- Deleting a note with `expectedRevision` now detects edits from another device. Revisions continue across deletion and recreation, and a deleted note's revision is available through `/sync` and `GET /items/{id}/note`.
-- Feed icons are checked again about once a week, even when the feed returns 304. A changed icon updates its hash and sync entry; an unchanged icon does not create a new sync entry.
+- Deleting a note detects edits from another device.
+- Feed icons are rechecked about once a week, even when the feed returns 304.
 
 ## [0.10.0] - 2026-10-03
 
 ### Added
-- Full-text search with SQLite FTS5: `GET /api/v1/search` searches titles, snippets, cached full text, and personal article notes with BM25 relevance ranking, diacritic-insensitive matching, and phrase support. The index stays in step through database triggers on article changes.
-- Article notes: attach personal Markdown notes to any article with `GET /api/v1/items/{id}/note` and `PUT /api/v1/items/{id}/note`, with conflict detection using expected revisions and offline mutation support (`item.note.set`, `item.note.delete`). Export individual notes as Markdown files or download all your notes in a single file from `GET /api/v1/notes/export`. Articles with notes are permanently excluded from database retention cleanups.
-- Curated daily edition: `GET /api/v1/edition` serves an ordered list of up to 24 hand-picked articles with an expiry date, and MCP clients can assemble it with the new `publish_edition` tool.
-- Feed icons served by the server: `/api/v1/subscriptions/{id}/icon` delivers icons directly with SHA-256 hashes and conditional ETags, and notifies clients of icon changes through `/sync`. The web app uses the server-served icons directly.
-- SF Symbols for folders: `POST /folders` and `PATCH /folders/{id}` accept an optional `iconSymbol` (such as `newspaper.fill`), which syncs across devices for native apps that display folders as sections or ressorts.
-- Retention rules in the meta endpoint: `GET /api/v1/meta` publishes `limits.retention` with the exact cleanup rules (whether cleanup runs, age limits for read and unread articles, and per-feed item caps) so offline clients can mirror the server's housekeeping.
+- Full-text search with SQLite FTS5 (`GET /api/v1/search`) over titles, snippets, cached full text and notes, ranked by BM25, diacritic-insensitive, with phrase support.
+- Article notes in Markdown, synced across devices, exportable as files, and exempt from cleanup.
+- A curated daily edition (`GET /api/v1/edition`) that MCP clients can assemble with `publish_edition`.
+- Feed icons served by the server with hashes and ETags, and SF Symbols for folders.
+- Retention rules in `GET /api/v1/meta`, so offline clients can mirror the server's housekeeping.
 
 ## [0.9.0] - 2026-10-02
 
 ### Added
-- Groundwork for native apps: `GET /api/v1/meta` and pairing a device with a one-time code (Settings → Devices, with a QR code). Each device gets its own revocable token for the new `/api/v1`, which MCP does not accept. See `docs/design/native-api.md`.
-- Native API: `GET /api/v1/sync` delivers everything that changed in a user's state (article read and saved state and reading position, subscriptions, folders, muted keywords) from a compacted change log, and `POST /api/v1/mutations` applies changes made offline idempotently with last-writer-wins per field.
-- Native API: subscriptions, folders, muted keywords, articles (cursor paging, search, content, bundles for offline copies), full text, images through the server, OPML and an overview, all under `/api/v1` and described in `docs/openapi.yaml`.
-- MCP: `get_digest` returns unread articles grouped by feed with short snippets, and `get_overview` summarizes the account (unread and saved counts, top feeds, folders, failing feeds).
-- MCP: `get_item` accepts `maxChars`, and `get_new_items` can leave out article HTML and shorten summaries, to save tokens.
-- MCP: `update_feed` can switch push notifications and the app icon count per feed.
-- MCP prompts (`daily_briefing`, `catch_up_on_topic`, `saved_reading_list`, `triage_unread`) and resources (feeds, OPML, saved articles, digest, single articles).
+- Groundwork for native apps: `GET /api/v1/meta`, device pairing with a QR code (Settings → Devices) and a revocable token per device. See `docs/design/native-api.md`.
+- Incremental sync (`GET /api/v1/sync`) and idempotent offline changes (`POST /api/v1/mutations`), plus subscriptions, folders, muted keywords, articles, full text, images, OPML and an overview under `/api/v1`, described in `docs/openapi.yaml`.
+- MCP: `get_digest`, `get_overview`, the `maxChars` option of `get_item`, shorter `get_new_items` results, push settings in `update_feed`, prompts (`daily_briefing`, `catch_up_on_topic`, `saved_reading_list`, `triage_unread`) and resources.
 
 ## [0.8.0] - 2026-10-02
 
@@ -247,7 +221,14 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 First public release: an RSS and Atom reader with a remote MCP server, multi-user accounts, a trilingual interface (English, German, Japanese), SSRF-guarded feed fetching and a single-file SQLite database.
 
-[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/visualfusion/feedkeeper/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/visualfusion/feedkeeper/compare/v0.15.1...v0.16.0
+[0.15.1]: https://github.com/visualfusion/feedkeeper/compare/v0.15.0...v0.15.1
+[0.15.0]: https://github.com/visualfusion/feedkeeper/compare/v0.14.2...v0.15.0
+[0.14.2]: https://github.com/visualfusion/feedkeeper/compare/v0.14.1...v0.14.2
+[0.14.1]: https://github.com/visualfusion/feedkeeper/compare/v0.14.0...v0.14.1
+[0.14.0]: https://github.com/visualfusion/feedkeeper/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/visualfusion/feedkeeper/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/visualfusion/feedkeeper/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/visualfusion/feedkeeper/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/visualfusion/feedkeeper/compare/v0.10.0...v0.10.1

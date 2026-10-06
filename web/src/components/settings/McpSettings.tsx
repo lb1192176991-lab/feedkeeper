@@ -80,12 +80,29 @@ export function McpSettings() {
             <code className="min-w-0 flex-1 truncate text-sm">{mcpUrl}</code>
             <CopyButton value={mcpUrl} />
           </div>
-          <ol className="mt-4 flex list-decimal flex-col gap-1 pl-5 text-sm text-[var(--c-text-muted)]">
-            <li>{t("settings.mcpStepToken")}</li>
-            <li>{t("settings.mcpStepUrl")}</li>
-            <li>{t("settings.mcpStepHeader")}</li>
-          </ol>
-          <p className="mt-3 text-sm text-[var(--c-text-muted)]">{t("settings.mcpStepOauth")}</p>
+          <div className="mt-5 rounded-xl border border-[var(--c-green3)] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">{t("settings.mcpOauthTitle")}</h3>
+              <span className="rounded-full bg-[var(--c-mobile-nav-active)] px-2 py-0.5 text-xs font-medium">
+                {t("settings.mcpOauthBadge")}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-[var(--c-text-muted)]">{t("settings.mcpOauthIntro")}</p>
+            <ol className="mt-3 flex list-decimal flex-col gap-1 pl-5 text-sm text-[var(--c-text-muted)]">
+              <li>{t("settings.mcpOauthStep1")}</li>
+              <li>{t("settings.mcpOauthStep2")}</li>
+              <li>{t("settings.mcpOauthStep3")}</li>
+            </ol>
+            <p className="mt-3 text-sm text-[var(--c-text-muted)]">{t("settings.mcpOauthDone")}</p>
+          </div>
+          <div className="mt-4 rounded-xl border border-[var(--c-border)] p-4">
+            <h3 className="font-semibold">{t("settings.mcpTokenTitle")}</h3>
+            <p className="mt-1 text-sm text-[var(--c-text-muted)]">{t("settings.mcpTokenIntro")}</p>
+            <ol className="mt-3 flex list-decimal flex-col gap-1 pl-5 text-sm text-[var(--c-text-muted)]">
+              <li>{t("settings.mcpStepToken")}</li>
+              <li>{t("settings.mcpStepUrl")}</li>
+              <li>{t("settings.mcpStepHeader")}</li>
+            </ol>
           <div className="mt-5 border-t border-[var(--c-border)] pt-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--c-text-muted)]">
@@ -124,6 +141,7 @@ export function McpSettings() {
   }
 }`}
             </pre>
+          </div>
           </div>
         </SettingBlock>
       </SettingsCard>
