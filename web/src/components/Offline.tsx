@@ -35,7 +35,7 @@ export function OfflineScreen() {
   const { refresh } = useAuth();
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-[var(--c-bg)] px-6 text-center">
-      <img src="/logo.svg" alt="" className="h-14 w-14" />
+      <img src="/logo.svg" alt="" className="h-12 w-12" />
       <h1 className="text-xl font-semibold" style={{ fontFamily: "Manrope, sans-serif" }}>{t("common.offlineTitle")}</h1>
       <p className="max-w-sm text-sm text-[var(--c-text-muted)]">{t("common.offlineText")}</p>
       <button type="button" onClick={() => void refresh()} className="btn-primary">{t("common.retry")}</button>

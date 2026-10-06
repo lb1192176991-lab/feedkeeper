@@ -108,6 +108,15 @@ test("a connector signs in with OAuth, PKCE and a consent page, then reaches /mc
     assert.equal((await post("/oauth/authorize/decision", { ...fields, csrf: "0".repeat(64), decision: "allow", grant_scope: "write" }, asUser)).status, 403);
     assert.equal((await post("/oauth/authorize/decision", { ...fields, redirect_uri: "http://localhost:8123/cb", decision: "allow", grant_scope: "write" }, asUser)).status, 403);
     assert.equal((await post("/oauth/authorize/decision", { ...fields, decision: "allow", grant_scope: "write" }, { ...asUser, origin: "https://evil.example.test" })).status, 403);
+    assert.equal((await post("/oauth/authorize/decision", { ...fields, decision: "allow", grant_scope: "write" }, { ...asUser, "sec-fetch-site": "cross-site" })).status, 403);
+    assert.equal((await post("/oauth/authorize/decision", { ...fields, decision: "allow", grant_scope: "write" }, { ...asUser, "sec-fetch-site": "same-site" })).status, 403);
+    // Without Origin or Sec-Fetch-Site (old browsers, tools) the CSRF token still binds the form to the session.
+    assert.equal((await post("/oauth/authorize/decision", { ...fields, csrf: "0".repeat(64), decision: "allow", grant_scope: "write" }, asUser)).status, 403);
+    // A same-origin post under `Referrer-Policy: no-referrer` carries `Origin: null`; the browser says same-origin itself.
+    const sameOriginNull = await post("/oauth/authorize/decision", { ...fields, decision: "deny" }, { ...asUser, origin: "null", "sec-fetch-site": "same-origin" });
+    assert.equal(sameOriginNull.status, 303);
+    assert.match(sameOriginNull.headers.get("location")!, /error=access_denied/);
+    assert.equal(consent.headers.get("referrer-policy"), "same-origin");
 
     // Deny sends the user back with access_denied.
     const denied = await post("/oauth/authorize/decision", { ...fields, decision: "deny" }, asUser);

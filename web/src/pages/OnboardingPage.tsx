@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
+import { BrandLockup } from "../components/BrandLockup.tsx";
 
 export function OnboardingPage() {
   const { t } = useTranslation();
@@ -30,9 +31,8 @@ export function OnboardingPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="card p-8 w-full max-w-md">
         <div className="flex flex-col items-center mb-6 text-center">
-          <img src="/logo.svg" alt="FeedKeeper" className="w-14 h-14 mb-3 drop-shadow-xs" />
-          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "Manrope, sans-serif" }}>
-            FeedKeeper
+          <h1 className="mb-3">
+            <BrandLockup size={44} />
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--c-text-muted)" }}>
             {t("onboarding.subtitle")}

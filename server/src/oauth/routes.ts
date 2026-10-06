@@ -212,10 +212,16 @@ const publicOrigin = new URL(issuer).origin;
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false });
 const formOnly = express.urlencoded({ extended: false, limit: "20kb" });
 
-/** The consent and login forms only ever post from our own pages. */
+/**
+ * The consent and login forms only ever post from our own pages. Browsers state that themselves in
+ * Sec-Fetch-Site; Origin is the fallback for older ones. With `Referrer-Policy: no-referrer` (helmet's
+ * default) a same-origin form post carries `Origin: null`, so a null Origin alone proves nothing.
+ */
 function sameOriginOnly(req: Request, res: Response, next: NextFunction): void {
+  const site = req.headers["sec-fetch-site"];
   const origin = req.headers.origin;
-  if ((origin && origin !== publicOrigin) || req.headers["sec-fetch-site"] === "cross-site") {
+  const foreign = site !== undefined ? site !== "same-origin" : origin !== undefined && origin !== publicOrigin;
+  if (foreign) {
     page(res, 403, renderError(req, "forbidden"));
     return;
   }
@@ -227,6 +233,8 @@ const LOOPBACK_FORM_ACTIONS = "http://localhost:* http://127.0.0.1:* http://[::1
 /** Pages are never cached or framed. Consent may submit on to the client's redirect address, which form-action also covers after a redirect. */
 function page(res: Response, status: number, html: string, allowRedirects = false): void {
   noStore(res);
+  // The forms check where a post came from; give them an Origin to check.
+  res.setHeader("Referrer-Policy", "same-origin");
   res.setHeader(
     "Content-Security-Policy",
     `default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'${allowRedirects ? ` https: ${LOOPBACK_FORM_ACTIONS}` : ""}`,

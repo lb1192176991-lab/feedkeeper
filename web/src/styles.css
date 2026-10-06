@@ -163,6 +163,27 @@ input[type="checkbox"]:disabled {
    `sm:w-56` on an element using `.input` always wins over this width:100%
    regardless of source order (plain same-specificity classes would not). */
 @layer components {
+  .brand-lockup {
+    --m: 28px;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: calc(var(--m) * 0.375);
+    color: inherit;
+  }
+  .brand-lockup img {
+    width: var(--m);
+    height: var(--m);
+    flex: none;
+  }
+  .brand-lockup .wordmark {
+    display: block;
+    flex: none;
+    width: auto;
+    height: calc(var(--m) * 0.803);
+    margin-top: calc(var(--m) * 0.151);
+    fill: currentColor;
+  }
+
   .card {
     background-color: var(--c-surface);
     border: 1px solid var(--c-border);

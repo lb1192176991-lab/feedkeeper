@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { BrandLockup } from "./BrandLockup.tsx";
 import { DesktopNav } from "./DesktopNav.tsx";
 import { ProfileMenu } from "./ProfileMenu.tsx";
 import { OfflineBanner } from "./Offline.tsx";
@@ -89,10 +90,7 @@ export function Layout() {
             onClick={handleItemsClick}
             className="flex items-center gap-2.5 shrink-0 hover:opacity-85 transition-opacity"
           >
-            <img src="/logo.svg" alt="FeedKeeper" className="w-6 h-6 shrink-0" />
-            <span className="font-semibold text-lg" style={{ fontFamily: "Manrope, sans-serif" }}>
-              {t("common.appName")}
-            </span>
+            <BrandLockup size={28} />
           </NavLink>
 
           <div className="flex items-center gap-3">

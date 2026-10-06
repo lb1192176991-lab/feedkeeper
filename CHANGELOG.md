@@ -4,6 +4,9 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Changed
+- The web app shows the wordmark from the new FeedKeeper logo file next to the logo in the header, on the sign-in page and on the setup page (light and dark, in the text color), sized like visualfusion.de: x-height 0.45, baseline at 0.772 and gap 0.375 of the logo height. The logo is cropped to its visible shape, so the splash and offline screens keep their size at 62 and 48 pixels.
+
 ## [0.15.0] - 2026-10-06
 
 ### Added
