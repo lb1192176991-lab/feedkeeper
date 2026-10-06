@@ -4,8 +4,11 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-06
+
 ### Added
 - OAuth 2.1 sign-in for the remote MCP endpoint, so connectors such as ChatGPT and Claude can connect without a hand-made token: discovery metadata (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`), dynamic client registration, authorization code flow with required PKCE (S256), refresh-token rotation with reuse detection, and revocation. The consent page asks every time and lets you choose read-only or read and write. OAuth tokens expire (access 1 hour, refresh 30 days) and only work on `/mcp`; existing `fk_` tokens are unchanged. `OAUTH_ALLOWED_REDIRECT_HOSTS` optionally limits which hosts may register redirect addresses.
+- Settings → MCP lists the apps that signed in through OAuth and lets you disconnect them.
 
 ## [0.14.2] - 2026-10-06
 
