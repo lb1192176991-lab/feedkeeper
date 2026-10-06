@@ -10,8 +10,9 @@ import { DevicesSettings } from "../components/settings/DevicesSettings.tsx";
 import { DatabaseSettings, UsersSettings } from "../components/settings/AdminSettings.tsx";
 import { SectionHeader } from "../components/settings/ui.tsx";
 import { ExtensionMount } from "../components/settings/ExtensionMount.tsx";
-import { groupSettingsSections, resolveSettingsExtensions } from "../settings/host.ts";
-import { useSettingsHost } from "../settings/useSettingsHost.ts";
+import { FooterLinks } from "../components/FooterLinks.tsx";
+import { groupSettingsSections, resolveSettingsExtensions } from "../extensions/host.ts";
+import { useExtensions } from "../extensions/useExtensions.ts";
 
 const icon = (path: ReactNode) => (
   <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{path}</svg>
@@ -37,7 +38,7 @@ export function SettingsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const host = useSettingsHost();
+  const extensions = useExtensions();
 
   const builtIn: Section[] = [
     { id: "account", label: t("settings.sectionAccount"), description: t("settings.sectionAccountHint"), icon: icon(<><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>), render: () => <AccountSettings /> },
@@ -49,7 +50,7 @@ export function SettingsPage() {
     { id: "database", label: t("settings.sectionDatabase"), description: t("settings.sectionDatabaseHint"), icon: icon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></>), admin: true, render: () => <DatabaseSettings /> },
   ];
   const isAdmin = user?.role === "admin";
-  const { hidden, sections: hostSections } = resolveSettingsExtensions(host, builtIn.map((section) => section.id), isAdmin);
+  const { hidden, sections: hostSections } = resolveSettingsExtensions(extensions, builtIn.map((section) => section.id), isAdmin);
   const extension: Section[] = hostSections.map((section) => ({
     id: section.id,
     label: section.label,
@@ -57,7 +58,7 @@ export function SettingsPage() {
     description: section.description,
     group: section.group,
     icon: icon(<>{(section.icon ?? DEFAULT_EXTENSION_ICON).map((path) => <path key={path} d={path} />)}</>),
-    render: () => <ExtensionMount section={section} />,
+    render: () => <ExtensionMount name={`settings-${section.id}`} mount={section.mount} />,
   }));
   const available = [...builtIn.filter((section) => !hidden.has(section.id) && (!section.admin || isAdmin)), ...extension];
   const active = available.find((section) => section.id === searchParams.get("tab")) ?? available[0];
@@ -113,6 +114,7 @@ export function SettingsPage() {
         <div key={active.id} className="min-w-0 animate-page-fade">
           <SectionHeader title={active.label} description={active.description} />
           {active.render()}
+          <FooterLinks placement="page" />
         </div>
       </div>
     </div>

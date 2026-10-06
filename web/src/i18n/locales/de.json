@@ -24,7 +24,8 @@
     "settings": "Einstellungen",
     "logout": "Abmelden",
     "menu": "Menü",
-    "account": "Konto"
+    "account": "Konto",
+    "footerLinks": "Weitere Links"
   },
   "onboarding": {
     "subtitle": "Lege den ersten Admin-Account an, um die Einrichtung abzuschließen.",

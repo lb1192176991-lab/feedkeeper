@@ -24,7 +24,8 @@
     "settings": "Settings",
     "logout": "Log out",
     "menu": "Menu",
-    "account": "Account"
+    "account": "Account",
+    "footerLinks": "Further links"
   },
   "onboarding": {
     "subtitle": "Create the first admin account to finish setting up this instance.",

@@ -2,6 +2,10 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api/client.ts";
 import { useAuth } from "../auth/AuthContext.tsx";
+import { ExtensionMount } from "../components/settings/ExtensionMount.tsx";
+import { FooterLinks } from "../components/FooterLinks.tsx";
+import { resolveLoginForm } from "../extensions/host.ts";
+import { useExtensions } from "../extensions/useExtensions.ts";
 import { BrandLockup } from "../components/BrandLockup.tsx";
 
 export function LoginPage() {
@@ -13,6 +17,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showGithubLink, setShowGithubLink] = useState(true);
   const [githubUrl, setGithubUrl] = useState("https://github.com/visualfusion/feedkeeper");
+  const hostForm = resolveLoginForm(useExtensions());
 
   useEffect(() => {
     api
@@ -53,34 +58,40 @@ export function LoginPage() {
             {t("login.subtitle")}
           </p>
         </div>
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="text-sm font-medium block mb-1">{t("login.emailLabel")}</label>
-            <input
-              type="email"
-              required
-              autoFocus
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium block mb-1">{t("login.passwordLabel")}</label>
-            <input
-              type="password"
-              required
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <button type="submit" disabled={submitting} className="btn-primary">
-            {t("login.submit")}
-          </button>
-        </form>
+        {hostForm ? (
+          <ExtensionMount name="login-form" mount={hostForm.mount} />
+        ) : (
+          <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            <div>
+              <label className="text-sm font-medium block mb-1">{t("login.emailLabel")}</label>
+              <input
+                type="email"
+                required
+                autoFocus
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">{t("login.passwordLabel")}</label>
+              <input
+                type="password"
+                required
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            {error && <p className="text-sm text-danger">{error}</p>}
+            <button type="submit" disabled={submitting} className="btn-primary">
+              {t("login.submit")}
+            </button>
+          </form>
+        )}
       </div>
+
+      <FooterLinks placement="login" />
 
       {showGithubLink && (
         <div className="mt-4 text-center">

@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext.tsx";
 import { getTheme, setTheme, subscribeTheme, type Theme } from "../utils/theme.ts";
 import { currentInstallMode, promptInstall, subscribeInstallPrompt } from "../utils/installPrompt.ts";
 import { UserAvatar } from "./UserAvatar.tsx";
+import { FooterLinks } from "./FooterLinks.tsx";
 
 const themeIcons: Record<Theme, ReactNode> = {
   light: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></>,
@@ -129,6 +130,7 @@ export function ProfileMenu() {
               {t("nav.logout")}
             </button>
           </div>
+          <FooterLinks placement="menu" />
         </div>
       )}
     </div>

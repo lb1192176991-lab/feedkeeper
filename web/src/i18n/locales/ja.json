@@ -24,7 +24,8 @@
     "settings": "設定",
     "logout": "ログアウト",
     "menu": "メニュー",
-    "account": "アカウント"
+    "account": "アカウント",
+    "footerLinks": "その他のリンク"
   },
   "onboarding": {
     "subtitle": "セットアップを完了するには、最初の管理者アカウントを作成してください。",

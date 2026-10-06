@@ -5,7 +5,7 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 ## [Unreleased]
 
 ### Added
-- The settings page has an extension point for products built on FeedKeeper: through `window.feedkeeperSettings` a script can add sections, listed under group headings in the navigation, and hide built-in ones. Sections are opened through `?tab=`, can be limited to administrators and are validated, so a broken entry cannot break the page. See [Extending the web app](docs/extending-the-web-app.md).
+- Extension points for the web app, for operators and products built on FeedKeeper: through `window.feedkeeperExtensions` a script on the page can add sections to the settings (listed under group headings, limited to administrators if wished) and hide built-in ones, add footer links such as a legal notice and privacy policy (localised, shown under the sign-in card, in the account menu and on the settings pages), and replace the sign-in form, for example to sign in through a company's single sign-on. Everything is validated, so a broken entry cannot break the page. See [Extending the web app](docs/extending-the-web-app.md).
 
 ## [0.15.1] - 2026-10-06
 
