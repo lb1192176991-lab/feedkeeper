@@ -4,6 +4,11 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-06
+
+### Fixed
+- The OAuth consent and sign-in forms were rejected as coming from another site. With `Referrer-Policy: no-referrer`, which helmet sets by default, browsers send `Origin: null` on a same-origin form post, and the origin check treated that as foreign, so connectors could sign in but never complete the consent. The check now relies on `Sec-Fetch-Site` and falls back to `Origin` only for browsers without it; the consent and sign-in pages send `Referrer-Policy: same-origin`.
+
 ### Changed
 - The web app shows the wordmark from the new FeedKeeper logo file next to the logo in the header, on the sign-in page and on the setup page (light and dark, in the text color), sized like visualfusion.de: x-height 0.45, baseline at 0.772 and gap 0.375 of the logo height. The logo is cropped to its visible shape, so the splash and offline screens keep their size at 62 and 48 pixels.
 
