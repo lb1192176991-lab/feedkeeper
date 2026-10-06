@@ -27,6 +27,7 @@ export const config = {
   sessionSecret: required("SESSION_SECRET"),
   allowSignup: process.env.ALLOW_SIGNUP === "true",
   trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  clientIpHeader: process.env.CLIENT_IP_HEADER?.trim() || null,
   minPollIntervalMinutes: Number(process.env.MIN_POLL_INTERVAL_MINUTES ?? 5),
   retentionReadDays: Number(process.env.RETENTION_READ_DAYS ?? 30),
   retentionMaxDays: Number(process.env.RETENTION_MAX_DAYS ?? 90),

@@ -7,6 +7,7 @@ import cors from "cors";
 import cookieSession from "cookie-session";
 import rateLimit from "express-rate-limit";
 import { config } from "./config.js";
+import { clientAddressFromHeader } from "./clientAddress.js";
 import { runMigrations } from "./db/index.js";
 import { apiRouter } from "./api/index.js";
 import { mcpRouter } from "./mcp/http.js";
@@ -37,6 +38,11 @@ const app = express();
 if (config.trustProxy !== false) {
   app.set("trust proxy", config.trustProxy);
 }
+if (config.clientIpHeader && !Array.isArray(config.trustProxy)) {
+  console.warn("[config] CLIENT_IP_HEADER is ignored: it needs TRUST_PROXY to list the trusted proxies");
+}
+// Before every rate limiter, so limits count the CDN's client rather than its edge.
+app.use(clientAddressFromHeader(config.clientIpHeader, config.trustProxy));
 
 app.use(
   helmet({

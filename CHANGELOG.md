@@ -8,6 +8,7 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ### Fixed
 - `TRUST_PROXY` accepts a comma-separated list of trusted proxies (addresses, CIDR ranges, `loopback`, `linklocal`, `uniquelocal`) or a hop count. Behind a CDN in front of the host's web server, `true` treated the CDN edge address as the client, so all visitors behind one edge shared the API and login rate limits. With the proxies listed, rate limits see the real client address and requests that bypass the CDN cannot forge one. `true` keeps its previous meaning; an invalid list stops the server at startup.
+- `CLIENT_IP_HEADER` (e.g. `CF-Connecting-IP`) takes the client address from the CDN's header for web servers that replace `X-Forwarded-For` with the CDN edge, as Uberspace does. The header is used only for requests from the proxies listed in `TRUST_PROXY`, so clients that bypass the CDN cannot set it.
 
 ## [0.14.1] - 2026-10-05
 
