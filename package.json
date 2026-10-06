@@ -28,7 +28,14 @@
     "setup": "npm run setup --workspace server",
     "db:backup": "npm run db:backup --workspace server --",
     "db:restore": "npm run db:restore --workspace server --",
-    "lint": "npm run lint --workspace server && npm run lint --workspace web",
+    "lint": "npm run lint --workspace server && npm run lint --workspace web && eslint .",
     "test": "npm run test --workspace server && npm run test --workspace web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript-eslint": "^8.71.1"
   }
 }

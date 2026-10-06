@@ -73,7 +73,10 @@ test("the change log and offline mutations keep devices in step", async () => {
     assert.equal(delta.changes.every((change, index) => index === 0 || change.seq > delta.changes[index - 1].seq), true);
 
     // The log is compacted: three toggles leave one entry for the article.
-    for (const read of [true, false, true]) read ? repo.markItemRead(ownerId, b) : repo.markItemUnread(ownerId, b);
+    for (const read of [true, false, true]) {
+      if (read) repo.markItemRead(ownerId, b);
+      else repo.markItemUnread(ownerId, b);
+    }
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM changes WHERE user_id = ? AND entity = 'item_state' AND entity_id = ?").get(ownerId, b)?.n, 1);
 
     // Paging, and nothing new means an empty answer that keeps the position.

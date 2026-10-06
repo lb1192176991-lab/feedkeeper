@@ -50,11 +50,11 @@ function cleanConsentDom(doc: Document): void {
  */
 export function isConsentContent(finalUrl: string, html: string, title?: string | null, text?: string | null): boolean {
   if (
-    /\/zustimmung[\/?]/i.test(finalUrl) ||
-    /\/consent[\/?]/i.test(finalUrl) ||
+    /\/zustimmung[/?]/i.test(finalUrl) ||
+    /\/consent[/?]/i.test(finalUrl) ||
     /\/cookie-wall/i.test(finalUrl) ||
-    /\/pur-abo[\/?]/i.test(finalUrl) ||
-    /\/cmp[\/?]/i.test(finalUrl) ||
+    /\/pur-abo[/?]/i.test(finalUrl) ||
+    /\/cmp[/?]/i.test(finalUrl) ||
     /\/privacy-wall/i.test(finalUrl)
   ) {
     return true;

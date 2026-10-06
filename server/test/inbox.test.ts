@@ -42,7 +42,7 @@ test("Universal Inbox: save web clippings, sync, retention protection, and unsub
   const { db, runMigrations } = await import("../src/db/index.js");
   const { v1Router } = await import("../src/api/v1/index.js");
   const { createPersonalAccessToken } = await import("../src/auth/tokens.js");
-  const { ensureUserInbox, saveToInbox, deleteInboxItem } = await import("../src/feeds/inbox.js");
+  const { saveToInbox } = await import("../src/feeds/inbox.js");
   const { runCleanup, updateRetentionSettings } = await import("../src/feeds/cleanup.js");
   const { createMcpServerForUser } = await import("../src/mcp/server.js");
 

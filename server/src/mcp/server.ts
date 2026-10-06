@@ -20,7 +20,6 @@ import {
   deleteFolder,
   updateSubscriptionFolder,
   applyToItems,
-  canAccessItem,
 } from "../feeds/repository.js";
 import type { TokenScope } from "../auth/tokens.js";
 import { getItemForMcp, listItemsPage } from "./items.js";
@@ -50,7 +49,6 @@ function errorResult(message: string) {
   return { content: [{ type: "text" as const, text: message }], isError: true as const };
 }
 
-const MAX_CONTENT_LENGTH = 40_000;
 
 const dateInput = z.union([z.string().datetime({ offset: true }), z.string().date()]);
 const publishedRange = {

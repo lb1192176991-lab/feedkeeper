@@ -229,7 +229,7 @@ const serializeFolder = (folder: ReturnType<typeof listFoldersForUser>[number]) 
   unreadCount: folder.unread_count,
 });
 
-export const SF_SYMBOL_REGEX = /^[a-z0-9]+(?:[\.\-][a-z0-9]+)*$/i;
+export const SF_SYMBOL_REGEX = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i;
 
 const sfSymbolSchema = z
   .string()

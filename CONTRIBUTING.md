@@ -33,7 +33,7 @@ See the [README](README.md#quick-start-local-development) for the full quick sta
 ## Before opening a pull request
 
 ```bash
-npm run lint   # type-checks both workspaces
+npm run lint   # type-checks both workspaces and runs ESLint
 npm test       # server and web tests
 npm run build  # verifies the production build succeeds
 ```
@@ -57,7 +57,7 @@ Feedkeeper is an npm workspace with two packages:
 ## Pull request guidelines
 
 - Keep PRs focused — one change per PR is easier to review than a bundle of unrelated fixes.
-- Match the existing code style (no linter/formatter is enforced yet beyond TypeScript's own checks).
+- Match the existing code style. ESLint (`npm run lint`) catches unused code and common mistakes; there is no automatic formatter yet. Warnings about React hook dependencies are known and do not block a pull request.
 - If you touch user-facing text, update all three locale files (`web/src/i18n/locales/{en,de,ja}.json`), not just English; a test fails when their keys differ. If you don't speak German or Japanese, a best-effort translation is fine, it will get reviewed. See [docs/translating.md](docs/translating.md) to improve or add a language.
 - User-visible changes get a line under "Unreleased" in [CHANGELOG.md](CHANGELOG.md).
 - Commit messages are a short conventional subject, for example `fix(server): reject empty feed titles` or `feat(web): add a refresh button`.

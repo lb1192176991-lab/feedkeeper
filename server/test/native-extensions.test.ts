@@ -10,7 +10,7 @@ test("native extensions: feed icons, folder icons, notes, editions, and retentio
   const { db, runMigrations } = await import("../src/db/index.js");
   const { storeFeedIcon } = await import("../src/feeds/feedIcon.js");
   const { runCleanup } = await import("../src/feeds/cleanup.js");
-  const { findItemNote, publishEdition } = await import("../src/feeds/repository.js");
+  const { findItemNote } = await import("../src/feeds/repository.js");
   const { listChanges } = await import("../src/sync/changeLog.js");
   const { applyMutations } = await import("../src/sync/mutations.js");
   const { v1Router } = await import("../src/api/v1/index.js");
@@ -332,12 +332,9 @@ test("native extensions: feed icons, folder icons, notes, editions, and retentio
     assert.equal(dupRes.isError, true);
 
     // MCP: foreign/inaccessible itemIds rejected
-    const foreignItemId = Number(
-      db
-        .prepare("INSERT INTO items (feed_id, guid, title, link, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(feedId, "item-foreign", "Foreign Item", "https://example.com/foreign", new Date().toISOString(), new Date().toISOString())
-        .lastInsertRowid,
-    );
+    db
+      .prepare("INSERT INTO items (feed_id, guid, title, link, published_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(feedId, "item-foreign", "Foreign Item", "https://example.com/foreign", new Date().toISOString(), new Date().toISOString());
     // User 2 cannot publish User 1's feed item unless subscribed
     const [c2Transport, s2Transport] = InMemoryTransport.createLinkedPair();
     const mcpServer2 = createMcpServerForUser(user2, "write");

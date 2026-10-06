@@ -170,7 +170,7 @@ export function pruneArchive(): number {
   })();
 
   let removed = 0;
-  let files: string[] = [];
+  let files: string[];
   try {
     files = readdirSync(archiveDir());
   } catch {
@@ -224,7 +224,6 @@ export function withArchivedImages<T extends { id: number; link: string | null; 
   });
 }
 
-const MAX_OFFLINE_IMAGES_PER_ITEM = 8;
 
 type ImageSource = { link: string | null; image_url?: string | null; content_html?: string | null; full_content_html?: string | null };
 

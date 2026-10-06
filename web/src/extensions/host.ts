@@ -119,6 +119,7 @@ export function pickLocalized(value: unknown, language: string): string | null {
 
 /** Only addresses on this site and http(s) URLs: a link must never run script. */
 function safeHref(href: string): boolean {
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what is rejected
   if (/[\u0000-\u001f\\]/.test(href) || href.length > 500) return false;
   return /^\/(?![/\\])/.test(href) || /^https?:\/\/[^\s/]+/i.test(href);
 }

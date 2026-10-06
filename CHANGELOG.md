@@ -4,6 +4,9 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+- ESLint runs as part of `npm run lint` and in CI. Unused code and a few unnecessary regex escapes found by it were removed.
+
 ### Changed
 - Settings → MCP explains signing in with OAuth as the recommended way to connect ChatGPT, Claude and other apps, step by step. Tokens are now described as the second option for scripts and clients without connector support.
 
