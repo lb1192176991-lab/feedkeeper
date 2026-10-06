@@ -4,6 +4,9 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+### Added
+- The settings page has an extension point for products built on FeedKeeper: through `window.feedkeeperSettings` a script can add sections, listed under group headings in the navigation, and hide built-in ones. Sections are opened through `?tab=`, can be limited to administrators and are validated, so a broken entry cannot break the page. See [Extending the web app](docs/extending-the-web-app.md).
+
 ## [0.15.1] - 2026-10-06
 
 ### Fixed
