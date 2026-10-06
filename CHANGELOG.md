@@ -4,6 +4,11 @@ All notable changes to FeedKeeper are documented here. The format follows [Keep 
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-10-06
+
+### Fixed
+- `TRUST_PROXY` accepts a comma-separated list of trusted proxies (addresses, CIDR ranges, `loopback`, `linklocal`, `uniquelocal`) or a hop count. Behind a CDN in front of the host's web server, `true` treated the CDN edge address as the client, so all visitors behind one edge shared the API and login rate limits. With the proxies listed, rate limits see the real client address and requests that bypass the CDN cannot forge one. `true` keeps its previous meaning; an invalid list stops the server at startup.
+
 ## [0.14.1] - 2026-10-05
 
 ### Fixed
