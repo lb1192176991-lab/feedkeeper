@@ -33,8 +33,9 @@ startEditionScheduler();
 
 const app = express();
 
-if (config.trustProxy) {
-  app.set("trust proxy", 1);
+// Express validates the addresses here, so a mistyped TRUST_PROXY list stops the server at startup.
+if (config.trustProxy !== false) {
+  app.set("trust proxy", config.trustProxy);
 }
 
 app.use(

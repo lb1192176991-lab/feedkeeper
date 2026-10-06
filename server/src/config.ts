@@ -1,6 +1,7 @@
 import { config as loadEnv } from "dotenv";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseTrustProxy } from "./trustProxy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // Loads the repo-root .env regardless of the process's current working
@@ -25,7 +26,7 @@ export const config = {
   archivePath: process.env.ARCHIVE_PATH ?? join(dirname(process.env.DATABASE_PATH ?? "./data/feedkeeper.sqlite"), "archive"),
   sessionSecret: required("SESSION_SECRET"),
   allowSignup: process.env.ALLOW_SIGNUP === "true",
-  trustProxy: process.env.TRUST_PROXY === "true",
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   minPollIntervalMinutes: Number(process.env.MIN_POLL_INTERVAL_MINUTES ?? 5),
   retentionReadDays: Number(process.env.RETENTION_READ_DAYS ?? 30),
   retentionMaxDays: Number(process.env.RETENTION_MAX_DAYS ?? 90),
