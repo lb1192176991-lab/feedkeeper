@@ -41,6 +41,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // Server-rendered OAuth pages and discovery documents must never be answered with the app shell.
+  if (url.pathname.startsWith("/oauth/") || url.pathname.startsWith("/.well-known/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(navigate(request));

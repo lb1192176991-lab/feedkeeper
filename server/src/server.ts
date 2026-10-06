@@ -11,6 +11,7 @@ import { clientAddressFromHeader } from "./clientAddress.js";
 import { runMigrations } from "./db/index.js";
 import { apiRouter } from "./api/index.js";
 import { mcpRouter } from "./mcp/http.js";
+import { oauthAuthorizeRouter, oauthPublicRouter } from "./oauth/routes.js";
 import { startFullTextScheduler } from "./feeds/fullTextQueue.js";
 import { startPollingScheduler } from "./feeds/poller.js";
 import { startCleanupScheduler } from "./feeds/cleanup.js";
@@ -60,6 +61,8 @@ app.use((_req, res, next) => {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   next();
 });
+// Connector backends and browser tools call these without our cookies, so they sit before the same-origin CORS rule.
+app.use(oauthPublicRouter);
 app.use(
   cors({
     origin: config.publicUrl,
@@ -94,6 +97,7 @@ app.use(
 );
 
 app.use("/api", apiRouter);
+app.use(oauthAuthorizeRouter);
 app.use("/mcp", mcpRouter);
 
 if (existsSync(WEB_DIST)) {
@@ -107,7 +111,7 @@ if (existsSync(WEB_DIST)) {
     }),
   );
   app.get(/(.*)/, (req, res, next) => {
-    if (req.path.startsWith("/api") || req.path.startsWith("/mcp")) return next();
+    if (req.path.startsWith("/api") || req.path.startsWith("/mcp") || req.path.startsWith("/oauth") || req.path.startsWith("/.well-known")) return next();
     res.sendFile(join(WEB_DIST, "index.html"));
   });
 }

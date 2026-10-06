@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type Token } from "../../api/client.ts";
+import { api, type OAuthGrant, type Token } from "../../api/client.ts";
 import { CustomSelect } from "../CustomSelect.tsx";
 import { formatRelativeTime } from "../../utils/relativeTime.ts";
 import { SettingsCard, SettingBlock } from "./ui.tsx";
@@ -35,6 +35,7 @@ function ScopeBadge({ scope }: { scope: Token["scope"] }) {
 export function McpSettings() {
   const { t, i18n } = useTranslation();
   const [tokens, setTokens] = useState<Token[]>([]);
+  const [grants, setGrants] = useState<OAuthGrant[]>([]);
   const [name, setName] = useState("");
   const [scope, setScope] = useState<Token["scope"]>("read");
   const [freshToken, setFreshToken] = useState<string | null>(null);
@@ -42,7 +43,9 @@ export function McpSettings() {
   const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: "medium" });
 
   async function load() {
-    setTokens(await api.listTokens());
+    const [nextTokens, nextGrants] = await Promise.all([api.listTokens(), api.listOAuthGrants()]);
+    setTokens(nextTokens);
+    setGrants(nextGrants);
   }
 
   useEffect(() => {
@@ -63,6 +66,12 @@ export function McpSettings() {
     await load();
   }
 
+  async function onDisconnect(grant: OAuthGrant) {
+    if (!confirm(t("settings.disconnectAppConfirm", { name: grant.client_name }))) return;
+    await api.deleteOAuthGrant(grant.id);
+    await load();
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <SettingsCard title={t("settings.mcpTitle")} description={t("settings.mcpHint")}>
@@ -76,6 +85,7 @@ export function McpSettings() {
             <li>{t("settings.mcpStepUrl")}</li>
             <li>{t("settings.mcpStepHeader")}</li>
           </ol>
+          <p className="mt-3 text-sm text-[var(--c-text-muted)]">{t("settings.mcpStepOauth")}</p>
           <div className="mt-5 border-t border-[var(--c-border)] pt-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--c-text-muted)]">
@@ -116,6 +126,31 @@ export function McpSettings() {
             </pre>
           </div>
         </SettingBlock>
+      </SettingsCard>
+
+      <SettingsCard title={t("settings.connectedAppsTitle")} description={t("settings.connectedAppsHint")}>
+        {grants.length === 0 ? (
+          <SettingBlock><p className="text-sm text-[var(--c-text-muted)]">{t("settings.noConnectedApps")}</p></SettingBlock>
+        ) : (
+          grants.map((grant) => (
+            <div key={grant.id} className="flex items-center gap-3 px-5 py-3.5 sm:px-6">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-medium">{grant.client_name}</span>
+                  <ScopeBadge scope={grant.scope} />
+                </div>
+                <p className="mt-0.5 truncate text-xs text-[var(--c-text-muted)]">
+                  {t("settings.tokenCreatedOn", { date: dateFormatter.format(new Date(grant.created_at)) })}
+                  {" · "}
+                  {grant.last_used_at ? t("settings.tokenLastUsed", { time: formatRelativeTime(new Date(grant.last_used_at), i18n.resolvedLanguage) }) : t("settings.tokenNeverUsed")}
+                </p>
+              </div>
+              <button type="button" onClick={() => onDisconnect(grant)} className="btn-secondary shrink-0 px-3 py-1.5 text-sm hover:text-[var(--c-danger)]">
+                {t("settings.disconnectApp")}
+              </button>
+            </div>
+          ))
+        )}
       </SettingsCard>
 
       <SettingsCard title={t("settings.tokensTitle")} description={t("settings.tokensHint")}>

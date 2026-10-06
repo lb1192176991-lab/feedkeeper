@@ -1,10 +1,12 @@
 import { randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { db } from "../db/index.js";
+import { resolveAccessToken } from "../oauth/store.js";
 
 const TOKEN_PREFIX = "fk_";
+const OAUTH_ACCESS_PREFIX = "fk_oat_";
 export type TokenScope = "read" | "write";
-/** `api` tokens are created by hand (MCP, scripts); `device` tokens come from pairing a native app. */
-export type TokenKind = "api" | "device";
+/** `api` tokens are created by hand (MCP, scripts); `device` tokens come from pairing a native app; `oauth` tokens come from a connector's sign-in and only work on /mcp. */
+export type TokenKind = "api" | "device" | "oauth";
 
 export interface PersonalAccessToken {
   id: number;
@@ -55,6 +57,10 @@ export interface ResolvedToken {
 
 export function resolveToken(token: string): ResolvedToken | null {
   if (!token.startsWith(TOKEN_PREFIX)) return null;
+  if (token.startsWith(OAUTH_ACCESS_PREFIX)) {
+    const grant = resolveAccessToken(token);
+    return grant ? { userId: grant.userId, scope: grant.scope, kind: "oauth", tokenId: grant.grantId } : null;
+  }
   const tokenHash = hashToken(token);
 
   const row = db

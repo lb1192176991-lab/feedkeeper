@@ -213,6 +213,14 @@ export interface Token {
   last_used_at: string | null;
 }
 
+export interface OAuthGrant {
+  id: number;
+  client_name: string;
+  scope: "read" | "write";
+  created_at: string;
+  last_used_at: string | null;
+}
+
 export interface OpmlImportResult {
   imported: number;
   skipped: number;
@@ -355,6 +363,8 @@ export const api = {
   createToken: (name: string, scope: "read" | "write") =>
     request<{ id: number; token: string }>("/tokens", { method: "POST", body: JSON.stringify({ name, scope }) }),
   deleteToken: (id: number) => request<void>(`/tokens/${id}`, { method: "DELETE" }),
+  listOAuthGrants: () => request<OAuthGrant[]>("/oauth-grants"),
+  deleteOAuthGrant: (id: number) => request<void>(`/oauth-grants/${id}`, { method: "DELETE" }),
 
   getRetention: () => request<{ settings: RetentionSettings; stats: DatabaseStats }>("/system/retention"),
   updateRetention: (data: Partial<RetentionSettings>) =>
